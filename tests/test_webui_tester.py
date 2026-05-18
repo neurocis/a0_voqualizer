@@ -147,3 +147,10 @@ def test_tester_treats_plain_pcm_tts_codec_as_pcm16():
     assert "if (codec === 'pcm')" in source
     assert "codec = Number(data.sample_rate" in source
     assert "codec === 'pcm16/24k' ? 24000" in source
+
+
+def test_tester_user_text_does_not_force_tts_sample_rate():
+    source = TESTER_STORE.read_text()
+    assert "sessionPayload({ text: clean })" in source
+    assert "codec: OUTPUT_CODEC, sample_rate: PCM_SAMPLE_RATE" not in source
+    assert "makes 24 kHz PCM play back slow" in source

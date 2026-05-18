@@ -659,7 +659,11 @@ export function createVoqualizerTesterStore(options = {}) {
       return null;
     }
     appendEvent('voqualizer_user_text', { text: clean });
-    return emitWithAck('voqualizer_user_text', sessionPayload({ text: clean, codec: OUTPUT_CODEC, sample_rate: PCM_SAMPLE_RATE }));
+    // Do not force the tester's default PCM_SAMPLE_RATE here.  The backend
+    // now derives TTS codec/sample_rate from the selected provider config
+    // (for example Kokoro PCM at 24 kHz).  Sending the tester's 16 kHz default
+    // overrides that provider config and makes 24 kHz PCM play back slow.
+    return emitWithAck('voqualizer_user_text', sessionPayload({ text: clean }));
   }
 
   async function control(action) {
