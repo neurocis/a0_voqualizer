@@ -202,12 +202,15 @@ def test_audio_chunk_accepts_socketio_buffer_payload_shape(monkeypatch):
 
 
 
-def test_batch_asr_buffers_twenty_ms_frames_to_two_hundred_ms(monkeypatch):
+
+def test_batch_asr_utterance_buffer_emits_partial_then_final(monkeypatch):
     async def scenario():
         handler = CapturingWs()
         await init_mock_session(handler, monkeypatch)
         session = handler._registry().get("asr-1")
-        session.metadata["asr_batch_min_ms"] = 200.0
+        session.metadata["asr_partial_interval_ms"] = 1000.0
+        session.metadata["asr_final_silence_ms"] = 800.0
+        session.metadata["asr_min_speech_ms"] = 500.0
 
         class BatchProvider:
             name = "batch-asr"
@@ -219,42 +222,64 @@ def test_batch_asr_buffers_twenty_ms_frames_to_two_hundred_ms(monkeypatch):
 
             async def transcribe(self, audio, *, language=None, sample_rate=16000, metadata=None):
                 from usr.plugins.a0_voqualizer.helpers.asr import TranscriptResult, TranscriptKind
-                self.calls.append((list(audio), dict(metadata or {})))
+                meta = dict(metadata or {})
+                self.calls.append((list(audio), meta))
+                text = "hello partial" if meta.get("utterance_event") == "partial" else "hello final"
                 return TranscriptResult(
-                    text="buffered speech",
+                    text=text,
                     kind=TranscriptKind.FINAL,
                     language=language or "en",
                     provider="batch-asr",
-                    metadata=metadata or {},
+                    metadata=meta,
                 )
 
         provider = BatchProvider()
         session.metadata["asr_provider_instance"] = provider
         token = handler.bearer_token
-        # 20ms of 16k PCM16 = 640 bytes. Nine frames must be buffered; the
-        # tenth reaches 200ms and triggers one batch transcription.
-        pcm20ms = b"\x01\x00" * 320
-        for idx in range(9):
+        speech20ms = b"\x10\x27" * 320
+        silence20ms = b"\x00\x00" * 320
+
+        # 49 speech frames (980ms) are below the 1000ms partial interval.
+        for idx in range(49):
             ack = await handler.process(
                 "voqualizer_audio_chunk",
-                {"frame": encode_frame(idx, idx * 20, pcm20ms), "bearer_token": token},
+                {"frame": encode_frame(idx, idx * 20, speech20ms), "bearer_token": token},
                 "SID1",
             )
             assert ack["event"] == "voqualizer_audio_ack"
             assert ack["emitted"] == 0
+
+        # 50th speech frame reaches 1000ms and emits one partial.
         ack = await handler.process(
             "voqualizer_audio_chunk",
-            {"frame": encode_frame(9, 180, pcm20ms), "bearer_token": token},
+            {"frame": encode_frame(49, 980, speech20ms), "bearer_token": token},
             "SID1",
         )
-        assert ack["event"] == "voqualizer_audio_ack"
         assert ack["emitted"] == 1
-        assert len(provider.calls) == 1
-        chunks, metadata = provider.calls[0]
-        assert len(chunks) == 10
-        assert metadata["buffered_ms"] == 200.0
-        assert metadata["asr_batch_min_ms"] == 200.0
-        assert [event for _sid, event, _data in handler.emitted] == ["voqualizer_asr_final"]
-        assert handler.emitted[0][2]["text"] == "buffered speech"
+        assert [event for _sid, event, _data in handler.emitted] == ["voqualizer_asr_partial"]
+        assert handler.emitted[0][2]["text"] == "hello partial"
+
+        # 40 silence frames = 800ms trailing silence, which finalizes utterance.
+        for idx in range(50, 89):
+            ack = await handler.process(
+                "voqualizer_audio_chunk",
+                {"frame": encode_frame(idx, idx * 20, silence20ms), "bearer_token": token},
+                "SID1",
+            )
+            assert ack["emitted"] == 0
+        ack = await handler.process(
+            "voqualizer_audio_chunk",
+            {"frame": encode_frame(89, 1780, silence20ms), "bearer_token": token},
+            "SID1",
+        )
+        assert ack["emitted"] == 1
+        assert [event for _sid, event, _data in handler.emitted] == [
+            "voqualizer_asr_partial",
+            "voqualizer_asr_final",
+        ]
+        assert handler.emitted[1][2]["text"] == "hello final"
+        assert provider.calls[0][1]["utterance_event"] == "partial"
+        assert provider.calls[1][1]["utterance_event"] == "final"
+        assert provider.calls[1][1]["trailing_silence_ms"] == 800.0
 
     run(scenario())

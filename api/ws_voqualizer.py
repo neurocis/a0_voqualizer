@@ -57,6 +57,8 @@ from usr.plugins.a0_voqualizer.helpers.asr import (  # noqa: E402
     ASRError,
     ASRProvider,
     AudioChunk,
+    TranscriptKind,
+    TranscriptResult,
     FasterWhisperASRProvider,
     LocalAIASRProvider,
     MockASRProvider,
@@ -626,14 +628,79 @@ class WsVoqualizer(WsHandler):
             return 0.0
         return (len(chunk.pcm16) / 2 / chunk.sample_rate) * 1000.0
 
-    def _asr_batch_buffer_for_session(self, session: BridgeSession) -> list[AudioChunk]:
-        """Return the per-session ASR buffer used for batch HTTP providers."""
-        buffer = session.metadata.get("asr_batch_buffer")
-        if isinstance(buffer, list):
-            return buffer
-        buffer = []
-        session.metadata["asr_batch_buffer"] = buffer
-        return buffer
+    @staticmethod
+    def _chunk_rms(chunk: AudioChunk) -> float:
+        """Return a lightweight RMS level for PCM16 little-endian audio."""
+        data = chunk.pcm16
+        if len(data) < 2:
+            return 0.0
+        total = 0.0
+        count = 0
+        # Avoid importing numpy for runtime plugin path; this is cheap enough for
+        # 20ms frames and works in the minimal A0 runtime.
+        for i in range(0, len(data) - 1, 2):
+            sample = int.from_bytes(data[i:i + 2], "little", signed=True)
+            total += float(sample * sample)
+            count += 1
+        if count <= 0:
+            return 0.0
+        return (total / count) ** 0.5
+
+    def _asr_utterance_state_for_session(self, session: BridgeSession) -> dict[str, Any]:
+        """Return per-session utterance buffer state for batch HTTP ASR."""
+        state = session.metadata.get("asr_utterance_state")
+        if isinstance(state, dict):
+            return state
+        state = {
+            "chunks": [],
+            "duration_ms": 0.0,
+            "speech_ms": 0.0,
+            "trailing_silence_ms": 0.0,
+            "has_speech": False,
+            "last_partial_at_ms": 0.0,
+            "last_partial_text": "",
+            "last_final_text": "",
+        }
+        session.metadata["asr_utterance_state"] = state
+        return state
+
+    @staticmethod
+    def _asr_text_is_useful(text: str) -> bool:
+        """Filter empty and very low-value batch Whisper fragments."""
+        clean = " ".join(str(text or "").strip().split())
+        if not clean:
+            return False
+        # Single filler tokens from tiny/noisy windows are usually worse than no
+        # update. Keep meaningful one-word utterances once final if punctuation
+        # or length suggests intent; partials/finals call this as a basic guard.
+        return len(clean) >= 2
+
+    async def _transcribe_utterance_segment(
+        self,
+        session: BridgeSession,
+        provider: ASRProvider,
+        segment: list[AudioChunk],
+        *,
+        language: str | None,
+        kind: TranscriptKind,
+        metadata: Mapping[str, Any],
+    ) -> TranscriptResult | None:
+        """Run provider.transcribe() and coerce the event kind for utterance ASR."""
+        result = await provider.transcribe(segment, language=language, metadata=metadata)
+        text = " ".join(result.text.strip().split())
+        if not self._asr_text_is_useful(text):
+            session.metadata["asr_empty_results_suppressed"] = int(session.metadata.get("asr_empty_results_suppressed", 0)) + 1
+            return None
+        return TranscriptResult(
+            text=text,
+            kind=kind,
+            confidence=result.confidence,
+            t_start=result.t_start,
+            t_end=result.t_end,
+            language=result.language,
+            provider=result.provider,
+            metadata=result.metadata,
+        )
 
     async def _process_batch_asr_chunk(
         self,
@@ -643,43 +710,106 @@ class WsVoqualizer(WsHandler):
         *,
         language: str | None,
     ) -> int:
-        """Buffer small mic frames before calling batch/non-streaming ASR.
+        """Utterance-buffer batch/non-streaming ASR providers.
 
-        Browser mic frames are normally 20ms. OpenAI-compatible Whisper-style
-        endpoints are HTTP batch transcription APIs, not realtime ASR engines;
-        sending one 20ms WAV per frame produces successful-but-empty transcripts.
-        Aggregate to at least 200ms by default so those providers receive a
-        usable audio segment while keeping latency low.
+        OpenAI-compatible Whisper endpoints are batch transcription APIs. They
+        produce poor fragments when called with 20ms browser mic frames. Buffer
+        frames into an utterance, emit interim batch partials about once per
+        second, and emit a final after trailing silence or a max segment cap.
         """
 
-        min_ms = float(session.metadata.get("asr_batch_min_ms", 200.0) or 200.0)
-        buffer = self._asr_batch_buffer_for_session(session)
-        buffer.append(chunk)
-        duration_ms = sum(self._chunk_duration_ms(item) for item in buffer)
-        if duration_ms < min_ms and not chunk.is_final:
+        partial_interval_ms = float(session.metadata.get("asr_partial_interval_ms", 1000.0) or 1000.0)
+        final_silence_ms = float(session.metadata.get("asr_final_silence_ms", 800.0) or 800.0)
+        max_segment_ms = float(session.metadata.get("asr_max_segment_ms", 8000.0) or 8000.0)
+        min_speech_ms = float(session.metadata.get("asr_min_speech_ms", 500.0) or 500.0)
+        speech_rms = float(session.metadata.get("asr_speech_rms", 250.0) or 250.0)
+
+        state = self._asr_utterance_state_for_session(session)
+        chunks: list[AudioChunk] = state.setdefault("chunks", [])
+        chunks.append(chunk)
+        chunk_ms = self._chunk_duration_ms(chunk)
+        state["duration_ms"] = float(state.get("duration_ms", 0.0)) + chunk_ms
+
+        rms = self._chunk_rms(chunk)
+        if rms >= speech_rms:
+            state["has_speech"] = True
+            state["speech_ms"] = float(state.get("speech_ms", 0.0)) + chunk_ms
+            state["trailing_silence_ms"] = 0.0
+        elif state.get("has_speech"):
+            state["trailing_silence_ms"] = float(state.get("trailing_silence_ms", 0.0)) + chunk_ms
+
+        duration_ms = float(state.get("duration_ms", 0.0))
+        speech_ms = float(state.get("speech_ms", 0.0))
+        trailing_ms = float(state.get("trailing_silence_ms", 0.0))
+        has_speech = bool(state.get("has_speech")) and speech_ms >= min_speech_ms
+        should_final = bool(chunk.is_final) or (has_speech and trailing_ms >= final_silence_ms) or (has_speech and duration_ms >= max_segment_ms)
+        should_partial = (
+            has_speech
+            and not should_final
+            and duration_ms - float(state.get("last_partial_at_ms", 0.0)) >= partial_interval_ms
+        )
+
+        if not should_partial and not should_final:
             return 0
 
-        segment = list(buffer)
-        buffer.clear()
-        result = await provider.transcribe(
-            segment,
-            language=language,
-            metadata={
-                "session_id": session.session_id,
-                "seq": chunk.seq,
-                "buffered_chunks": len(segment),
-                "buffered_ms": round(duration_ms, 3),
-                "asr_batch_min_ms": min_ms,
-            },
-        )
-        # Empty finals from batch Whisper are not useful UI output. They still
-        # indicate the provider ran, but suppressing them avoids a wall of blank
-        # ASR events while the user is between words or speaking softly.
-        if result.text.strip():
+        segment = list(chunks)
+        metadata = {
+            "session_id": session.session_id,
+            "seq": chunk.seq,
+            "buffered_chunks": len(segment),
+            "buffered_ms": round(duration_ms, 3),
+            "speech_ms": round(speech_ms, 3),
+            "trailing_silence_ms": round(trailing_ms, 3),
+            "asr_partial_interval_ms": partial_interval_ms,
+            "asr_final_silence_ms": final_silence_ms,
+            "asr_max_segment_ms": max_segment_ms,
+            "asr_min_speech_ms": min_speech_ms,
+        }
+
+        if should_partial:
+            result = await self._transcribe_utterance_segment(
+                session,
+                provider,
+                segment,
+                language=language,
+                kind=TranscriptKind.PARTIAL,
+                metadata={**metadata, "utterance_event": "partial"},
+            )
+            state["last_partial_at_ms"] = duration_ms
+            if result is None:
+                return 0
+            if result.text == state.get("last_partial_text"):
+                return 0
+            state["last_partial_text"] = result.text
             await self._emit_transcript(session, result)
             return 1
-        session.metadata["asr_empty_results_suppressed"] = int(session.metadata.get("asr_empty_results_suppressed", 0)) + 1
-        return 0
+
+        # Final: transcribe, emit if useful/non-duplicate, then reset utterance.
+        result = await self._transcribe_utterance_segment(
+            session,
+            provider,
+            segment,
+            language=language,
+            kind=TranscriptKind.FINAL,
+            metadata={**metadata, "utterance_event": "final"},
+        )
+        last_final = str(state.get("last_final_text", ""))
+        preserved_last_final = result.text if result is not None else last_final
+        state.clear()
+        state.update({
+            "chunks": [],
+            "duration_ms": 0.0,
+            "speech_ms": 0.0,
+            "trailing_silence_ms": 0.0,
+            "has_speech": False,
+            "last_partial_at_ms": 0.0,
+            "last_partial_text": "",
+            "last_final_text": preserved_last_final,
+        })
+        if result is None or result.text == last_final:
+            return 0
+        await self._emit_transcript(session, result)
+        return 1
 
     async def _handle_audio_chunk(self, data: Any, sid: str) -> dict[str, Any] | WsResult:
         if self._session_id is None:
