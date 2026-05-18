@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Added raw PCM TTS smoke-preview playback, mapped Kokoro PCM defaults to 24 kHz live TTS requests, and contained Providers-page test-result layout expansion.
 - Fixed encoded TTS playback by collecting full WAV/MP3/Opus streams before browser playback, adding a JSON-safe TTS audio fallback, and repairing Kokoro RIFF/WAVE preview headers when needed.
 - Added audible TTS provider smoke-test previews and surfaced encoded WAV/MP3/Opus chunks with matching codecs for browser playback.
 - Fixed Tester transcript rendering by unwrapping A0 Socket.IO event envelopes before updating ASR partial/final and agent response panels.

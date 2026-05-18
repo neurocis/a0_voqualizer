@@ -983,11 +983,34 @@ class WsVoqualizer(WsHandler):
         voice = data.get("voice")
         if voice is not None:
             voice = str(voice)
-        codec = str(data.get("codec") or session.output_codec or "pcm16/16k")
-        sample_rate = int(data.get("sample_rate") or (24000 if codec == "pcm16/24k" else 16000))
+
+        cfg = _safe_load_config()
+        provider_spec = _provider_config(cfg, "tts", session.tts_provider) or {}
+        provider_format = str(
+            provider_spec.get("format")
+            or provider_spec.get("response_format")
+            or (provider_spec.get("options") or {}).get("format")
+            or (provider_spec.get("options") or {}).get("response_format")
+            or ""
+        ).lower()
+        provider_sample_rate = int(
+            provider_spec.get("sample_rate")
+            or (provider_spec.get("options") or {}).get("sample_rate")
+            or 0
+        )
+        if provider_format == "pcm" and provider_sample_rate == 24000:
+            default_codec = "pcm16/24k"
+        elif provider_format == "pcm" and provider_sample_rate == 16000:
+            default_codec = "pcm16/16k"
+        else:
+            default_codec = session.output_codec or "pcm16/16k"
+        codec = str(data.get("codec") or default_codec)
+        sample_rate = int(data.get("sample_rate") or provider_sample_rate or (24000 if codec == "pcm16/24k" else 16000))
         speed = float(data.get("speed", 1.0))
         metadata = dict(data.get("metadata") or {})
         metadata.setdefault("source", "voqualizer_user_text")
+        if provider_format:
+            metadata.setdefault("response_format", provider_format)
 
         session.reset_cancel()
         request = TTSRequest(
@@ -1002,7 +1025,6 @@ class WsVoqualizer(WsHandler):
 
         chunks = 0
         try:
-            cfg = _safe_load_config()
             provider = await self._tts_provider_for_session(session, cfg)
             session.metadata["tts_active_utterance_id"] = utterance_id
             try:

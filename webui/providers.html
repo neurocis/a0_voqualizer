@@ -25,7 +25,8 @@
     textarea { width: 100%; min-height: 4rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; box-sizing: border-box; }
     .error { color: #fecaca; }
     .dirty { color: #fde68a; }
-    .result { color: #bfdbfe; font-size: 0.9rem; display: block; flex: 1 1 18rem; min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
+    .result { color: #bfdbfe; font-size: 0.9rem; display: block; flex: 1 1 18rem; min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; white-space: normal; contain: inline-size; }
+    .provider-actions { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); align-items: center; }
     .events { max-height: 14rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; background: #0f172a; border-radius: 0.5rem; padding: 0.75rem; }
     nav a { color: #bfdbfe; text-decoration: none; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.45rem 0.65rem; background: #0f172a; }
     code { color: #bae6fd; }
@@ -106,7 +107,7 @@
         <label><span>Sample rate</span><input class="provider-sample-rate" autocomplete="off" inputmode="numeric" placeholder="24000"></label>
       </div>
       <label><span>Advanced options JSON</span><textarea class="provider-options" spellcheck="false"></textarea></label>
-      <div class="row">
+      <div class="row provider-actions">
         <button class="provider-test test" type="button">Test provider</button>
         <button class="provider-delete danger" type="button">Delete</button>
         <span class="provider-result result"></span>
@@ -125,6 +126,7 @@
     // first animation frame, so this same path is safe in both contexts.
 
     const store = createVoqualizerConfigStore();
+    let previewContext = null;
 
     function init() {
       const $ = (id) => document.getElementById(id);
@@ -160,6 +162,30 @@
         return repaired;
       }
 
+      async function playPcmPreview(bytes, sampleRate) {
+        const AudioContextCtor = globalThis.AudioContext || globalThis.webkitAudioContext;
+        if (!AudioContextCtor) {
+          throw new Error('Web Audio playback is unavailable in this browser');
+        }
+        if (!previewContext) {
+          previewContext = new AudioContextCtor({ sampleRate });
+        }
+        if (previewContext.state === 'suspended') {
+          await previewContext.resume();
+        }
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const samples = new Float32Array(Math.floor(bytes.byteLength / 2));
+        for (let i = 0; i < samples.length; i += 1) {
+          samples[i] = Math.max(-1, Math.min(1, view.getInt16(i * 2, true) / 32768));
+        }
+        const buffer = previewContext.createBuffer(1, samples.length, sampleRate || 24000);
+        buffer.copyToChannel(samples, 0);
+        const source = previewContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(previewContext.destination);
+        source.start();
+      }
+
       async function playTtsPreview(response) {
         if (!response || !response.audio_preview_b64) {
           return;
@@ -170,8 +196,12 @@
           bytes = repairRiffWaveHeader(bytes);
         }
         const codec = String(response.codec || '').toLowerCase();
-        const mime = response.audio_preview_mime || (fmt === 'wav' || codec === 'wav' ? 'audio/wav' : fmt === 'mp3' || codec === 'mp3' ? 'audio/mpeg' : '');
-        if (mime && mime !== 'audio/L16') {
+        const mime = response.audio_preview_mime || (fmt === 'wav' || codec === 'wav' ? 'audio/wav' : fmt === 'mp3' || codec === 'mp3' ? 'audio/mpeg' : fmt === 'pcm' || codec.startsWith('pcm16') ? 'audio/L16' : '');
+        if (mime === 'audio/L16' || fmt === 'pcm' || codec === 'pcm' || codec.startsWith('pcm16')) {
+          await playPcmPreview(bytes, Number(response.sample_rate || 24000));
+          return;
+        }
+        if (mime) {
           const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
           try {
             const audio = new Audio(url);

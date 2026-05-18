@@ -238,3 +238,11 @@ def test_providers_page_event_log_omits_large_audio_base64_payloads():
         assert key in text
     assert "base64 chars omitted" in text
     assert "JSON.stringify(compactEventPayload(item.payload))" in text
+
+
+def test_providers_page_plays_raw_pcm_tts_preview_without_layout_blowout():
+    source = PROVIDERS_HTML.read_text()
+    assert "async function playPcmPreview(bytes, sampleRate)" in source
+    assert "mime === 'audio/L16'" in source
+    assert "provider-actions" in source
+    assert "contain: inline-size" in source

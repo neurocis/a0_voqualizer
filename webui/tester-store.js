@@ -419,7 +419,10 @@ export function createVoqualizerTesterStore(options = {}) {
   async function playPcm16Chunk(payload) {
     const data = eventData(payload);
     const audio = bytesFromTtsPayload(payload);
-    const codec = String(data.codec || payload.codec || '').toLowerCase();
+    let codec = String(data.codec || payload.codec || '').toLowerCase();
+    if (codec === 'pcm') {
+      codec = Number(data.sample_rate || payload.sample_rate || PCM_SAMPLE_RATE) === 24000 ? 'pcm16/24k' : 'pcm16/16k';
+    }
     if (codec === 'wav' || codec === 'mp3' || codec === 'opus') {
       // Encoded formats are not independently playable per transport chunk.
       // Accumulate by utterance and play after voqualizer_tts_done or a final
@@ -441,7 +444,7 @@ export function createVoqualizerTesterStore(options = {}) {
     if (!samples.length) {
       return;
     }
-    const sampleRate = Number(data.sample_rate || data.sampleRate || payload.sample_rate || payload.sampleRate || PCM_SAMPLE_RATE);
+    const sampleRate = Number(data.sample_rate || data.sampleRate || payload.sample_rate || payload.sampleRate || (codec === 'pcm16/24k' ? 24000 : PCM_SAMPLE_RATE));
     const ctx = await ensurePlaybackContext(sampleRate);
     const buffer = ctx.createBuffer(1, samples.length, sampleRate);
     buffer.copyToChannel(samples, 0);

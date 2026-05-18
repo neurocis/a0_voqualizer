@@ -304,3 +304,11 @@ def test_explicit_wav_format_surfaces_wav_codec():
     }, api_key="k", session_factory=lambda: None)
     request = TTSRequest(text="hello", codec="pcm16/16k")
     assert provider._codec_for_response_format("wav", request) == "wav"
+
+
+def test_explicit_pcm_format_uses_sample_rate_codec():
+    from helpers.tts.openai_tts import OpenAITTSProvider
+    from helpers.tts.base import TTSRequest
+    provider = OpenAITTSProvider({"name": "x", "type": "openai", "api_key_env": "X", "format": "pcm"}, api_key="k", session_factory=lambda: None)
+    assert provider._codec_for_response_format("pcm", TTSRequest(text="hello", codec="pcm16/16k", sample_rate=24000)) == "pcm16/24k"
+    assert provider._codec_for_response_format("pcm", TTSRequest(text="hello", codec="pcm16/16k", sample_rate=16000)) == "pcm16/16k"

@@ -247,3 +247,11 @@ def test_tts_chunk_includes_base64_fallback_for_browser_dispatch():
     source = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
     assert 'payload["audio_b64"]' in source
     assert 'payload["audio_encoding"] = "base64"' in source
+
+
+def test_user_text_prefers_provider_pcm_sample_rate_defaults():
+    from pathlib import Path
+    source = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'provider_format == "pcm" and provider_sample_rate == 24000' in source
+    assert 'default_codec = "pcm16/24k"' in source
+    assert 'metadata.setdefault("response_format", provider_format)' in source

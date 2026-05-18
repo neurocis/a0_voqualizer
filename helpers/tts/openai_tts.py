@@ -180,6 +180,8 @@ class OpenAITTSProvider(TTSProvider):
         normalized = str(fmt or "").lower()
         if normalized in {"wav", "mp3", "opus"}:
             return normalized
+        if normalized == "pcm":
+            return "pcm16/24k" if int(request.sample_rate) == 24000 else "pcm16/16k"
         if request.codec in _CODEC_TO_OPENAI_FORMAT:
             return request.codec
         return _FORMAT_TO_CODEC.get(normalized, request.codec)

@@ -140,3 +140,10 @@ def test_tester_buffers_encoded_tts_chunks_until_done():
     assert "audio_b64" in source
     assert "repairRiffWaveHeader" in source
     assert "flushEncodedTts(utteranceId).catch(setError)" in source
+
+
+def test_tester_treats_plain_pcm_tts_codec_as_pcm16():
+    source = TESTER_STORE.read_text()
+    assert "if (codec === 'pcm')" in source
+    assert "codec = Number(data.sample_rate" in source
+    assert "codec === 'pcm16/24k' ? 24000" in source
