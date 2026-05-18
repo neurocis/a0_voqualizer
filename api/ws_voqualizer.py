@@ -918,6 +918,10 @@ class WsVoqualizer(WsHandler):
         # compatible with AudioChunk.event_payload() while exposing bytes to
         # deterministic tests and browser clients.
         payload["audio"] = chunk.data
+        # JSON-safe fallback for browser/A0 dispatch paths that do not preserve
+        # nested binary values reliably.
+        payload["audio_b64"] = base64.b64encode(chunk.data).decode("ascii")
+        payload["audio_encoding"] = "base64"
         if session.sender is not None:
             await session.sender(event, payload)
 

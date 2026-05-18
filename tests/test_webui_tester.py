@@ -131,3 +131,12 @@ def test_tester_unwraps_a0_event_envelopes_for_visible_transcripts():
     assert "const data = eventData(payload);" in source
     assert "setState({ partialText: data.text || '' })" in source
     assert "state.finalTranscripts.push({ text, payload: data, envelope: payload" in source
+
+
+def test_tester_buffers_encoded_tts_chunks_until_done():
+    source = TESTER_STORE.read_text()
+    assert "const encodedTtsBuffers = new Map()" in source
+    assert "function flushEncodedTts(utteranceId)" in source
+    assert "audio_b64" in source
+    assert "repairRiffWaveHeader" in source
+    assert "flushEncodedTts(utteranceId).catch(setError)" in source

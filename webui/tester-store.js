@@ -138,6 +138,7 @@ export function createVoqualizerTesterStore(options = {}) {
   let mediaSource = null;
   let playbackContext = null;
   let playbackTail = 0;
+  const encodedTtsBuffers = new Map();
 
   function snapshot() {
     return {
@@ -339,9 +340,53 @@ export function createVoqualizerTesterStore(options = {}) {
     return playbackContext;
   }
 
+  function base64ToBytes(value) {
+    const binary = atob(String(value || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  function concatBytes(parts) {
+    const total = parts.reduce((sum, part) => sum + part.length, 0);
+    const output = new Uint8Array(total);
+    let offset = 0;
+    for (const part of parts) {
+      output.set(part, offset);
+      offset += part.length;
+    }
+    return output;
+  }
+
+  function repairRiffWaveHeader(bytes) {
+    // Some OpenAI-compatible Kokoro gateways stream WAV-like bytes as
+    // RIFFWAVEfmt... (missing the RIFF chunk-size field). Browsers expect
+    // RIFF + uint32 file_size_minus_8 + WAVE. Repair only this exact shape.
+    if (!(bytes instanceof Uint8Array) || bytes.length < 12) {
+      return bytes;
+    }
+    const riffWave = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+      && bytes[4] === 0x57 && bytes[5] === 0x41 && bytes[6] === 0x56 && bytes[7] === 0x45;
+    if (!riffWave) {
+      return bytes;
+    }
+    const repaired = new Uint8Array(bytes.length + 4);
+    repaired.set(bytes.slice(0, 4), 0);
+    const view = new DataView(repaired.buffer);
+    view.setUint32(4, repaired.length - 8, true);
+    repaired.set(bytes.slice(4), 8);
+    return repaired;
+  }
+
   function bytesFromTtsPayload(payload) {
     const data = eventData(payload);
-    return data.audio || data.data || data.pcm16 || payload.audio || payload.data || payload.pcm16;
+    if (data.audio_b64 || payload.audio_b64) {
+      return base64ToBytes(data.audio_b64 || payload.audio_b64);
+    }
+    const value = data.audio || data.data || data.pcm16 || payload.audio || payload.data || payload.pcm16;
+    return value instanceof Uint8Array ? value : new Uint8Array(value || []);
   }
 
   async function playEncodedAudio(bytes, mimeType) {
@@ -357,15 +402,38 @@ export function createVoqualizerTesterStore(options = {}) {
     }
   }
 
+  async function flushEncodedTts(utteranceId) {
+    const buffered = encodedTtsBuffers.get(utteranceId || 'default');
+    if (!buffered || !buffered.chunks.length) {
+      return;
+    }
+    encodedTtsBuffers.delete(utteranceId || 'default');
+    let bytes = concatBytes(buffered.chunks);
+    if (buffered.codec === 'wav') {
+      bytes = repairRiffWaveHeader(bytes);
+    }
+    const mime = buffered.codec === 'wav' ? 'audio/wav' : buffered.codec === 'mp3' ? 'audio/mpeg' : 'audio/ogg; codecs=opus';
+    await playEncodedAudio(bytes, mime);
+  }
+
   async function playPcm16Chunk(payload) {
     const data = eventData(payload);
     const audio = bytesFromTtsPayload(payload);
     const codec = String(data.codec || payload.codec || '').toLowerCase();
     if (codec === 'wav' || codec === 'mp3' || codec === 'opus') {
+      // Encoded formats are not independently playable per transport chunk.
+      // Accumulate by utterance and play after voqualizer_tts_done or a final
+      // chunk marker.
       const bytes = audio instanceof Uint8Array ? audio : new Uint8Array(audio || []);
-      const mime = codec === 'wav' ? 'audio/wav' : codec === 'mp3' ? 'audio/mpeg' : 'audio/ogg; codecs=opus';
+      const utteranceId = data.utterance_id || payload.utterance_id || 'default';
+      if (!encodedTtsBuffers.has(utteranceId)) {
+        encodedTtsBuffers.set(utteranceId, { codec, chunks: [] });
+      }
       if (bytes.length) {
-        await playEncodedAudio(bytes, mime);
+        encodedTtsBuffers.get(utteranceId).chunks.push(bytes);
+      }
+      if (data.is_final || payload.is_final) {
+        await flushEncodedTts(utteranceId);
       }
       return;
     }
@@ -401,6 +469,9 @@ export function createVoqualizerTesterStore(options = {}) {
   }
 
   function handleTtsDone(payload) {
+    const data = eventData(payload);
+    const utteranceId = data.utterance_id || payload.utterance_id || 'default';
+    flushEncodedTts(utteranceId).catch(setError);
     appendEvent('voqualizer_tts_done', payload);
   }
 

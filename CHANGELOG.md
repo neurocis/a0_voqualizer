@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Fixed encoded TTS playback by collecting full WAV/MP3/Opus streams before browser playback, adding a JSON-safe TTS audio fallback, and repairing Kokoro RIFF/WAVE preview headers when needed.
 - Added audible TTS provider smoke-test previews and surfaced encoded WAV/MP3/Opus chunks with matching codecs for browser playback.
 - Fixed Tester transcript rendering by unwrapping A0 Socket.IO event envelopes before updating ASR partial/final and agent response panels.
 - Replaced the fixed 200ms batch-ASR trigger with an utterance buffer that emits ~1s partials and silence-finalized transcripts for OpenAI-compatible Whisper providers.

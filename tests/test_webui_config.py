@@ -210,3 +210,10 @@ def test_providers_page_plays_tts_smoke_preview():
     assert "audio_preview_b64" in source
     assert "new Audio(url)" in source
     assert "side === 'tts' && data && data.ok !== false" in source
+
+
+def test_providers_page_repairs_wav_preview_header():
+    source = PROVIDERS_HTML.read_text()
+    assert "function repairRiffWaveHeader(bytes)" in source
+    assert "view.setUint32(4, repaired.length - 8, true)" in source
+    assert "bytes = repairRiffWaveHeader(bytes)" in source

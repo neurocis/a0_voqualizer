@@ -380,7 +380,10 @@ class VoqualizerAdmin(ApiHandler):
                     preview_format = str(chunk.metadata.get("format") or preview_format or "")
                 if piece and len(preview_audio) < preview_limit:
                     preview_audio += piece[: max(0, preview_limit - len(preview_audio))]
-                if bytes_returned > 0:
+                # Continue collecting chunks until the provider finishes or the
+                # preview cap is reached. Encoded WAV/MP3/Opus is usually not
+                # decodable as the first transport chunk alone.
+                if len(preview_audio) >= preview_limit:
                     break
             latency_ms = int(round((time.perf_counter() - started) * 1000))
             ok = bytes_returned > 0

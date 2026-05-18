@@ -240,3 +240,10 @@ def test_mock_no_network_no_credentials_behavior(monkeypatch):
     assert ack2["event"] == "voqualizer_tts_ack"
     assert first_audio == second_audio
     assert first_audio
+
+
+def test_tts_chunk_includes_base64_fallback_for_browser_dispatch():
+    from pathlib import Path
+    source = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'payload["audio_b64"]' in source
+    assert 'payload["audio_encoding"] = "base64"' in source

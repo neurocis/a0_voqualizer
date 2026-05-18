@@ -142,12 +142,32 @@
         return bytes;
       }
 
+      function repairRiffWaveHeader(bytes) {
+        if (!(bytes instanceof Uint8Array) || bytes.length < 12) {
+          return bytes;
+        }
+        const riffWave = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+          && bytes[4] === 0x57 && bytes[5] === 0x41 && bytes[6] === 0x56 && bytes[7] === 0x45;
+        if (!riffWave) {
+          return bytes;
+        }
+        const repaired = new Uint8Array(bytes.length + 4);
+        repaired.set(bytes.slice(0, 4), 0);
+        const view = new DataView(repaired.buffer);
+        view.setUint32(4, repaired.length - 8, true);
+        repaired.set(bytes.slice(4), 8);
+        return repaired;
+      }
+
       async function playTtsPreview(response) {
         if (!response || !response.audio_preview_b64) {
           return;
         }
-        const bytes = base64ToBytes(response.audio_preview_b64);
+        let bytes = base64ToBytes(response.audio_preview_b64);
         const fmt = String(response.audio_preview_format || '').toLowerCase();
+        if (fmt === 'wav' || String(response.codec || '').toLowerCase() === 'wav') {
+          bytes = repairRiffWaveHeader(bytes);
+        }
         const codec = String(response.codec || '').toLowerCase();
         const mime = response.audio_preview_mime || (fmt === 'wav' || codec === 'wav' ? 'audio/wav' : fmt === 'mp3' || codec === 'mp3' ? 'audio/mpeg' : '');
         if (mime && mime !== 'audio/L16') {
