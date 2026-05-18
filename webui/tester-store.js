@@ -428,9 +428,20 @@ export function createVoqualizerTesterStore(options = {}) {
             socket.connect();
           }
         });
+      } else if (!state.connected) {
+        // The tester may intentionally mark the logical session disconnected
+        // after `end_session` while keeping the underlying Socket.IO transport
+        // alive. A subsequent Connect should re-use the live transport and
+        // establish a fresh Voqualizer session rather than appearing stuck.
+        setState({ connected: true });
+      }
+      const requestedSessionId = init.session_id || init.sessionId || '';
+      const sessionId = requestedSessionId || (state.bearerToken && state.sessionId ? state.sessionId : makeSessionId());
+      if (sessionId !== state.sessionId || !state.bearerToken) {
+        setState({ sessionId, bearerToken: '', negotiated: null, capabilities: null });
       }
       const ready = await emitWithAck('voqualizer_init', {
-        session_id: state.sessionId,
+        session_id: sessionId,
         asr: { codec: INPUT_CODEC, ...(init.asr || {}) },
         tts: { codec: OUTPUT_CODEC, ...(init.tts || {}) },
         context_id: init.context_id || init.contextId || '',
@@ -516,7 +527,14 @@ export function createVoqualizerTesterStore(options = {}) {
       setState({ muted: false });
     } else if (action === 'end_session') {
       await stopCapture();
-      setState({ bearerToken: '', connected: false });
+      setState({
+        bearerToken: '',
+        connected: false,
+        connecting: false,
+        sessionId: makeSessionId(),
+        negotiated: null,
+        capabilities: null,
+      });
     }
     appendEvent('voqualizer_control_ack', result);
     return result;

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tester reconnect now creates a fresh Voqualizer session after `end_session` instead of reusing an ended session id/token state.
+
 - Providers page now exposes common provider settings (`endpoint`, `model`, `voice`, `api_key_env`, `format`, and `sample_rate`) as first-class editable fields instead of hiding them behind blank/advanced options JSON.
 
 ### Fixed

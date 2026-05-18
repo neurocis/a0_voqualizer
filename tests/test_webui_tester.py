@@ -97,3 +97,15 @@ def test_html_binds_controls_transcripts_agent_and_event_log():
     assert "store.startCapture()" in text
     assert "store.sendText(text)" in text
     assert "store.control('barge_in')" in text
+
+
+def test_store_reconnect_after_end_session_creates_fresh_session():
+    text = STORE.read_text(encoding="utf-8")
+    assert "The tester may intentionally mark the logical session disconnected" in text
+    assert "const requestedSessionId = init.session_id || init.sessionId || '';" in text
+    assert "const sessionId = requestedSessionId || (state.bearerToken && state.sessionId ? state.sessionId : makeSessionId());" in text
+    assert "setState({ sessionId, bearerToken: '', negotiated: null, capabilities: null });" in text
+    assert "session_id: sessionId" in text
+    assert "sessionId: makeSessionId()" in text
+    assert "bearerToken: ''," in text
+    assert "connected: false," in text
