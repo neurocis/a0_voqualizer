@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Providers page now exposes common provider settings (`endpoint`, `model`, `voice`, `api_key_env`, `format`, and `sample_rate`) as first-class editable fields instead of hiding them behind blank/advanced options JSON.
+
 ### Fixed
 - Made the Providers page Save button always available except while a save request is in progress; dirty state is now informational only.
 - Replaced the Providers page `test_provider` admin stub with real ASR/TTS smoke checks that return latency, provider metadata, pass/fail status, and M3/M4 error taxonomy codes.

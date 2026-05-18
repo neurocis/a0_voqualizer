@@ -90,13 +90,21 @@
 
   <template id="provider-template">
     <article class="provider">
-      <div class="fields">
-        <label>Name <input class="provider-name" autocomplete="off"></label>
-        <label>Type <select class="provider-type"></select></label>
-        <label>Default <input class="provider-default" type="radio"></label>
-        <label>Enabled <input class="provider-enabled" type="checkbox"></label>
+      <div class="fields provider-main">
+        <label><span>Name</span><input class="provider-name" autocomplete="off"></label>
+        <label><span>Type</span><select class="provider-type"></select></label>
+        <label><span>Default</span><input class="provider-default" type="radio"></label>
+        <label><span>Enabled</span><input class="provider-enabled" type="checkbox"></label>
       </div>
-      <label>Options JSON <textarea class="provider-options" spellcheck="false"></textarea></label>
+      <div class="fields provider-details">
+        <label><span>Endpoint / base URL</span><input class="provider-endpoint" autocomplete="off" placeholder="https://.../audio/..."></label>
+        <label><span>Model</span><input class="provider-model" autocomplete="off" placeholder="model name"></label>
+        <label><span>Voice</span><input class="provider-voice" autocomplete="off" placeholder="TTS voice"></label>
+        <label><span>API key env</span><input class="provider-api-key-env" autocomplete="off" placeholder="API_KEY_LEMONADE"></label>
+        <label><span>Format</span><input class="provider-format" autocomplete="off" placeholder="wav / pcm / mp3"></label>
+        <label><span>Sample rate</span><input class="provider-sample-rate" autocomplete="off" inputmode="numeric" placeholder="24000"></label>
+      </div>
+      <label><span>Advanced options JSON</span><textarea class="provider-options" spellcheck="false"></textarea></label>
       <div class="row">
         <button class="provider-test test" type="button">Test provider</button>
         <button class="provider-delete danger" type="button">Delete</button>
@@ -132,6 +140,12 @@
         const type = node.querySelector('.provider-type');
         const enabled = node.querySelector('.provider-enabled');
         const isDefault = node.querySelector('.provider-default');
+        const endpoint = node.querySelector('.provider-endpoint');
+        const model = node.querySelector('.provider-model');
+        const voice = node.querySelector('.provider-voice');
+        const apiKeyEnv = node.querySelector('.provider-api-key-env');
+        const format = node.querySelector('.provider-format');
+        const sampleRate = node.querySelector('.provider-sample-rate');
         const options = node.querySelector('.provider-options');
         const result = node.querySelector('.provider-result');
 
@@ -144,6 +158,12 @@
           type.appendChild(option);
         }
         enabled.checked = provider.enabled !== false;
+        endpoint.value = provider.endpoint || provider.base_url || '';
+        model.value = provider.model || '';
+        voice.value = provider.voice || '';
+        apiKeyEnv.value = provider.api_key_env || '';
+        format.value = provider.format || provider.response_format || '';
+        sampleRate.value = provider.sample_rate == null ? '' : String(provider.sample_rate);
         isDefault.name = `${side}-default`;
         isDefault.checked = state.config[side].default === provider.name;
         options.value = JSON.stringify(provider.options || {}, null, 2);
@@ -159,13 +179,35 @@
             $('error').textContent = `Invalid options JSON for ${originalName}: ${error.message}`;
             return;
           }
+          const patch = {
+            name: name.value.trim(),
+            type: type.value,
+            enabled: enabled.checked,
+            options: parsedOptions,
+          };
+          const endpointValue = endpoint.value.trim();
+          const modelValue = model.value.trim();
+          const voiceValue = voice.value.trim();
+          const apiKeyEnvValue = apiKeyEnv.value.trim();
+          const formatValue = format.value.trim();
+          const sampleRateValue = sampleRate.value.trim();
+          if (endpointValue) { patch.endpoint = endpointValue; } else { patch.endpoint = ''; patch.base_url = ''; }
+          if (modelValue) { patch.model = modelValue; } else { patch.model = ''; }
+          if (voiceValue) { patch.voice = voiceValue; } else { patch.voice = ''; }
+          if (apiKeyEnvValue) { patch.api_key_env = apiKeyEnvValue; } else { patch.api_key_env = ''; }
+          if (formatValue) { patch.format = formatValue; } else { patch.format = ''; patch.response_format = ''; }
+          if (sampleRateValue) {
+            const parsedSampleRate = Number.parseInt(sampleRateValue, 10);
+            if (!Number.isFinite(parsedSampleRate) || parsedSampleRate <= 0) {
+              $('error').textContent = `Invalid sample rate for ${originalName}: ${sampleRateValue}`;
+              return;
+            }
+            patch.sample_rate = parsedSampleRate;
+          } else {
+            patch.sample_rate = '';
+          }
           try {
-            store.updateProvider(side, originalName, {
-              name: name.value.trim(),
-              type: type.value,
-              enabled: enabled.checked,
-              options: parsedOptions,
-            });
+            store.updateProvider(side, originalName, patch);
           } catch (error) {
             $('error').textContent = error.message || String(error);
           }
@@ -174,6 +216,12 @@
         name.addEventListener('change', commit);
         type.addEventListener('change', commit);
         enabled.addEventListener('change', commit);
+        endpoint.addEventListener('change', commit);
+        model.addEventListener('change', commit);
+        voice.addEventListener('change', commit);
+        apiKeyEnv.addEventListener('change', commit);
+        format.addEventListener('change', commit);
+        sampleRate.addEventListener('change', commit);
         options.addEventListener('change', commit);
         isDefault.addEventListener('change', () => store.setDefault(side, provider.name));
         node.querySelector('.provider-test').addEventListener('click', () => store.testProvider(side, provider.name).catch((error) => { $('error').textContent = error.message; }));

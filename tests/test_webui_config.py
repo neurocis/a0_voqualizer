@@ -156,3 +156,49 @@ def test_config_store_save_always_uses_schema_validating_admin_path():
     assert "const data = await admin('save', { overlay: overlayFromConfig(state.config) });" in save_body
     assert "loadedOverlay: overlayFromConfig(savedConfig)" in save_body
     assert "dirty: false" in save_body
+
+
+def test_providers_page_exposes_common_provider_settings_as_fields():
+    text = html_source()
+    for klass in [
+        "provider-endpoint",
+        "provider-model",
+        "provider-voice",
+        "provider-api-key-env",
+        "provider-format",
+        "provider-sample-rate",
+        "provider-options",
+    ]:
+        assert klass in text
+    for label in [
+        "Endpoint / base URL",
+        "Model",
+        "Voice",
+        "API key env",
+        "Format",
+        "Sample rate",
+        "Advanced options JSON",
+    ]:
+        assert label in text
+    assert "patch.endpoint = endpointValue" in text
+    assert "patch.model = modelValue" in text
+    assert "patch.api_key_env = apiKeyEnvValue" in text
+    assert "patch.sample_rate = parsedSampleRate" in text
+
+
+def test_config_store_lifts_common_options_into_visible_provider_fields():
+    text = store_source()
+    assert "Keep top-level fields authoritative when present" in text
+    for key in [
+        "endpoint",
+        "base_url",
+        "model",
+        "api_key_env",
+        "voice",
+        "format",
+        "response_format",
+        "sample_rate",
+    ]:
+        assert key in text
+    assert "normalized[key] = options[key];" in text
+    assert "delete normalized[key];" in text

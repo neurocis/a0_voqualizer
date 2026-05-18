@@ -58,13 +58,23 @@ function providerKey(provider) {
 
 function normalizeProvider(side, provider = {}) {
   const types = providerTypesFor(side);
+  const options = provider.options && typeof provider.options === 'object' && !Array.isArray(provider.options) ? provider.options : {};
   const normalized = {
     ...provider,
     name: String(provider.name || makeProviderName(side)).trim(),
     type: String(provider.type || 'mock').trim(),
     enabled: provider.enabled !== false,
-    options: provider.options && typeof provider.options === 'object' && !Array.isArray(provider.options) ? provider.options : {},
+    options,
   };
+  // Providers can be edited either through top-level fields or advanced
+  // options JSON. Keep top-level fields authoritative when present, but lift
+  // common keys from options so endpoint/model/key/voice/etc. are always
+  // visible and editable in the Providers UI.
+  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'language', 'streaming']) {
+    if ((normalized[key] == null || normalized[key] === '') && options[key] != null && options[key] !== '') {
+      normalized[key] = options[key];
+    }
+  }
   if (!types.includes(normalized.type)) {
     normalized.type = 'mock';
   }
@@ -73,6 +83,11 @@ function normalizeProvider(side, provider = {}) {
   }
   if (side === 'tts' && !normalized.voice) {
     normalized.voice = 'mock';
+  }
+  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate']) {
+    if (normalized[key] === '') {
+      delete normalized[key];
+    }
   }
   return normalized;
 }
