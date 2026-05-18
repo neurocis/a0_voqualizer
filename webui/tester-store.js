@@ -261,6 +261,17 @@ export function createVoqualizerTesterStore(options = {}) {
     };
   }
 
+  function eventData(payload) {
+    // A0 Socket.IO emits plugin events in an envelope:
+    // { handlerId, eventId, correlationId, ts, data: {...} }.
+    // Older tests/raw helpers may pass the protocol payload directly.  Normalize
+    // both shapes before updating visible tester state.
+    if (payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object') {
+      return payload.data;
+    }
+    return payload || {};
+  }
+
   function handleReady(payload) {
     setState({
       connected: true,
@@ -277,15 +288,17 @@ export function createVoqualizerTesterStore(options = {}) {
   }
 
   function handleAsrPartial(payload) {
+    const data = eventData(payload);
     state.diagnostics.lastAsrPartialAt = nowMs();
-    setState({ partialText: payload.text || '' });
+    setState({ partialText: data.text || '' });
     appendEvent('voqualizer_asr_partial', payload);
   }
 
   function handleAsrFinal(payload) {
-    const text = payload.text || '';
+    const data = eventData(payload);
+    const text = data.text || '';
     if (text) {
-      state.finalTranscripts.push({ text, payload, ts: nowMs() });
+      state.finalTranscripts.push({ text, payload: data, envelope: payload, ts: nowMs() });
       state.partialText = '';
       state.diagnostics.lastAsrFinalAt = nowMs();
       notify();
@@ -294,7 +307,8 @@ export function createVoqualizerTesterStore(options = {}) {
   }
 
   function handleAgentDelta(payload) {
-    const delta = payload.delta || payload.text || payload.content || '';
+    const data = eventData(payload);
+    const delta = data.delta || data.text || data.content || '';
     if (delta) {
       state.diagnostics.lastAgentDeltaAt = nowMs();
       setState({ agentText: state.agentText + delta });
@@ -303,7 +317,8 @@ export function createVoqualizerTesterStore(options = {}) {
   }
 
   function handleAgentFinal(payload) {
-    const text = payload.text || payload.content || payload.response || '';
+    const data = eventData(payload);
+    const text = data.text || data.content || data.response || '';
     if (text) {
       setState({ agentText: text });
     }

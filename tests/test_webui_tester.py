@@ -122,3 +122,12 @@ def test_tester_audio_payload_includes_base64_fallback():
     assert "frame_b64: bytesToBase64(frame)" in source
     assert "frame_encoding: 'base64'" in source
     assert "frame_bytes: frame.byteLength" in source
+
+
+def test_tester_unwraps_a0_event_envelopes_for_visible_transcripts():
+    source = TESTER_STORE.read_text()
+    assert "function eventData(payload)" in source
+    assert "payload.data && typeof payload.data === 'object'" in source
+    assert "const data = eventData(payload);" in source
+    assert "setState({ partialText: data.text || '' })" in source
+    assert "state.finalTranscripts.push({ text, payload: data, envelope: payload" in source
