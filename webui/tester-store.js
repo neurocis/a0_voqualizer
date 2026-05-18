@@ -47,6 +47,17 @@ function bytesFromUnknownAudio(value) {
   return new Uint8Array();
 }
 
+export function bytesToBase64(bytes) {
+  const data = bytesFromUnknownAudio(bytes);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < data.byteLength; offset += chunkSize) {
+    const chunk = data.subarray(offset, Math.min(offset + chunkSize, data.byteLength));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
 export function framePcm16(seq, tsMs, pcm16) {
   const audio = bytesFromUnknownAudio(pcm16);
   const frame = new Uint8Array(FRAME_HEADER_BYTES + audio.byteLength);
@@ -61,6 +72,8 @@ export function audioChunkPayload(seq, tsMs, pcm16) {
   const frame = framePcm16(seq, tsMs, pcm16);
   return {
     frame,
+    frame_b64: bytesToBase64(frame),
+    frame_encoding: 'base64',
     frame_bytes: frame.byteLength,
     seq: seq & 0xffff,
     ts_ms: tsMs & 0xffff,

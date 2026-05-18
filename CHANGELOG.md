@@ -1,3 +1,6 @@
+## [Unreleased]
+- Added a JSON-safe base64 fallback for tester audio frames so browser/A0 paths that strip nested binary attachments still reach ASR instead of `BAD_AUDIO_CHUNK`.
+
 # Changelog
 
 ## Unreleased

@@ -114,3 +114,11 @@ def test_store_reconnect_after_end_session_creates_fresh_session():
     assert "sessionId: makeSessionId()" in text
     assert "bearerToken: ''," in text
     assert "connected: false," in text
+
+
+def test_tester_audio_payload_includes_base64_fallback():
+    source = TESTER_STORE.read_text()
+    assert "export function bytesToBase64" in source
+    assert "frame_b64: bytesToBase64(frame)" in source
+    assert "frame_encoding: 'base64'" in source
+    assert "frame_bytes: frame.byteLength" in source

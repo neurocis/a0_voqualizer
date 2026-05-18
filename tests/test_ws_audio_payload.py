@@ -67,3 +67,13 @@ def test_extract_audio_frame_payload_accepts_browser_socketio_shapes(payload):
 def test_extract_audio_frame_payload_rejects_malformed_shapes(payload):
     with pytest.raises(FrameError):
         _extract_audio_frame_payload(payload)
+
+
+def test_extract_audio_frame_accepts_base64_fallback():
+    import base64
+    from usr.plugins.a0_voqualizer.api.ws_voqualizer import _extract_audio_frame_payload
+
+    frame = bytes([0, 1, 0, 2, 3, 4, 5, 6])
+    raw, final = _extract_audio_frame_payload({"frame_b64": base64.b64encode(frame).decode("ascii")})
+    assert raw == frame
+    assert final is False

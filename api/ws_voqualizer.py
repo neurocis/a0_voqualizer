@@ -26,6 +26,7 @@ connected.
 from __future__ import annotations
 
 import asyncio
+import base64
 import time
 import uuid
 from collections.abc import Mapping
@@ -243,6 +244,11 @@ def _coerce_binary_payload(value: Any) -> bytes | None:
 
     if isinstance(value, (bytes, bytearray, memoryview)):
         return bytes(value)
+    if isinstance(value, str):
+        try:
+            return base64.b64decode(value, validate=True)
+        except Exception:
+            return None
     if isinstance(value, list | tuple):
         try:
             return bytes(value)
@@ -254,6 +260,11 @@ def _coerce_binary_payload(value: Any) -> bytes | None:
             return _coerce_binary_payload(value.get("data"))
         # Browser binary wrappers often arrive as {data: [...]}, sometimes
         # nested under frame/audio/payload again.
+        for key in ("frame_b64", "audio_b64", "payload_b64"):
+            if key in value:
+                coerced = _coerce_binary_payload(value.get(key))
+                if coerced is not None:
+                    return coerced
         for key in ("frame", "audio", "payload", "data", "buffer"):
             if key in value:
                 coerced = _coerce_binary_payload(value.get(key))
