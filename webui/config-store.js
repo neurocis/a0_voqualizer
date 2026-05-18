@@ -70,7 +70,7 @@ function normalizeProvider(side, provider = {}) {
   // options JSON. Keep top-level fields authoritative when present, but lift
   // common keys from options so endpoint/model/key/voice/etc. are always
   // visible and editable in the Providers UI.
-  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'language', 'streaming']) {
+  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'speed', 'language', 'streaming']) {
     if ((normalized[key] == null || normalized[key] === '') && options[key] != null && options[key] !== '') {
       normalized[key] = options[key];
     }
@@ -84,7 +84,7 @@ function normalizeProvider(side, provider = {}) {
   if (side === 'tts' && !normalized.voice) {
     normalized.voice = 'mock';
   }
-  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate']) {
+  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'speed']) {
     if (normalized[key] === '') {
       delete normalized[key];
     }

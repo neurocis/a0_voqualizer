@@ -105,6 +105,7 @@
         <label><span>API key env</span><input class="provider-api-key-env" autocomplete="off" placeholder="API_KEY_LEMONADE"></label>
         <label><span>Format</span><input class="provider-format" autocomplete="off" placeholder="wav / pcm / mp3"></label>
         <label><span>Sample rate</span><input class="provider-sample-rate" autocomplete="off" inputmode="numeric" placeholder="24000"></label>
+        <label><span>TTS speed</span><input class="provider-speed" autocomplete="off" inputmode="decimal" placeholder="1.0"></label>
       </div>
       <label><span>Advanced options JSON</span><textarea class="provider-options" spellcheck="false"></textarea></label>
       <div class="row provider-actions">
@@ -227,6 +228,7 @@
         const apiKeyEnv = node.querySelector('.provider-api-key-env');
         const format = node.querySelector('.provider-format');
         const sampleRate = node.querySelector('.provider-sample-rate');
+        const speed = node.querySelector('.provider-speed');
         const options = node.querySelector('.provider-options');
         const result = node.querySelector('.provider-result');
 
@@ -245,6 +247,7 @@
         apiKeyEnv.value = provider.api_key_env || '';
         format.value = provider.format || provider.response_format || '';
         sampleRate.value = provider.sample_rate == null ? '' : String(provider.sample_rate);
+        speed.value = provider.speed == null ? '' : String(provider.speed);
         isDefault.name = `${side}-default`;
         isDefault.checked = state.config[side].default === provider.name;
         options.value = JSON.stringify(provider.options || {}, null, 2);
@@ -272,6 +275,7 @@
           const apiKeyEnvValue = apiKeyEnv.value.trim();
           const formatValue = format.value.trim();
           const sampleRateValue = sampleRate.value.trim();
+          const speedValue = speed.value.trim();
           if (endpointValue) { patch.endpoint = endpointValue; } else { patch.endpoint = ''; patch.base_url = ''; }
           if (modelValue) { patch.model = modelValue; } else { patch.model = ''; }
           if (voiceValue) { patch.voice = voiceValue; } else { patch.voice = ''; }
@@ -286,6 +290,16 @@
             patch.sample_rate = parsedSampleRate;
           } else {
             patch.sample_rate = '';
+          }
+          if (speedValue) {
+            const parsedSpeed = Number.parseFloat(speedValue);
+            if (!Number.isFinite(parsedSpeed) || parsedSpeed <= 0) {
+              $('error').textContent = `Invalid TTS speed for ${originalName}: ${speedValue}`;
+              return;
+            }
+            patch.speed = parsedSpeed;
+          } else {
+            patch.speed = '';
           }
           try {
             store.updateProvider(side, originalName, patch);
@@ -303,6 +317,7 @@
         apiKeyEnv.addEventListener('change', commit);
         format.addEventListener('change', commit);
         sampleRate.addEventListener('change', commit);
+        speed.addEventListener('change', commit);
         options.addEventListener('change', commit);
         isDefault.addEventListener('change', () => store.setDefault(side, provider.name));
         node.querySelector('.provider-test').addEventListener('click', () => {

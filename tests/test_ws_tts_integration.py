@@ -255,3 +255,11 @@ def test_user_text_prefers_provider_pcm_sample_rate_defaults():
     assert 'provider_format == "pcm" and provider_sample_rate == 24000' in source
     assert 'default_codec = "pcm16/24k"' in source
     assert 'metadata.setdefault("response_format", provider_format)' in source
+
+
+def test_user_text_prefers_provider_tts_speed_default():
+    from pathlib import Path
+    source = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'provider_spec.get("speed")' in source
+    assert 'provider_speed = float' in source
+    assert 'speed = float(data.get("speed") or provider_speed)' in source

@@ -1006,7 +1006,12 @@ class WsVoqualizer(WsHandler):
             default_codec = session.output_codec or "pcm16/16k"
         codec = str(data.get("codec") or default_codec)
         sample_rate = int(data.get("sample_rate") or provider_sample_rate or (24000 if codec == "pcm16/24k" else 16000))
-        speed = float(data.get("speed", 1.0))
+        provider_speed = float(
+            provider_spec.get("speed")
+            or (provider_spec.get("options") or {}).get("speed")
+            or 1.0
+        )
+        speed = float(data.get("speed") or provider_speed)
         metadata = dict(data.get("metadata") or {})
         metadata.setdefault("source", "voqualizer_user_text")
         if provider_format:

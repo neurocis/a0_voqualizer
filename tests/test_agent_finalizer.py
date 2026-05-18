@@ -280,3 +280,10 @@ def test_process_chain_end_extension_ignores_empty_response(monkeypatch):
         assert calls == []
 
     run(scenario())
+
+
+def test_agent_finalizer_uses_provider_tts_speed_source_marker():
+    from pathlib import Path
+    source = Path('/a0/usr/plugins/a0_voqualizer/helpers/agent_finalizer.py').read_text()
+    assert 'speed = float(spec.get("speed")' in source
+    assert 'speed=speed' in source

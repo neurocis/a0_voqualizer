@@ -198,3 +198,11 @@ def test_admin_test_provider_unknown_provider_and_side_are_clear(admin):
     assert bad_side["side"] == "video"
     assert "asr" in bad_side["message"]
     assert "tts" in bad_side["message"]
+
+
+def test_tts_provider_smoke_uses_configured_speed_source_marker():
+    from pathlib import Path
+    source = Path('/a0/usr/plugins/a0_voqualizer/api/voqualizer_admin.py').read_text()
+    assert 'speed = float(spec.get("speed")' in source
+    assert 'speed=speed' in source
+    assert '"speed": speed' in source

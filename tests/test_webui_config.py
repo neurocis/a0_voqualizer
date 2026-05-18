@@ -246,3 +246,11 @@ def test_providers_page_plays_raw_pcm_tts_preview_without_layout_blowout():
     assert "mime === 'audio/L16'" in source
     assert "provider-actions" in source
     assert "contain: inline-size" in source
+
+
+def test_providers_page_exposes_tts_speed_field():
+    source = PROVIDERS_HTML.read_text()
+    assert "provider-speed" in source
+    assert "TTS speed" in source
+    assert "Number.parseFloat(speedValue)" in source
+    assert "patch.speed = parsedSpeed" in source

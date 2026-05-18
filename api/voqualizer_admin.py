@@ -358,11 +358,14 @@ class VoqualizerAdmin(ApiHandler):
             sample_rate = 16000
             if hasattr(caps, "sample_rates") and sample_rate not in tuple(caps.sample_rates):
                 sample_rate = int(tuple(caps.sample_rates)[0])
+            provider_options = spec.get("options") if isinstance(spec.get("options"), Mapping) else {}
+            speed = float(spec.get("speed") or provider_options.get("speed") or 1.0)
             request = TTSRequest(
                 text="Provider test ok.",
                 voice=str(spec.get("voice") or "") or None,
                 codec=codec,
                 sample_rate=sample_rate,
+                speed=speed,
                 metadata={"source": "voqualizer_admin_test_provider"},
             )
             bytes_returned = 0
@@ -405,7 +408,7 @@ class VoqualizerAdmin(ApiHandler):
                     f"TTS provider {name!r} smoke test passed in {latency_ms} ms."
                     if ok else f"TTS provider {name!r} returned no audio bytes."
                 ),
-                "details": {"chunks_seen": chunk_count, "utterance": request.utterance_id},
+                "details": {"chunks_seen": chunk_count, "utterance": request.utterance_id, "speed": speed},
             }
         except TTSError as exc:
             latency_ms = int(round((time.perf_counter() - started) * 1000))

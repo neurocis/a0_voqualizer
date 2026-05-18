@@ -146,6 +146,8 @@ async def synthesize_agent_response_tts(
 
         codec = session.output_codec or cfg.get("protocol", {}).get("default_output_codec") or "pcm16/16k"
         sample_rate = int(spec.get("sample_rate") or _sample_rate_for_codec(codec))
+        spec_options = spec.get("options") if isinstance(spec.get("options"), Mapping) else {}
+        speed = float(spec.get("speed") or spec_options.get("speed") or 1.0)
         if reset_cancel:
             session.reset_cancel()
         session.metadata["tts_active_utterance_id"] = utterance_id
@@ -163,6 +165,7 @@ async def synthesize_agent_response_tts(
             utterance_id=utterance_id,
             codec=codec,
             sample_rate=sample_rate,
+            speed=speed,
             voice=spec.get("voice"),
             language=session.language if session.language != "auto" else None,
             metadata=request_metadata,
