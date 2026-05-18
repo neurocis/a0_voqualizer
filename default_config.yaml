@@ -1,0 +1,91 @@
+# a0_voqualizer default configuration
+#
+# Real-time streaming WebSocket ASR/TTS bridge for Agent Zero.
+# This file describes the default provider catalogue, runtime limits, and
+# protocol/codec defaults. A copy is materialized into config.json on first
+# load via helpers/registry.py.
+
+# --- ASR (speech-to-text) providers ---
+asr:
+  providers:
+    - name: whisper-local
+      type: whisper
+      model: large-v3
+      device: auto                # auto | cpu | cuda
+      compute_type: auto          # auto | int8 | float16 | float32
+      streaming: true
+      vad: true
+      language: auto
+    - name: openai-whisper
+      type: openai
+      endpoint: https://api.openai.com/v1/audio/transcriptions
+      model: whisper-1
+      api_key_env: OPENAI_API_KEY
+    - name: localai
+      type: openai-compatible
+      endpoint: http://198.18.88.45/v1/audio/transcriptions
+      model: whisper-base
+  default: whisper-local
+
+# --- TTS (text-to-speech) providers ---
+tts:
+  providers:
+    - name: piper-local
+      type: piper
+      voice: en_US-amy-medium
+      sample_rate: 22050
+      streaming: true
+    - name: openai-tts
+      type: openai
+      endpoint: https://api.openai.com/v1/audio/speech
+      model: gpt-4o-mini-tts
+      voice: alloy
+      api_key_env: OPENAI_API_KEY
+    - name: localai-tts
+      type: openai-compatible
+      endpoint: http://198.18.88.45/v1/audio/speech
+      model: piper
+  default: piper-local
+
+# --- Protocol / codec defaults ---
+protocol:
+  # Input codecs the WS endpoint will negotiate from clients
+  input_codecs:
+    - pcm16/8k
+    - pcm16/16k
+    - pcm16/24k
+    - opus
+    - webm-opus
+    - mulaw/8k
+    - alaw/8k
+  # Output codecs the WS endpoint can emit
+  output_codecs:
+    - pcm16/16k
+    - pcm16/24k
+    - opus
+    - mp3
+    - mulaw/8k
+  # Default codecs when client doesn't request specific ones
+  default_input_codec: pcm16/16k
+  default_output_codec: pcm16/16k
+  # Heartbeat / resume
+  heartbeat_interval_seconds: 15
+  session_resume_window_seconds: 30
+
+# --- Runtime limits ---
+limits:
+  max_session_seconds: 1800
+  max_audio_chunk_kb: 64
+  max_text_chunk_chars: 4000
+  max_concurrent_sessions: 32
+  # Per-session bounded audio frame queue (oldest-dropped policy)
+  audio_queue_max_frames: 256
+
+# --- Behavior ---
+behavior:
+  # Allow voice barge-in to cancel in-flight TTS playback
+  barge_in: true
+  # Auto-spawn an AgentContext on init if session_id is fresh
+  auto_spawn_context: true
+  # Sentence-boundary chunking of LLM token deltas before TTS synthesis
+  sentence_chunking: true

@@ -1,0 +1,285 @@
+"""Assistant-final response bridge for Voqualizer (M5 / A5.3).
+
+This helper is called by the Agent Zero ``process_chain_end`` extension after an
+agent finishes a response on a context bound to one or more Voqualizer sessions.
+It emits the completed text and then reuses the accepted M4 TTS provider/session
+machinery to synthesize the final response for the voice client.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Callable, Mapping
+from typing import Any
+
+from usr.plugins.a0_voqualizer.helpers.context_bridge import get_default_context_bridge
+from usr.plugins.a0_voqualizer.helpers.registry import BridgeRegistry
+from usr.plugins.a0_voqualizer.helpers.session import BridgeSession, STATE_READY
+from usr.plugins.a0_voqualizer.helpers.tts import AudioChunk as TTSAudioChunk
+from usr.plugins.a0_voqualizer.helpers.tts import TTSProvider, TTSRequest, TTSError
+
+ConfigLoader = Callable[[], dict[str, Any]]
+TTSProviderFactory = Callable[[Mapping[str, Any]], TTSProvider]
+UtteranceIdFactory = Callable[[], str]
+
+
+def _clean_text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _default_config_loader() -> dict[str, Any]:
+    from usr.plugins.a0_voqualizer.api.ws_voqualizer import _safe_load_config
+
+    return _safe_load_config()
+
+
+def _default_tts_provider_factory(spec: Mapping[str, Any]) -> TTSProvider:
+    from usr.plugins.a0_voqualizer.api.ws_voqualizer import _build_tts_provider
+
+    return _build_tts_provider(spec)
+
+
+def _provider_config(config: dict[str, Any], provider_name: str) -> dict[str, Any] | None:
+    for provider in config.get("tts", {}).get("providers", []):
+        if provider.get("name") == provider_name:
+            return dict(provider)
+    return None
+
+
+def _sample_rate_for_codec(codec: str) -> int:
+    if codec == "pcm16/24k":
+        return 24000
+    if codec == "mulaw/8k":
+        return 8000
+    return 16000
+
+
+async def _emit_tts_chunk(
+    session: BridgeSession,
+    chunk: TTSAudioChunk,
+    *,
+    metadata_defaults: dict[str, Any] | None = None,
+) -> None:
+    payload = chunk.event_payload()
+    event = payload.pop("event")
+    payload["session_id"] = session.session_id
+    payload["audio"] = chunk.data
+    if metadata_defaults:
+        payload["metadata"] = {**metadata_defaults, **dict(payload.get("metadata") or {})}
+    if session.sender is not None:
+        await session.sender(event, payload)
+
+
+async def _emit_tts_done(
+    session: BridgeSession,
+    *,
+    utterance_id: str,
+    cancelled: bool = False,
+    chunks: int = 0,
+    reason: str | None = None,
+) -> None:
+    if session.sender is None:
+        return
+    payload: dict[str, Any] = {
+        "session_id": session.session_id,
+        "utterance_id": utterance_id,
+        "cancelled": cancelled,
+        "chunks": chunks,
+    }
+    if reason:
+        payload["reason"] = reason
+    await session.sender("voqualizer_tts_done", payload)
+
+
+async def _emit_tts_error(session: BridgeSession, err: TTSError) -> None:
+    if session.sender is None:
+        return
+    payload = err.to_dict()
+    payload["session_id"] = session.session_id
+    await session.sender("voqualizer_error", payload)
+
+
+async def synthesize_agent_response_tts(
+    session: BridgeSession,
+    text: str,
+    *,
+    context_id: str,
+    utterance_id: str,
+    config_loader: ConfigLoader | None = None,
+    tts_provider_factory: TTSProviderFactory | None = None,
+    reset_cancel: bool = True,
+    metadata_source: str = "voqualizer_agent_response_final",
+) -> dict[str, Any]:
+    """Stream completed assistant text through the session's TTS provider.
+
+    Returns a JSON-safe summary for tests/telemetry. Errors are emitted to the
+    client as ``voqualizer_error`` and summarized instead of escaping into the
+    Agent Zero process-chain hook.
+    """
+
+    text = _clean_text(text)
+    if not text:
+        return {"status": "skipped", "reason": "empty_text", "chunks": 0}
+    if session.sender is None:
+        return {"status": "skipped", "reason": "missing_sender", "chunks": 0}
+
+    cfg_loader = config_loader or _default_config_loader
+    provider_factory = tts_provider_factory or _default_tts_provider_factory
+    chunks = 0
+    try:
+        cfg = cfg_loader()
+        spec = _provider_config(cfg, session.tts_provider)
+        if spec is None:
+            raise TTSError(
+                f"unknown TTS provider {session.tts_provider!r}",
+                code="TTS_PROVIDER_NOT_FOUND",
+                details={"provider": session.tts_provider},
+            )
+
+        cached = session.metadata.get("tts_provider_instance")
+        if isinstance(cached, TTSProvider):
+            provider = cached
+        else:
+            provider = provider_factory(spec)
+            await provider.start()
+            session.metadata["tts_provider_instance"] = provider
+
+        codec = session.output_codec or cfg.get("protocol", {}).get("default_output_codec") or "pcm16/16k"
+        sample_rate = int(spec.get("sample_rate") or _sample_rate_for_codec(codec))
+        if reset_cancel:
+            session.reset_cancel()
+        session.metadata["tts_active_utterance_id"] = utterance_id
+        try:
+            session.transition_to("speaking")
+        except Exception:
+            pass
+
+        request_metadata = {
+            "source": metadata_source,
+            "context_id": context_id,
+        }
+        request = TTSRequest(
+            text=text,
+            utterance_id=utterance_id,
+            codec=codec,
+            sample_rate=sample_rate,
+            voice=spec.get("voice"),
+            language=session.language if session.language != "auto" else None,
+            metadata=request_metadata,
+        )
+        async for chunk in provider.stream(request):
+            if session.cancel_tts.is_set():
+                await _emit_tts_done(
+                    session,
+                    utterance_id=utterance_id,
+                    cancelled=True,
+                    chunks=chunks,
+                    reason="barge_in",
+                )
+                return {"status": "cancelled", "reason": "barge_in", "chunks": chunks}
+            await _emit_tts_chunk(session, chunk, metadata_defaults=request_metadata)
+            chunks += 1
+            if session.cancel_tts.is_set():
+                await _emit_tts_done(
+                    session,
+                    utterance_id=utterance_id,
+                    cancelled=True,
+                    chunks=chunks,
+                    reason="barge_in",
+                )
+                return {"status": "cancelled", "reason": "barge_in", "chunks": chunks}
+        await _emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
+        return {"status": "ok", "chunks": chunks, "utterance_id": utterance_id}
+    except TTSError as exc:
+        await _emit_tts_error(session, exc)
+        return {"status": "error", "error": exc.to_dict(), "chunks": chunks}
+    except Exception as exc:
+        err = TTSError(str(exc), code="TTS_FINALIZATION_ERROR", recoverable=True)
+        await _emit_tts_error(session, err)
+        return {"status": "error", "error": err.to_dict(), "chunks": chunks}
+    finally:
+        session.metadata.pop("tts_active_utterance_id", None)
+        try:
+            session.transition_to(STATE_READY)
+        except Exception:
+            pass
+
+
+async def finalize_agent_response_for_context(
+    *,
+    context_id: str,
+    text: str,
+    config_loader: ConfigLoader | None = None,
+    tts_provider_factory: TTSProviderFactory | None = None,
+    utterance_id_factory: UtteranceIdFactory | None = None,
+) -> dict[str, Any]:
+    """Emit final assistant text and trigger TTS for bound Voqualizer sessions."""
+
+    context_id = _clean_text(context_id)
+    text = _clean_text(text)
+    if not context_id or not text:
+        return {"emitted": 0, "tts": [], "reason": "empty_context_or_text"}
+
+    bridge = get_default_context_bridge()
+    bindings = bridge.bindings_for_context(context_id)
+    if not bindings:
+        return {"emitted": 0, "tts": [], "reason": "no_bindings"}
+
+    registry = BridgeRegistry.instance()
+    utterance_ids = utterance_id_factory or (lambda: f"agent-{uuid.uuid4().hex}")
+    emitted = 0
+    tts_results: list[dict[str, Any]] = []
+    for binding in bindings:
+        session = registry.get(binding.session_id)
+        if session is None or session.sender is None:
+            continue
+        utterance_id = utterance_ids()
+        # Clear any stale cancellation before announcing the new final response.
+        # If a client barges in in reaction to this event, preserve that fresh
+        # cancellation into the TTS stream startup below.
+        session.reset_cancel()
+        await session.sender(
+            "voqualizer_agent_response_final",
+            {
+                "session_id": session.session_id,
+                "context_id": binding.context_id,
+                "text": text,
+                "utterance_id": utterance_id,
+            },
+        )
+        emitted += 1
+        try:
+            from usr.plugins.a0_voqualizer.helpers.sentence_chunker import get_default_sentence_tts_chunker
+
+            chunker = get_default_sentence_tts_chunker()
+            has_streaming_state = chunker.has_session_state(session.session_id)
+        except Exception:
+            chunker = None
+            has_streaming_state = False
+
+        if has_streaming_state and chunker is not None:
+            tts_result = await chunker.finalize_session(
+                session,
+                context_id=binding.context_id,
+                final_text=text,
+                config_loader=config_loader,
+                tts_provider_factory=tts_provider_factory,
+            )
+        else:
+            tts_result = await synthesize_agent_response_tts(
+                session,
+                text,
+                context_id=binding.context_id,
+                utterance_id=utterance_id,
+                config_loader=config_loader,
+                tts_provider_factory=tts_provider_factory,
+                reset_cancel=False,
+            )
+        tts_results.append({"session_id": session.session_id, **tts_result})
+    return {"emitted": emitted, "tts": tts_results}
+
+
+__all__ = [
+    "finalize_agent_response_for_context",
+    "synthesize_agent_response_tts",
+]

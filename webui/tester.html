@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A0 Voqualizer Tester</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; padding: 1.25rem; background: #111827; color: #e5e7eb; }
+    main { width: 1860px; max-width: 100%; margin: 0 auto; display: grid; gap: 1rem; }
+    .columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+    .column { display: grid; gap: 1rem; align-items: start; }
+    @media (max-width: 900px) { .columns { grid-template-columns: 1fr; } }
+    section { border: 1px solid #374151; border-radius: 0.75rem; padding: 1rem; background: #1f2937; }
+    h1, h2 { margin-top: 0; }
+    button, input { border-radius: 0.5rem; border: 1px solid #4b5563; padding: 0.55rem 0.75rem; background: #111827; color: #f9fafb; }
+    button { cursor: pointer; background: #2563eb; border-color: #3b82f6; }
+    button.secondary { background: #374151; }
+    button.danger { background: #dc2626; border-color: #ef4444; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .status { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; }
+    .card { background: #111827; border: 1px solid #374151; border-radius: 0.5rem; padding: 0.75rem; }
+    .vu { height: 1rem; background: #111827; border: 1px solid #374151; border-radius: 999px; overflow: hidden; }
+    .vu > div { height: 100%; width: 0%; background: linear-gradient(90deg, #22c55e, #eab308, #ef4444); transition: width 80ms linear; }
+    .transcript, .agent, .events { min-height: 4rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .events, .frame-inspector { max-height: 18rem; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
+    .diagnostics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.5rem; }
+    .metric { background: #111827; border: 1px solid #374151; border-radius: 0.5rem; padding: 0.6rem; }
+    .metric span { display: block; color: #93c5fd; font-size: 1.1rem; margin-top: 0.25rem; }
+    .error { color: #fecaca; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>A0 Voqualizer Tester</h1>
+      <p>End-to-end browser harness for <code>voqualizer_*</code> WebSocket events.</p>
+    </header>
+
+    <div class="columns">
+      <div class="column">
+    <section>
+      <h2>Connection</h2>
+      <div class="row">
+        <button id="connect">Connect</button>
+        <button id="start" disabled>Start microphone</button>
+        <button id="stop" class="secondary" disabled>Stop microphone</button>
+        <button id="mute" class="secondary" disabled>Mute</button>
+        <button id="unmute" class="secondary" disabled>Unmute</button>
+        <button id="barge" class="danger" disabled>Barge-in</button>
+        <button id="end" class="danger" disabled>End session</button>
+      </div>
+      <div class="status" aria-live="polite">
+        <div class="card">Connected: <strong id="connected">false</strong></div>
+        <div class="card">Capturing: <strong id="capturing">false</strong></div>
+        <div class="card">Session: <strong id="session">—</strong></div>
+        <div class="card">Bearer token: <strong id="token">not issued</strong></div>
+      </div>
+      <p id="error" class="error"></p>
+    </section>
+
+    <section>
+      <h2>Microphone VU</h2>
+      <div class="vu" role="meter" aria-label="microphone level"><div id="vu-bar"></div></div>
+      <p>Level: <span id="vu-level">0.00</span> Peak: <span id="vu-peak">0.00</span></p>
+    </section>
+
+    <section>
+      <h2>Text input / TTS smoke</h2>
+      <form id="text-form" class="row">
+        <input id="text" type="text" placeholder="Send text to voqualizer_user_text" autocomplete="off" size="50">
+        <button id="send" type="submit" disabled>Send text</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>ASR partials/finals</h2>
+      <div class="card transcript">
+        <strong>Partial:</strong> <span id="partial"></span>
+        <hr>
+        <strong>Finals:</strong>
+        <div id="finals"></div>
+      </div>
+    </section>
+      </div>
+      <div class="column">
+
+    <section>
+      <h2>Agent deltas / final response</h2>
+      <div id="agent" class="card agent"></div>
+    </section>
+
+    <section id="diagnostics-overlay">
+      <h2>Diagnostics overlay</h2>
+      <div class="row">
+        <button id="clear-diagnostics" class="secondary" type="button">Clear diagnostics</button>
+      </div>
+      <h3>Latency timers</h3>
+      <div class="diagnostics-grid">
+        <div class="metric">Audio ack RTT <span id="diag-audio-rtt">—</span></div>
+        <div class="metric">First TTS latency <span id="diag-first-tts">—</span></div>
+        <div class="metric">Last ASR partial <span id="diag-asr-partial">—</span></div>
+        <div class="metric">Last ASR final <span id="diag-asr-final">—</span></div>
+        <div class="metric">Last agent delta <span id="diag-agent-delta">—</span></div>
+        <div class="metric">Last TTS chunk <span id="diag-tts-chunk">—</span></div>
+      </div>
+      <h3>Frame inspector</h3>
+      <div id="frame-inspector" class="card frame-inspector"></div>
+    </section>
+
+    <section>
+      <h2>Event log</h2>
+      <div id="events" class="card events"></div>
+    </section>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { createVoqualizerTesterStore } from '/plugins/a0_voqualizer/webui/tester-store.js';
+
+    // When this page is opened via A0's openModal(...), the parent modal loader
+    // executes inline <script type="module"> blocks BEFORE appending the body's
+    // HTML nodes (see /a0/webui/js/components.js#importComponent). Touching the
+    // DOM at top-level therefore yields null. We must defer initialization until
+    // the modal has appended our markup. When loaded as a standalone page, the
+    // elements are present on the first animation frame, so this same path is
+    // safe in both contexts.
+
+    const store = createVoqualizerTesterStore();
+
+    function init() {
+      const $ = (id) => document.getElementById(id);
+
+      function fmtMs(value) {
+        return value == null || value === 0 ? '\u2014' : `${value} ms`;
+      }
+
+      function fmtClock(value) {
+        return value ? new Date(value).toLocaleTimeString() : '\u2014';
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+
+      function render(state) {
+        $('connected').textContent = String(state.connected);
+        $('capturing').textContent = String(state.capturing);
+        $('session').textContent = state.sessionId || '\u2014';
+        $('token').textContent = state.bearerToken ? 'issued' : 'not issued';
+        $('error').textContent = state.error || '';
+        $('vu-bar').style.width = `${Math.round((state.vu.level || 0) * 100)}%`;
+        $('vu-level').textContent = (state.vu.level || 0).toFixed(2);
+        $('vu-peak').textContent = (state.vu.peak || 0).toFixed(2);
+        $('partial').textContent = state.partialText || '';
+        $('finals').innerHTML = state.finalTranscripts.map((item) => `<p>${escapeHtml(item.text)}</p>`).join('');
+        $('agent').textContent = state.agentText || '';
+        $('diag-audio-rtt').textContent = fmtMs(state.diagnostics.lastAckRttMs);
+        $('diag-first-tts').textContent = fmtMs(state.diagnostics.firstTtsLatencyMs);
+        $('diag-asr-partial').textContent = fmtClock(state.diagnostics.lastAsrPartialAt);
+        $('diag-asr-final').textContent = fmtClock(state.diagnostics.lastAsrFinalAt);
+        $('diag-agent-delta').textContent = fmtClock(state.diagnostics.lastAgentDeltaAt);
+        $('diag-tts-chunk').textContent = fmtClock(state.diagnostics.lastTtsChunkAt);
+        $('frame-inspector').textContent = state.frameInspector.map((frame) => `seq=${frame.seq} tsMs=${frame.tsMs} bytes=${frame.bytes} payload=${frame.payloadBytes} codec=${frame.codec}`).join('\n');
+        $('events').textContent = state.events.map((item) => `${new Date(item.ts).toLocaleTimeString()} ${item.event} ${JSON.stringify(item.payload)}`).join('\n');
+
+        $('connect').disabled = state.connecting || !!state.bearerToken;
+        $('start').disabled = !state.bearerToken || state.capturing;
+        $('stop').disabled = !state.capturing;
+        $('mute').disabled = !state.bearerToken || state.muted;
+        $('unmute').disabled = !state.bearerToken || !state.muted;
+        $('barge').disabled = !state.bearerToken;
+        $('end').disabled = !state.bearerToken;
+        $('send').disabled = !state.bearerToken;
+      }
+
+      store.subscribe(render);
+      $('clear-diagnostics').addEventListener('click', () => store.clearDiagnostics());
+      $('connect').addEventListener('click', () => store.connect().catch(console.error));
+      $('start').addEventListener('click', () => store.startCapture().catch(console.error));
+      $('stop').addEventListener('click', () => store.stopCapture().catch(console.error));
+      $('mute').addEventListener('click', () => store.control('mute').catch(console.error));
+      $('unmute').addEventListener('click', () => store.control('unmute').catch(console.error));
+      $('barge').addEventListener('click', () => store.control('barge_in').catch(console.error));
+      $('end').addEventListener('click', () => store.control('end_session').catch(console.error));
+      $('text-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const text = $('text').value;
+        $('text').value = '';
+        store.sendText(text).catch(console.error);
+      });
+    }
+
+    function waitForDomAndInit(deadlineMs = 5000) {
+      const start = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      function tick() {
+        if (document.getElementById('connected')) { init(); return; }
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        if (now - start > deadlineMs) {
+          console.error('[a0_voqualizer tester] Timed out waiting for modal DOM');
+          return;
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    waitForDomAndInit();
+  </script>
+</body>
+</html>

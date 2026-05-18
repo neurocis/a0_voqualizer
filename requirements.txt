@@ -1,0 +1,24 @@
+# a0_voqualizer runtime dependencies
+#
+# These are installed by hooks.py on plugin activation. Versions are pinned to
+# minimums known to work with Agent Zero v0.9.8+.
+
+# Audio processing
+numpy>=1.24.0
+soundfile>=0.12.1
+webrtcvad>=2.0.10
+
+# ASR — local backend (faster-whisper)
+faster-whisper>=1.0.0
+
+# ASR — remote backends use stdlib http via aiohttp (also required for WS in tests)
+aiohttp>=3.9.0
+
+# TTS — local backend (piper, in-process)
+piper-tts>=1.2.0
+
+# Resampling and codec helpers (Opus, mulaw/alaw, MP3 via ffmpeg shell-out)
+samplerate>=0.2.1
+
+# JSON schema validation for config
+jsonschema>=4.0.0

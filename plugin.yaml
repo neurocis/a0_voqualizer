@@ -1,0 +1,17 @@
+name: a0_voqualizer
+title: A0 Voqualizer
+description: >-
+  Real-time streaming WebSocket ASR/TTS bridge for Agent Zero. Binds each
+  WebSocket session to a configurable AgentContext, supports pluggable ASR
+  providers (faster-whisper local, OpenAI Whisper, OpenAI-compatible/LocalAI)
+  and TTS providers (Piper local, OpenAI TTS, OpenAI-compatible). Full-duplex
+  streaming with barge-in cancellation, sequence/timestamp framing, jitter
+  buffer, heartbeat, session resume, and codec negotiation (PCM16/Opus/
+  mulaw/alaw at 8/16/24 kHz). Ships an in-plugin browser tester WebUI and is
+  designed mobile-friendly and VoIP-adapter-friendly.
+version: 0.1.0
+settings_sections:
+  - agent
+per_project_config: false
+per_agent_config: false
+always_enabled: false

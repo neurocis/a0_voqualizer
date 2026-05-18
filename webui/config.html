@@ -1,0 +1,281 @@
+<html>
+<head>
+    <title>A0 Voqualizer</title>
+    <style>
+        /* Keep the standard A0 Settings fragment scoped and neutral; the full
+           provider-management page lives at webui/providers.html. */
+        .a0voq-settings { margin-left: 0 !important; padding-left: 0 !important; }
+        .a0voq-settings .section,
+        .a0voq-settings .section-title,
+        .a0voq-settings .section-description,
+        .a0voq-settings .field,
+        .a0voq-settings .field-label,
+        .a0voq-settings .field-description { margin-left: 0 !important; padding-left: 0 !important; }
+    </style>
+</head>
+
+<body>
+    <div x-data>
+        <template x-if="config">
+            <div class="a0voq-settings">
+                <div class="section-title">A0 Voqualizer</div>
+                <div class="section-description">
+                    Real-time streaming WebSocket ASR/TTS bridge for Agent Zero. Binds each WebSocket session to an
+                    <code>AgentContext</code> with pluggable ASR and TTS providers, A2 4-byte audio framing, jitter
+                    buffer, heartbeat, session resume, codec negotiation, and per-session bearer-token auth. The
+                    advanced provider editor and live tester live in dedicated pages (see below).
+                </div>
+
+                <div class="section-title">Behavior</div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Barge-in</div>
+                        <div class="field-description">
+                            Allow incoming voice to cancel in-flight TTS playback.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <label class="toggle">
+                            <input type="checkbox" x-model="config.behavior.barge_in" />
+                            <span class="toggler"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Auto-spawn AgentContext</div>
+                        <div class="field-description">
+                            On <code>voqualizer_init</code>, automatically spawn an <code>AgentContext</code> when the
+                            client did not supply an existing one.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <label class="toggle">
+                            <input type="checkbox" x-model="config.behavior.auto_spawn_context" />
+                            <span class="toggler"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Sentence-boundary TTS chunking</div>
+                        <div class="field-description">
+                            Buffer streamed assistant tokens to sentence boundaries before TTS synthesis, with a
+                            sub-1s first-audio latency budget.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <label class="toggle">
+                            <input type="checkbox" x-model="config.behavior.sentence_chunking" />
+                            <span class="toggler"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="section-title">Default providers</div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Default ASR provider</div>
+                        <div class="field-description">
+                            Name of the ASR provider used when a session does not request a specific one. Manage the
+                            full ASR provider catalog in the Providers editor.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="text" x-model="config.asr.default" placeholder="whisper-local" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Default TTS provider</div>
+                        <div class="field-description">
+                            Name of the TTS provider used when a session does not request a specific one. Manage the
+                            full TTS provider catalog in the Providers editor.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="text" x-model="config.tts.default" placeholder="piper-local" />
+                    </div>
+                </div>
+
+                <div class="section-title">Protocol defaults</div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Default input codec</div>
+                        <div class="field-description">
+                            Negotiated client &rarr; server codec when the client does not request one. Use the form
+                            <code>pcm16/16k</code>, <code>opus</code>, <code>mulaw/8k</code>, etc.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="text" x-model="config.protocol.default_input_codec" placeholder="pcm16/16k" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Default output codec</div>
+                        <div class="field-description">
+                            Negotiated server &rarr; client codec when the client does not request one.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="text" x-model="config.protocol.default_output_codec" placeholder="pcm16/16k" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Heartbeat interval (seconds)</div>
+                        <div class="field-description">
+                            Interval between heartbeats. Sessions are kept alive on each heartbeat.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="1" x-model.number="config.protocol.heartbeat_interval_seconds" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Session resume window (seconds)</div>
+                        <div class="field-description">
+                            Window after disconnect during which a client may reconnect with the same
+                            <code>session_id</code> and resume.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="0" x-model.number="config.protocol.session_resume_window_seconds" />
+                    </div>
+                </div>
+
+                <div class="section-title">Runtime limits</div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Max concurrent sessions</div>
+                        <div class="field-description">
+                            Maximum number of simultaneous Voqualizer sessions across this backend.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="1" x-model.number="config.limits.max_concurrent_sessions" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Max session seconds</div>
+                        <div class="field-description">
+                            Maximum lifetime of any single session in seconds.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="1" x-model.number="config.limits.max_session_seconds" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Max audio chunk size (KB)</div>
+                        <div class="field-description">
+                            Per-message inbound audio chunk size limit, in kilobytes.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="1" x-model.number="config.limits.max_audio_chunk_kb" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Max text chunk characters</div>
+                        <div class="field-description">
+                            Per-message inbound text chunk character limit.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="1" x-model.number="config.limits.max_text_chunk_chars" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Audio queue max frames</div>
+                        <div class="field-description">
+                            Per-session bounded audio frame queue depth. Oldest frames are dropped under backpressure.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="1" x-model.number="config.limits.audio_queue_max_frames" />
+                    </div>
+                </div>
+
+                <div class="section-title">Tools and references</div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Providers editor</div>
+                        <div class="field-description">
+                            Add, edit, remove, default-select, and live-test ASR and TTS providers. Uses the
+                            same-origin admin endpoint <code>/api/plugins/a0_voqualizer/voqualizer_admin</code>.
+                            Opens in a new tab as a standalone page.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <a class="btn btn-field"
+                            href="/plugins/a0_voqualizer/webui/providers.html"
+                            target="_blank"
+                            rel="noopener noreferrer">
+                            Open Providers editor
+                        </a>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Live tester &amp; diagnostics</div>
+                        <div class="field-description">
+                            Microphone capture, A2 frame inspector, VU meter, ASR/agent/TTS event rendering, and
+                            latency timers via the bundled browser tester. Opens in a new tab as a standalone page.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <a class="btn btn-field"
+                            href="/plugins/a0_voqualizer/webui/tester.html"
+                            target="_blank"
+                            rel="noopener noreferrer">
+                            Open tester
+                        </a>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Documentation</div>
+                        <div class="field-description">
+                            Plugin README, SKILL card, protocol error taxonomy, security review, load-test report,
+                            client portability matrix, and examples README ship in-repo for offline reference.
+                            See <code>README.md</code>, <code>SKILL.md</code>, <code>docs/protocol/errors.md</code>,
+                            <code>docs/security/review.md</code>, <code>docs/performance/load-test-32-sessions.md</code>,
+                            <code>docs/clients/portability.md</code>, and <code>examples/README.md</code>.
+                        </div>
+                    </div>
+                </div>
+
+                <!--
+                    A8.4-settings-panel marker preserved for regression coverage of the prior settings-panel
+                    contract; the polished standalone settings panel now lives at webui/providers.html.
+                -->
+                <div id="settings-panel" data-artifact="A8.4-settings-panel" style="display:none"></div>
+            </div>
+        </template>
+    </div>
+</body>
+</html>
