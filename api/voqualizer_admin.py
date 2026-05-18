@@ -352,21 +352,43 @@ class VoqualizerAdmin(ApiHandler):
             provider = self._build_tts_provider(spec)
             await provider.start()
             caps = provider.capabilities
-            codec = "pcm16/16k"
-            if hasattr(caps, "output_codecs") and codec not in tuple(caps.output_codecs):
-                codec = tuple(caps.output_codecs)[0]
-            sample_rate = 16000
-            if hasattr(caps, "sample_rates") and sample_rate not in tuple(caps.sample_rates):
-                sample_rate = int(tuple(caps.sample_rates)[0])
             provider_options = spec.get("options") if isinstance(spec.get("options"), Mapping) else {}
+            # Honor provider-configured sample rate / format so the smoke test
+            # asks Kokoro/Lemonade for audio in the same shape it would deliver
+            # to a live session, rather than forcing pcm16/16k defaults.
+            spec_format = str(spec.get("format") or spec.get("response_format") or provider_options.get("format") or "").lower()
+            try:
+                spec_sample_rate = int(spec.get("sample_rate") or provider_options.get("sample_rate") or 0)
+            except (TypeError, ValueError):
+                spec_sample_rate = 0
+            if spec_format == "pcm":
+                sample_rate = spec_sample_rate or 24000
+                codec = "pcm16/24k" if sample_rate == 24000 else f"pcm16/{sample_rate // 1000}k"
+            elif spec_format in ("wav", "mp3", "opus"):
+                codec = spec_format
+                sample_rate = spec_sample_rate or 24000
+            else:
+                codec = "pcm16/16k"
+                sample_rate = spec_sample_rate or 16000
+            if hasattr(caps, "output_codecs"):
+                supported = tuple(caps.output_codecs)
+                if supported and codec not in supported:
+                    codec = supported[0]
+            if hasattr(caps, "sample_rates"):
+                supported_sr = tuple(caps.sample_rates)
+                if supported_sr and sample_rate not in supported_sr:
+                    sample_rate = int(supported_sr[0])
             speed = float(spec.get("speed") or provider_options.get("speed") or 1.0)
+            request_metadata = {"source": "voqualizer_admin_test_provider"}
+            if spec_format:
+                request_metadata["response_format"] = spec_format
             request = TTSRequest(
                 text="Provider test ok.",
                 voice=str(spec.get("voice") or "") or None,
                 codec=codec,
                 sample_rate=sample_rate,
                 speed=speed,
-                metadata={"source": "voqualizer_admin_test_provider"},
+                metadata=request_metadata,
             )
             bytes_returned = 0
             chunk_count = 0

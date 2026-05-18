@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Fixed Providers TTS smoke test to honor provider-configured `format` and `sample_rate` (e.g. `pcm` @ 24000 Hz) instead of forcing `pcm16/16k`, producing audible previews on Kokoro-style PCM endpoints.
 - Added configurable TTS speed as a provider field used by smoke tests, tester/direct TTS, and agent-response TTS requests.
 - Fixed slow PCM TTS playback from the tester by no longer forcing 16 kHz text-to-speech requests over provider-configured sample rates.
 - Added raw PCM TTS smoke-preview playback, mapped Kokoro PCM defaults to 24 kHz live TTS requests, and contained Providers-page test-result layout expansion.
