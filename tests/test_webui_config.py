@@ -217,3 +217,24 @@ def test_providers_page_repairs_wav_preview_header():
     assert "function repairRiffWaveHeader(bytes)" in source
     assert "view.setUint32(4, repaired.length - 8, true)" in source
     assert "bytes = repairRiffWaveHeader(bytes)" in source
+
+
+
+def test_providers_page_tts_test_results_do_not_break_column_layout():
+    text = html_source()
+    assert ".grid > section { min-width: 0; }" in text
+    assert ".provider {" in text and "min-width: 0; overflow: hidden;" in text
+    assert ".fields {" in text and "minmax(min(160px, 100%), 1fr)" in text
+    assert ".result {" in text
+    assert "overflow-wrap: anywhere" in text
+    assert "word-break: break-word" in text
+    assert "flex: 1 1 18rem" in text
+
+
+def test_providers_page_event_log_omits_large_audio_base64_payloads():
+    text = html_source()
+    assert "function compactEventPayload(payload)" in text
+    for key in ["audio_preview_b64", "audio_b64", "frame_b64"]:
+        assert key in text
+    assert "base64 chars omitted" in text
+    assert "JSON.stringify(compactEventPayload(item.payload))" in text

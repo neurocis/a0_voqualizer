@@ -16,16 +16,17 @@
     button.danger { background: #dc2626; border-color: #ef4444; }
     button.test { background: #0891b2; border-color: #06b6d4; }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
-    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
-    .provider { display: grid; gap: 0.5rem; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.75rem; background: #0f172a; margin: 0.75rem 0; }
-    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.5rem; }
-    label { display: grid; gap: 0.25rem; font-size: 0.9rem; color: #cbd5e1; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; min-width: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 1rem; min-width: 0; }
+    .grid > section { min-width: 0; }
+    .provider { display: grid; gap: 0.5rem; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.75rem; background: #0f172a; margin: 0.75rem 0; min-width: 0; overflow: hidden; }
+    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 0.5rem; min-width: 0; }
+    label { display: grid; gap: 0.25rem; font-size: 0.9rem; color: #cbd5e1; min-width: 0; }
     textarea { width: 100%; min-height: 4rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; box-sizing: border-box; }
     .error { color: #fecaca; }
     .dirty { color: #fde68a; }
-    .result { color: #bfdbfe; font-size: 0.9rem; }
-    .events { max-height: 14rem; overflow: auto; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; background: #0f172a; border-radius: 0.5rem; padding: 0.75rem; }
+    .result { color: #bfdbfe; font-size: 0.9rem; display: block; flex: 1 1 18rem; min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
+    .events { max-height: 14rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; background: #0f172a; border-radius: 0.5rem; padding: 0.75rem; }
     nav a { color: #bfdbfe; text-decoration: none; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.45rem 0.65rem; background: #0f172a; }
     code { color: #bae6fd; }
   </style>
@@ -298,6 +299,19 @@
         }
       }
 
+      function compactEventPayload(payload) {
+        const copy = { ...(payload || {}) };
+        for (const key of ['audio_preview_b64', 'audio_b64', 'frame_b64']) {
+          if (typeof copy[key] === 'string') {
+            copy[key] = `[${copy[key].length} base64 chars omitted]`;
+          }
+        }
+        if (copy.response && typeof copy.response === 'object') {
+          copy.response = compactEventPayload(copy.response);
+        }
+        return copy;
+      }
+
       function render(state) {
         $('status').innerHTML = state.dirty
           ? '<span class="dirty">Unsaved provider changes</span>'
@@ -306,7 +320,7 @@
         $('error').textContent = state.error || $('error').textContent || '';
         renderSide('asr', state);
         renderSide('tts', state);
-        $('events').textContent = state.events.map((item) => `${new Date(item.ts).toLocaleTimeString()} ${item.event} ${JSON.stringify(item.payload)}`).join('\n');
+        $('events').textContent = state.events.map((item) => `${new Date(item.ts).toLocaleTimeString()} ${item.event} ${JSON.stringify(compactEventPayload(item.payload))}`).join('\n');
       }
 
       store.subscribe(render);

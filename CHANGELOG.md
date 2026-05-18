@@ -11,6 +11,7 @@
 ## Unreleased
 
 ### Fixed
+- Fixed Providers page layout overflow after TTS tests by constraining result/event text and redacting large base64 blobs from the admin event log.
 - Hardened tester audio transport and backend frame extraction so browser Socket.IO decoded binary shapes no longer fail with `BAD_AUDIO_CHUNK` before ASR.
 
 
