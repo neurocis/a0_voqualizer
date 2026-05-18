@@ -199,3 +199,62 @@ def test_audio_chunk_accepts_socketio_buffer_payload_shape(monkeypatch):
         assert ack["emitted"] == 2
 
     run(scenario())
+
+
+
+def test_batch_asr_buffers_twenty_ms_frames_to_two_hundred_ms(monkeypatch):
+    async def scenario():
+        handler = CapturingWs()
+        await init_mock_session(handler, monkeypatch)
+        session = handler._registry().get("asr-1")
+        session.metadata["asr_batch_min_ms"] = 200.0
+
+        class BatchProvider:
+            name = "batch-asr"
+            calls = []
+
+            def capabilities(self):
+                from usr.plugins.a0_voqualizer.helpers.asr import ASRCapabilities
+                return ASRCapabilities(provider="batch-asr", streaming=False, partials=False, finals=True)
+
+            async def transcribe(self, audio, *, language=None, sample_rate=16000, metadata=None):
+                from usr.plugins.a0_voqualizer.helpers.asr import TranscriptResult, TranscriptKind
+                self.calls.append((list(audio), dict(metadata or {})))
+                return TranscriptResult(
+                    text="buffered speech",
+                    kind=TranscriptKind.FINAL,
+                    language=language or "en",
+                    provider="batch-asr",
+                    metadata=metadata or {},
+                )
+
+        provider = BatchProvider()
+        session.metadata["asr_provider_instance"] = provider
+        token = handler.bearer_token
+        # 20ms of 16k PCM16 = 640 bytes. Nine frames must be buffered; the
+        # tenth reaches 200ms and triggers one batch transcription.
+        pcm20ms = b"\x01\x00" * 320
+        for idx in range(9):
+            ack = await handler.process(
+                "voqualizer_audio_chunk",
+                {"frame": encode_frame(idx, idx * 20, pcm20ms), "bearer_token": token},
+                "SID1",
+            )
+            assert ack["event"] == "voqualizer_audio_ack"
+            assert ack["emitted"] == 0
+        ack = await handler.process(
+            "voqualizer_audio_chunk",
+            {"frame": encode_frame(9, 180, pcm20ms), "bearer_token": token},
+            "SID1",
+        )
+        assert ack["event"] == "voqualizer_audio_ack"
+        assert ack["emitted"] == 1
+        assert len(provider.calls) == 1
+        chunks, metadata = provider.calls[0]
+        assert len(chunks) == 10
+        assert metadata["buffered_ms"] == 200.0
+        assert metadata["asr_batch_min_ms"] == 200.0
+        assert [event for _sid, event, _data in handler.emitted] == ["voqualizer_asr_final"]
+        assert handler.emitted[0][2]["text"] == "buffered speech"
+
+    run(scenario())

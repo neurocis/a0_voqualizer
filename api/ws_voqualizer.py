@@ -619,6 +619,68 @@ class WsVoqualizer(WsHandler):
         if session.sender is not None:
             await session.sender(event, payload)
 
+    @staticmethod
+    def _chunk_duration_ms(chunk: AudioChunk) -> float:
+        """Return PCM16 chunk duration in milliseconds."""
+        if chunk.sample_rate <= 0:
+            return 0.0
+        return (len(chunk.pcm16) / 2 / chunk.sample_rate) * 1000.0
+
+    def _asr_batch_buffer_for_session(self, session: BridgeSession) -> list[AudioChunk]:
+        """Return the per-session ASR buffer used for batch HTTP providers."""
+        buffer = session.metadata.get("asr_batch_buffer")
+        if isinstance(buffer, list):
+            return buffer
+        buffer = []
+        session.metadata["asr_batch_buffer"] = buffer
+        return buffer
+
+    async def _process_batch_asr_chunk(
+        self,
+        session: BridgeSession,
+        provider: ASRProvider,
+        chunk: AudioChunk,
+        *,
+        language: str | None,
+    ) -> int:
+        """Buffer small mic frames before calling batch/non-streaming ASR.
+
+        Browser mic frames are normally 20ms. OpenAI-compatible Whisper-style
+        endpoints are HTTP batch transcription APIs, not realtime ASR engines;
+        sending one 20ms WAV per frame produces successful-but-empty transcripts.
+        Aggregate to at least 200ms by default so those providers receive a
+        usable audio segment while keeping latency low.
+        """
+
+        min_ms = float(session.metadata.get("asr_batch_min_ms", 200.0) or 200.0)
+        buffer = self._asr_batch_buffer_for_session(session)
+        buffer.append(chunk)
+        duration_ms = sum(self._chunk_duration_ms(item) for item in buffer)
+        if duration_ms < min_ms and not chunk.is_final:
+            return 0
+
+        segment = list(buffer)
+        buffer.clear()
+        result = await provider.transcribe(
+            segment,
+            language=language,
+            metadata={
+                "session_id": session.session_id,
+                "seq": chunk.seq,
+                "buffered_chunks": len(segment),
+                "buffered_ms": round(duration_ms, 3),
+                "asr_batch_min_ms": min_ms,
+            },
+        )
+        # Empty finals from batch Whisper are not useful UI output. They still
+        # indicate the provider ran, but suppressing them avoids a wall of blank
+        # ASR events while the user is between words or speaking softly.
+        if result.text.strip():
+            await self._emit_transcript(session, result)
+            return 1
+        session.metadata["asr_empty_results_suppressed"] = int(session.metadata.get("asr_empty_results_suppressed", 0)) + 1
+        return 0
+
     async def _handle_audio_chunk(self, data: Any, sid: str) -> dict[str, Any] | WsResult:
         if self._session_id is None:
             return WsResult.error(
@@ -644,6 +706,9 @@ class WsVoqualizer(WsHandler):
             cfg = _safe_load_config()
             provider = await self._asr_provider_for_session(session, cfg)
 
+            provider_caps = provider.capabilities()
+            is_batch_asr = not bool(getattr(provider_caps, "streaming", False))
+
             for frame in ready_frames:
                 pcm16 = convert_codec_to_pcm16(frame.payload, session.input_codec, dst_rate=16000)
                 chunk = AudioChunk(
@@ -653,6 +718,14 @@ class WsVoqualizer(WsHandler):
                     ts_ms=frame.ts_ms,
                     is_final=is_final,
                 )
+                if is_batch_asr:
+                    emitted += await self._process_batch_asr_chunk(
+                        session,
+                        provider,
+                        chunk,
+                        language=session.language,
+                    )
+                    continue
                 async for result in provider.stream(
                     [chunk],
                     language=session.language,

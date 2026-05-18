@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Added a 200ms ASR aggregation buffer for batch/OpenAI-compatible Whisper providers so 20ms tester mic frames are transcribed as usable segments instead of empty per-frame results.
 - Added a JSON-safe base64 fallback for tester audio frames so browser/A0 paths that strip nested binary attachments still reach ASR instead of `BAD_AUDIO_CHUNK`.
 
 # Changelog
