@@ -50,11 +50,21 @@ function bytesFromUnknownAudio(value) {
 export function framePcm16(seq, tsMs, pcm16) {
   const audio = bytesFromUnknownAudio(pcm16);
   const frame = new Uint8Array(FRAME_HEADER_BYTES + audio.byteLength);
-  const view = new DataView(frame.buffer);
+  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
   view.setUint16(0, seq & 0xffff, false);
   view.setUint16(2, tsMs & 0xffff, false);
   frame.set(audio, FRAME_HEADER_BYTES);
-  return frame.buffer;
+  return frame;
+}
+
+export function audioChunkPayload(seq, tsMs, pcm16) {
+  const frame = framePcm16(seq, tsMs, pcm16);
+  return {
+    frame,
+    frame_bytes: frame.byteLength,
+    seq: seq & 0xffff,
+    ts_ms: tsMs & 0xffff,
+  };
 }
 
 export function pcm16ToFloat32(pcm16) {
@@ -477,10 +487,12 @@ export function createVoqualizerTesterStore(options = {}) {
       if (message.type === 'vu') {
         setState({ vu: { level: message.level || 0, peak: message.peak || 0, rms: message.rms || 0, clipped: !!message.clipped } });
       } else if (message.type === 'audio' && !state.muted) {
-        const frame = framePcm16(message.seq || 0, message.tsMs || 0, message.pcm16);
-        recordFrameInspection(frame);
+        const audioPayload = audioChunkPayload(message.seq || 0, message.tsMs || 0, message.pcm16);
+        recordFrameInspection(audioPayload.frame);
         const sentAt = nowMs();
-        emitWithAck('voqualizer_audio_chunk', sessionPayload({ frame })).then(() => markAudioAck(sentAt)).catch(setError);
+        emitWithAck('voqualizer_audio_chunk', sessionPayload(audioPayload))
+          .then((ack) => { markAudioAck(sentAt); appendEvent('voqualizer_audio_ack', ack); })
+          .catch((error) => { appendEvent('voqualizer_audio_error', { message: error.message || String(error), code: 'BAD_AUDIO_CHUNK' }); setError(error); });
       }
     };
     state.diagnostics.captureStartedAt = nowMs();
@@ -579,6 +591,7 @@ export function createVoqualizerTesterStore(options = {}) {
     control,
     clearDiagnostics,
     framePcm16,
+    audioChunkPayload,
     pcm16ToFloat32,
   };
 }

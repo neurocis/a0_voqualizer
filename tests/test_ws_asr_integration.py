@@ -157,3 +157,45 @@ def test_bad_audio_chunk_returns_recoverable_error(monkeypatch):
         assert err["code"] == "BAD_AUDIO_CHUNK"
 
     run(scenario())
+
+
+def test_audio_chunk_accepts_socketio_list_payload_shape(monkeypatch):
+    async def scenario():
+        handler = CapturingWs()
+        await init_mock_session(handler, monkeypatch)
+        frame = encode_frame(9, 160, b"\x00\x00" * 160)
+
+        ack = await handler.process(
+            "voqualizer_audio_chunk",
+            {"frame": list(frame), "bearer_token": handler.bearer_token},
+            "SID1",
+        )
+
+        assert ack["event"] == "voqualizer_audio_ack"
+        assert ack["seq"] == 9
+        assert ack["emitted"] == 2
+        assert [event for _sid, event, _data in handler.emitted] == [
+            "voqualizer_asr_partial",
+            "voqualizer_asr_final",
+        ]
+
+    run(scenario())
+
+
+def test_audio_chunk_accepts_socketio_buffer_payload_shape(monkeypatch):
+    async def scenario():
+        handler = CapturingWs()
+        await init_mock_session(handler, monkeypatch)
+        frame = encode_frame(10, 180, b"\x00\x00" * 160)
+
+        ack = await handler.process(
+            "voqualizer_audio_chunk",
+            {"frame": {"type": "Buffer", "data": list(frame)}, "bearer_token": handler.bearer_token},
+            "SID1",
+        )
+
+        assert ack["event"] == "voqualizer_audio_ack"
+        assert ack["seq"] == 10
+        assert ack["emitted"] == 2
+
+    run(scenario())

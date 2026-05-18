@@ -52,9 +52,14 @@ def test_store_frames_pcm16_audio_as_a2_binary_header_and_sends_with_token():
     assert "export function framePcm16" in text
     assert "view.setUint16(0, seq & 0xffff, false)" in text
     assert "view.setUint16(2, tsMs & 0xffff, false)" in text
+    assert "export function audioChunkPayload" in text
+    assert "return frame;" in text
+    assert "frame_bytes: frame.byteLength" in text
     assert "voqualizer_audio_chunk" in text
-    assert "sessionPayload({ frame })" in text
+    assert "sessionPayload(audioPayload)" in text
     assert "bearer_token: state.bearerToken" in text
+    assert "voqualizer_audio_error" in text
+    assert "appendEvent('voqualizer_audio_ack'" in text
 
 
 def test_store_renders_asr_and_agent_events():

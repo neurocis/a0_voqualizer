@@ -40,7 +40,7 @@ from helpers.print_style import PrintStyle
 # shadowing the framework `helpers` package and matches the convention used by
 # `a0_crosschatapi` and other reference plugins.
 from usr.plugins.a0_voqualizer.helpers import registry as _registry_mod  # noqa: E402
-from usr.plugins.a0_voqualizer.helpers.frame import decode_frame, FrameError  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.frame import HEADER_SIZE, decode_frame, FrameError  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.codec import (  # noqa: E402
     convert_codec_to_pcm16,
     CodecError,
@@ -231,16 +231,71 @@ def _build_tts_provider(spec: Mapping[str, Any]) -> TTSProvider:
     )
 
 
+def _coerce_binary_payload(value: Any) -> bytes | None:
+    """Coerce common Socket.IO/browser decoded binary shapes to bytes.
+
+    Live browser clients may send Uint8Array/ArrayBuffer nested in an object.
+    Depending on the Socket.IO/A0 dispatch path this can arrive in Python as
+    bytes, bytearray, memoryview, a list of byte values, a Node-style
+    ``{type: 'Buffer', data: [...]}``, or a mapping with numeric keys.  Keep the
+    conversion narrow: every list/numeric mapping value must be an integer byte.
+    """
+
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return bytes(value)
+    if isinstance(value, list | tuple):
+        try:
+            return bytes(value)
+        except (TypeError, ValueError):
+            return None
+    if isinstance(value, Mapping):
+        # Node/socket.io decoded Buffer shape: {type: 'Buffer', data: [..]}.
+        if str(value.get("type", "")).lower() == "buffer" and "data" in value:
+            return _coerce_binary_payload(value.get("data"))
+        # Browser binary wrappers often arrive as {data: [...]}, sometimes
+        # nested under frame/audio/payload again.
+        for key in ("frame", "audio", "payload", "data", "buffer"):
+            if key in value:
+                coerced = _coerce_binary_payload(value.get(key))
+                if coerced is not None:
+                    return coerced
+        # Some JSON serializers turn typed arrays into {'0': 1, '1': 2, ...}.
+        if value:
+            indexed: list[tuple[int, Any]] = []
+            for key, item in value.items():
+                try:
+                    index = int(key)
+                except (TypeError, ValueError):
+                    indexed = []
+                    break
+                indexed.append((index, item))
+            if indexed and sorted(index for index, _item in indexed) == list(range(len(indexed))):
+                return _coerce_binary_payload([item for _index, item in sorted(indexed)])
+    return None
+
+
 def _extract_audio_frame_payload(data: Any) -> tuple[bytes, bool]:
     """Extract a binary protocol frame and optional final flag from event data."""
 
-    if isinstance(data, (bytes, bytearray, memoryview)):
-        return bytes(data), False
     if isinstance(data, Mapping):
         for key in ("frame", "audio", "payload", "data"):
-            value = data.get(key)
-            if isinstance(value, (bytes, bytearray, memoryview)):
-                return bytes(value), bool(data.get("is_final", data.get("final", False)))
+            if key in data:
+                raw = _coerce_binary_payload(data.get(key))
+                if raw is not None:
+                    if len(raw) < HEADER_SIZE:
+                        raise FrameError("voqualizer_audio_chunk frame is shorter than A2 header")
+                    return raw, bool(data.get("is_final", data.get("final", False)))
+        raw = _coerce_binary_payload(data)
+        if raw is not None:
+            if len(raw) < HEADER_SIZE:
+                raise FrameError("voqualizer_audio_chunk frame is shorter than A2 header")
+            return raw, bool(data.get("is_final", data.get("final", False)))
+    else:
+        raw = _coerce_binary_payload(data)
+        if raw is not None:
+            if len(raw) < HEADER_SIZE:
+                raise FrameError("voqualizer_audio_chunk frame is shorter than A2 header")
+            return raw, False
     raise FrameError("voqualizer_audio_chunk requires a binary frame payload")
 
 
