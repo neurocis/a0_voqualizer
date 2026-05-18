@@ -133,6 +133,36 @@
         return String(value == null ? '' : value);
       }
 
+      function base64ToBytes(value) {
+        const binary = atob(String(value || ''));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+      }
+
+      async function playTtsPreview(response) {
+        if (!response || !response.audio_preview_b64) {
+          return;
+        }
+        const bytes = base64ToBytes(response.audio_preview_b64);
+        const fmt = String(response.audio_preview_format || '').toLowerCase();
+        const codec = String(response.codec || '').toLowerCase();
+        const mime = response.audio_preview_mime || (fmt === 'wav' || codec === 'wav' ? 'audio/wav' : fmt === 'mp3' || codec === 'mp3' ? 'audio/mpeg' : '');
+        if (mime && mime !== 'audio/L16') {
+          const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+          try {
+            const audio = new Audio(url);
+            await audio.play();
+            audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
+          } catch (error) {
+            URL.revokeObjectURL(url);
+            throw error;
+          }
+        }
+      }
+
       function renderProvider(side, provider, state) {
         const node = template.content.firstElementChild.cloneNode(true);
         const originalName = provider.name;
@@ -224,7 +254,16 @@
         sampleRate.addEventListener('change', commit);
         options.addEventListener('change', commit);
         isDefault.addEventListener('change', () => store.setDefault(side, provider.name));
-        node.querySelector('.provider-test').addEventListener('click', () => store.testProvider(side, provider.name).catch((error) => { $('error').textContent = error.message; }));
+        node.querySelector('.provider-test').addEventListener('click', () => {
+          store.testProvider(side, provider.name)
+            .then((data) => {
+              if (side === 'tts' && data && data.ok !== false) {
+                return playTtsPreview(data);
+              }
+              return null;
+            })
+            .catch((error) => { $('error').textContent = error.message; });
+        });
         node.querySelector('.provider-delete').addEventListener('click', () => {
           try { store.removeProvider(side, provider.name); } catch (error) { $('error').textContent = error.message || String(error); }
         });

@@ -202,3 +202,11 @@ def test_config_store_lifts_common_options_into_visible_provider_fields():
         assert key in text
     assert "normalized[key] = options[key];" in text
     assert "delete normalized[key];" in text
+
+
+def test_providers_page_plays_tts_smoke_preview():
+    source = PROVIDERS_HTML.read_text()
+    assert "function playTtsPreview(response)" in source
+    assert "audio_preview_b64" in source
+    assert "new Audio(url)" in source
+    assert "side === 'tts' && data && data.ok !== false" in source

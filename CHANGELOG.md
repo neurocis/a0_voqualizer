@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Added audible TTS provider smoke-test previews and surfaced encoded WAV/MP3/Opus chunks with matching codecs for browser playback.
 - Fixed Tester transcript rendering by unwrapping A0 Socket.IO event envelopes before updating ASR partial/final and agent response panels.
 - Replaced the fixed 200ms batch-ASR trigger with an utterance buffer that emits ~1s partials and silence-finalized transcripts for OpenAI-compatible Whisper providers.
 - Added a 200ms ASR aggregation buffer for batch/OpenAI-compatible Whisper providers so 20ms tester mic frames are transcribed as usable segments instead of empty per-frame results.

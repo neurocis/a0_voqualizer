@@ -26,6 +26,7 @@ defaults from a fresh plugin install.
 
 from __future__ import annotations
 
+import base64
 import os
 import sys
 import time
@@ -325,6 +326,20 @@ class VoqualizerAdmin(ApiHandler):
                     except Exception:
                         pass
 
+
+    def _tts_preview_mime(self, codec: str, fmt: str = "") -> str:
+        fmt = str(fmt or "").lower()
+        codec = str(codec or "").lower()
+        if fmt == "wav" or codec == "wav":
+            return "audio/wav"
+        if fmt == "mp3" or codec == "mp3":
+            return "audio/mpeg"
+        if fmt == "opus" or codec == "opus":
+            return "audio/ogg; codecs=opus"
+        if fmt == "pcm" or codec.startswith("pcm16"):
+            return "audio/L16"
+        return "application/octet-stream"
+
     async def _test_tts_provider(self, spec: Mapping[str, Any]) -> dict[str, Any]:
         from usr.plugins.a0_voqualizer.helpers.tts import TTSError, TTSRequest
 
@@ -352,11 +367,19 @@ class VoqualizerAdmin(ApiHandler):
             )
             bytes_returned = 0
             chunk_count = 0
+            preview_audio = b""
+            preview_limit = 512 * 1024
+            preview_format = ""
             async for chunk in provider.stream(request):
-                bytes_returned += len(chunk.data)
+                piece = bytes(chunk.data)
+                bytes_returned += len(piece)
                 chunk_count += 1
                 codec = chunk.codec
                 sample_rate = int(chunk.sample_rate)
+                if isinstance(getattr(chunk, "metadata", None), Mapping):
+                    preview_format = str(chunk.metadata.get("format") or preview_format or "")
+                if piece and len(preview_audio) < preview_limit:
+                    preview_audio += piece[: max(0, preview_limit - len(preview_audio))]
                 if bytes_returned > 0:
                     break
             latency_ms = int(round((time.perf_counter() - started) * 1000))
@@ -372,6 +395,9 @@ class VoqualizerAdmin(ApiHandler):
                 "bytes_returned": bytes_returned,
                 "codec": codec,
                 "sample_rate": sample_rate,
+                "audio_preview_b64": base64.b64encode(preview_audio).decode("ascii") if preview_audio else "",
+                "audio_preview_format": preview_format or str(spec.get("format") or spec.get("response_format") or ""),
+                "audio_preview_mime": self._tts_preview_mime(codec, preview_format or str(spec.get("format") or spec.get("response_format") or "")),
                 "message": (
                     f"TTS provider {name!r} smoke test passed in {latency_ms} ms."
                     if ok else f"TTS provider {name!r} returned no audio bytes."

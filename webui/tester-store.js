@@ -339,13 +339,41 @@ export function createVoqualizerTesterStore(options = {}) {
     return playbackContext;
   }
 
+  function bytesFromTtsPayload(payload) {
+    const data = eventData(payload);
+    return data.audio || data.data || data.pcm16 || payload.audio || payload.data || payload.pcm16;
+  }
+
+  async function playEncodedAudio(bytes, mimeType) {
+    const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const audio = new Audio(url);
+      await audio.play();
+      audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+  }
+
   async function playPcm16Chunk(payload) {
-    const audio = payload.audio || payload.data || payload.pcm16;
+    const data = eventData(payload);
+    const audio = bytesFromTtsPayload(payload);
+    const codec = String(data.codec || payload.codec || '').toLowerCase();
+    if (codec === 'wav' || codec === 'mp3' || codec === 'opus') {
+      const bytes = audio instanceof Uint8Array ? audio : new Uint8Array(audio || []);
+      const mime = codec === 'wav' ? 'audio/wav' : codec === 'mp3' ? 'audio/mpeg' : 'audio/ogg; codecs=opus';
+      if (bytes.length) {
+        await playEncodedAudio(bytes, mime);
+      }
+      return;
+    }
     const samples = pcm16ToFloat32(audio);
     if (!samples.length) {
       return;
     }
-    const sampleRate = Number(payload.sample_rate || payload.sampleRate || PCM_SAMPLE_RATE);
+    const sampleRate = Number(data.sample_rate || data.sampleRate || payload.sample_rate || payload.sampleRate || PCM_SAMPLE_RATE);
     const ctx = await ensurePlaybackContext(sampleRate);
     const buffer = ctx.createBuffer(1, samples.length, sampleRate);
     buffer.copyToChannel(samples, 0);
@@ -367,7 +395,8 @@ export function createVoqualizerTesterStore(options = {}) {
       state.diagnostics.firstTtsLatencyMs = state.diagnostics.lastAsrFinalAt ? ts - state.diagnostics.lastAsrFinalAt : null;
     }
     notify();
-    appendEvent('voqualizer_tts_chunk', { ...payload, audio: '[binary]' });
+    const data = eventData(payload);
+    appendEvent('voqualizer_tts_chunk', { ...data, audio: '[binary]' });
     playPcm16Chunk(payload).catch(setError);
   }
 

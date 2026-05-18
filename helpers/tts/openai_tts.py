@@ -173,9 +173,16 @@ class OpenAITTSProvider(TTSProvider):
             ) from exc
 
     def _codec_for_response_format(self, fmt: str, request: TTSRequest) -> str:
+        # If the provider was explicitly configured to return an encoded
+        # container (wav/mp3/opus), surface that container to clients instead of
+        # pretending the bytes are raw PCM. This lets the tester/provider-smoke
+        # UI choose the correct playback path.
+        normalized = str(fmt or "").lower()
+        if normalized in {"wav", "mp3", "opus"}:
+            return normalized
         if request.codec in _CODEC_TO_OPENAI_FORMAT:
             return request.codec
-        return _FORMAT_TO_CODEC.get(fmt, request.codec)
+        return _FORMAT_TO_CODEC.get(normalized, request.codec)
 
     def _build_payload(self, request: TTSRequest) -> dict[str, Any]:
         fmt = self._response_format_for_request(request)
