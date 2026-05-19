@@ -170,6 +170,7 @@
     STATE_CONVERSATIONAL,
     STATE_PTT_ACTIVE,
     STATE_CONNECTING,
+    STATE_STOPPING,
     STATE_ERROR,
   } from '/plugins/a0_voqualizer/webui/conversation-mode.js';
 
@@ -206,6 +207,7 @@
             pill.classList.toggle('voqualizer-ptt', visualClass === 'voqualizer-ptt');
             pill.classList.toggle('voqualizer-connecting', visualClass === 'voqualizer-connecting');
             pill.classList.toggle('voqualizer-error', visualClass === 'voqualizer-error');
+            pill.setAttribute('title', `Voqualizer state=${s.state || 'unknown'} desired=${s.desiredMode || 'unknown'} reason=${s.lastTransitionReason || 'n/a'} phase=${s.lastConnectPhase || 'n/a'} socket=${s.lastSocketEvent || 'n/a'}`);
           }
           if (speaker) {
             speaker.classList.toggle('voqualizer-tts-off', ttsOff);
@@ -221,7 +223,7 @@
             mic.classList.toggle('voqualizer-error', visualClass === 'voqualizer-error');
             mic.setAttribute('aria-pressed', String(s.state === STATE_CONVERSATIONAL || s.state === STATE_PTT_ACTIVE));
             mic.setAttribute('aria-label', micLabel);
-            mic.setAttribute('title', micLabel);
+            mic.setAttribute('title', `${micLabel} Last: ${s.lastTransitionReason || 'n/a'} / ${s.lastConnectPhase || 'n/a'}`);
           }
         };
         sync();
@@ -229,6 +231,7 @@
       },
       statusText(s, ttsOff) {
         if (s.state === STATE_CONNECTING) return 'Voq: Connecting…';
+        if (s.state === STATE_STOPPING) return 'Voq: Stopping…';
         if (s.state === STATE_CONVERSATIONAL) return 'Voq: Listening';
         if (s.state === STATE_PTT_ACTIVE) return 'Voq: Push-to-talk';
         if (s.state === STATE_ERROR) return 'Voq: Error';
@@ -241,13 +244,14 @@
       },
       micLabel(s) {
         if (s.state === STATE_CONNECTING) return 'Voqualizer connecting…';
+        if (s.state === STATE_STOPPING) return 'Voqualizer stopping…';
         if (s.state === STATE_CONVERSATIONAL) return 'Voqualizer listening. Tap to stop. Hold for push-to-talk finalization.';
         if (s.state === STATE_PTT_ACTIVE) return 'Voqualizer push-to-talk active. Release to send final.';
         if (s.state === STATE_ERROR) return 'Voqualizer error. Tap to retry.';
         return 'Voqualizer mic off. Tap for conversation. Hold for push-to-talk.';
       },
       visualClass(s) {
-        if (s.state === STATE_CONNECTING) return 'voqualizer-connecting';
+        if (s.state === STATE_CONNECTING || s.state === STATE_STOPPING) return 'voqualizer-connecting';
         if (s.state === STATE_CONVERSATIONAL) return 'voqualizer-active';
         if (s.state === STATE_PTT_ACTIVE) return 'voqualizer-ptt';
         if (s.state === STATE_ERROR) return 'voqualizer-error';

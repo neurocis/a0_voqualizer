@@ -11,7 +11,6 @@
 
 import {
   audioChunkPayload,
-  fetchSessionToken,
   initMicWorklet,
   createPlaybackTracker,
   alignPcm16Bytes,
@@ -26,29 +25,68 @@ import {
 export const TAP_HOLD_THRESHOLD_MS = 250;
 export const VOQUALIZER_HANDLER = 'plugins/a0_voqualizer/ws_voqualizer';
 export const TTS_PREF_PREFIX = 'a0_voqualizer.tts_enabled.';
+export const CONTEXT_CHANGE_DEBOUNCE_MS = 850;
 
 export const STATE_IDLE = 'idle';
 export const STATE_CONNECTING = 'connecting';
 export const STATE_CONVERSATIONAL = 'conversational';
 export const STATE_PTT_ACTIVE = 'ptt-active';
+export const STATE_STOPPING = 'stopping';
 export const STATE_ERROR = 'error';
+
+export const DESIRED_IDLE = 'idle';
+export const DESIRED_CONVERSATIONAL = 'conversational';
+export const DESIRED_PTT = 'ptt';
+
+function normalizeContextCandidate(value) {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    const text = String(value).trim();
+    return text && text !== '[object Object]' ? text : '';
+  }
+  if (typeof value === 'object') {
+    for (const key of ('id', 'ctxid', 'context_id', 'contextId', 'chat_id', 'chatId')) {
+      if (value[key] != null) {
+        const text = normalizeContextCandidate(value[key]);
+        if (text) return text;
+      }
+    }
+  }
+  return '';
+}
 
 export function currentContextId() {
   try {
     if (typeof globalThis.getContext === 'function') {
-      const ctx = globalThis.getContext();
-      if (ctx) return String(ctx);
+      const ctx = normalizeContextCandidate(globalThis.getContext());
+      if (ctx) return ctx;
     }
   } catch (_e) {}
   try {
     const chats = globalThis.Alpine && globalThis.Alpine.store && globalThis.Alpine.store('chats');
     if (chats) {
-      if (chats.selectedContext && chats.selectedContext.id) return String(chats.selectedContext.id);
-      if (typeof chats.getSelectedChatId === 'function') {
-        const id = chats.getSelectedChatId();
-        if (id) return String(id);
+      const candidates = [
+        chats.selectedContext,
+        chats.selectedContext && chats.selectedContext.id,
+        typeof chats.getSelectedChatId === 'function' ? chats.getSelectedChatId() : '',
+        chats.selected,
+      ];
+      for (const candidate of candidates) {
+        const id = normalizeContextCandidate(candidate);
+        if (id) return id;
       }
-      if (chats.selected) return String(chats.selected);
+    }
+  } catch (_e) {}
+  try {
+    const raw = globalThis.sessionStorage && globalThis.sessionStorage.getItem('lastSelectedChat');
+    const id = normalizeContextCandidate(raw);
+    if (id) return id;
+  } catch (_e) {}
+  try {
+    const params = new URLSearchParams(globalThis.location && globalThis.location.search || '');
+    for (const key of ('ctxid', 'context_id', 'contextId')) {
+      const id = normalizeContextCandidate(params.get(key));
+      if (id) return id;
     }
   } catch (_e) {}
   return '';
@@ -75,7 +113,13 @@ export function createVoqualizerStore(options = {}) {
   const carryMap = new Map();
   const state = {
     state: STATE_IDLE,
+    desiredMode: DESIRED_IDLE,
     contextId: currentContextId(),
+    pendingContextId: '',
+    pendingContextSince: 0,
+    contextChangeDebounceMs: options.contextChangeDebounceMs || CONTEXT_CHANGE_DEBOUNCE_MS,
+    connectionGeneration: 0,
+    intentionalDisconnect: false,
     sessionId: '',
     bearerToken: '',
     capturing: false,
@@ -83,40 +127,126 @@ export function createVoqualizerStore(options = {}) {
     conversational: false,
     ttsEnabledByContext: {},
     lastError: '',
+    lastTransitionReason: 'created',
+    lastConnectPhase: '',
+    lastDisconnectReason: '',
+    lastSocketEvent: '',
     audioFramesSent: 0,
     seq: 0,
     startTs: 0,
     holdStartedAt: 0,
+    _initialized: false,
+    _socket: null,
+    _mic: null,
+    _ctxPoll: null,
+    _contextHandler: null,
+    _pttOverlay: false,
     init() {
+      if (this._initialized) return this;
+      this._initialized = true;
+      this._setReason('init');
+      this.contextId = normalizeContextCandidate(this.contextId) || currentContextId();
       this.ttsEnabledByContext[this.contextId] = readTtsEnabled(this.contextId);
-      const onContextChange = () => this._onContextChanged();
-      try { globalThis.addEventListener && globalThis.addEventListener('a0:context-changed', onContextChange); } catch (_e) {}
-      // Best-effort polling fallback because A0 does not always emit a context-change event.
-      this._ctxPoll = setInterval(() => {
-        const cur = currentContextId();
-        if (cur && cur !== this.contextId) this._onContextChanged(cur);
-      }, 500);
+      this._contextHandler = () => this._observeContextChange(currentContextId(), 'event');
+      try { globalThis.addEventListener && globalThis.addEventListener('a0:context-changed', this._contextHandler); } catch (_e) {}
+      this._ctxPoll = setInterval(() => this._observeContextChange(currentContextId(), 'poll'), 500);
+      this._publishDebug();
+      return this;
     },
     destroy() {
       try { clearInterval(this._ctxPoll); } catch (_e) {}
-      this._stopMic();
+      try { this._contextHandler && globalThis.removeEventListener && globalThis.removeEventListener('a0:context-changed', this._contextHandler); } catch (_e) {}
+      this._stopMic('destroy');
+      this._disconnect('destroy');
+      this._initialized = false;
+      this._publishDebug();
     },
     isTtsEnabled() { return !!this.ttsEnabledByContext[this.contextId]; },
-    _onContextChanged(newId) {
-      const cur = newId || currentContextId();
-      if (cur === this.contextId) return;
-      // Context switch: stop, disconnect, reset.
-      this._stopMic();
-      this._disconnect();
+    debugSnapshot() {
+      return {
+        state: this.state,
+        desiredMode: this.desiredMode,
+        contextId: this.contextId,
+        pendingContextId: this.pendingContextId,
+        connectionGeneration: this.connectionGeneration,
+        intentionalDisconnect: this.intentionalDisconnect,
+        sessionId: this.sessionId,
+        bearerTokenIssued: !!this.bearerToken,
+        capturing: this.capturing,
+        conversational: this.conversational,
+        pttActive: this.pttActive,
+        ttsEnabled: this.isTtsEnabled(),
+        lastError: this.lastError,
+        lastTransitionReason: this.lastTransitionReason,
+        lastConnectPhase: this.lastConnectPhase,
+        lastDisconnectReason: this.lastDisconnectReason,
+        lastSocketEvent: this.lastSocketEvent,
+        audioFramesSent: this.audioFramesSent,
+      };
+    },
+    _publishDebug() {
+      try { globalThis.__voqualizer_conversation = this.debugSnapshot(); } catch (_e) {}
+    },
+    _setReason(reason, phase = '') {
+      this.lastTransitionReason = reason || this.lastTransitionReason;
+      if (phase) this.lastConnectPhase = phase;
+      this._publishDebug();
+    },
+    _isGenerationCurrent(generation) {
+      const current = generation === this.connectionGeneration;
+      if (!current) this._setReason('stale_generation_ignored');
+      return current;
+    },
+    _observeContextChange(rawId, source = 'poll') {
+      const cur = normalizeContextCandidate(rawId);
+      if (!cur) {
+        // Ignore a single empty/transient context read; only act if it remains
+        // stable long enough and we currently have no meaningful context.
+        if (!this.pendingContextId) {
+          this.pendingContextId = '';
+          this.pendingContextSince = Date.now();
+        }
+        this._setReason(`context_empty_${source}`);
+        return;
+      }
+      if (cur === this.contextId) {
+        this.pendingContextId = '';
+        this.pendingContextSince = 0;
+        return;
+      }
+      const now = Date.now();
+      if (cur !== this.pendingContextId) {
+        this.pendingContextId = cur;
+        this.pendingContextSince = now;
+        this._setReason('context_change_pending');
+        return;
+      }
+      if (now - this.pendingContextSince < this.contextChangeDebounceMs) return;
+      this._applyContextChange(cur);
+    },
+    async _applyContextChange(newId) {
+      const cur = normalizeContextCandidate(newId);
+      if (!cur || cur === this.contextId) return;
+      this._setReason('context_changed');
+      this.pendingContextId = '';
+      this.pendingContextSince = 0;
+      this.desiredMode = DESIRED_IDLE;
+      this.intentionalDisconnect = true;
+      this.connectionGeneration += 1;
+      await this._stopMic('context_changed');
+      await this._disconnect('context_changed');
       this.contextId = cur;
       this.ttsEnabledByContext[this.contextId] = readTtsEnabled(this.contextId);
-      this.state = STATE_IDLE;
       this.conversational = false;
+      this.pttActive = false;
+      this.state = STATE_IDLE;
+      this._publishDebug();
     },
     toggleTts() {
       const enabled = !this.isTtsEnabled();
       this.ttsEnabledByContext[this.contextId] = enabled;
       writeTtsEnabled(this.contextId, enabled);
+      this._setReason(enabled ? 'tts_enabled' : 'tts_muted');
       if (this._socket && this.bearerToken) {
         try {
           this._socket.emit('voqualizer_control', {
@@ -127,133 +257,267 @@ export function createVoqualizerStore(options = {}) {
         } catch (_e) {}
       }
     },
-    // --- Mic gesture entry points (called by extension capture-phase handler) ---
     async onTap() {
-      // Quick tap: toggle conversational mode
-      if (this.state === STATE_CONVERSATIONAL) {
-        await this._stopMic();
-        await this._disconnect();
+      if (this.state === STATE_CONNECTING || this.state === STATE_STOPPING) return;
+      if (this.state === STATE_CONVERSATIONAL || this.desiredMode === DESIRED_CONVERSATIONAL) {
+        this._setReason('manual_stop');
+        this.desiredMode = DESIRED_IDLE;
+        this.intentionalDisconnect = true;
+        this.connectionGeneration += 1;
+        this.state = STATE_STOPPING;
+        await this._stopMic('manual_stop');
+        await this._disconnect('manual_stop');
         this.conversational = false;
+        this.pttActive = false;
         this.state = STATE_IDLE;
+        this._publishDebug();
         return;
       }
+      const generation = this._beginLifecycle(DESIRED_CONVERSATIONAL, 'connect_requested');
+      await this._ensureConnected(generation);
+      if (!this._isGenerationCurrent(generation) || this.desiredMode !== DESIRED_CONVERSATIONAL) return;
+      await this._startMic(generation);
+      if (!this._isGenerationCurrent(generation) || this.desiredMode !== DESIRED_CONVERSATIONAL) return;
       this.conversational = true;
-      await this._ensureConnected();
-      await this._startMic();
       this.state = STATE_CONVERSATIONAL;
+      this._setReason('mic_started');
     },
     async onHoldStart() {
+      if (this.state === STATE_CONNECTING && this.desiredMode !== DESIRED_PTT) return;
       this.holdStartedAt = Date.now();
       this.pttActive = true;
-      const wasConversational = this.state === STATE_CONVERSATIONAL;
+      const wasConversational = this.state === STATE_CONVERSATIONAL || this.desiredMode === DESIRED_CONVERSATIONAL;
       this._pttOverlay = wasConversational;
-      await this._ensureConnected();
-      if (!this.capturing) await this._startMic();
+      const generation = this._beginLifecycle(DESIRED_PTT, 'ptt_requested');
+      await this._ensureConnected(generation);
+      if (!this._isGenerationCurrent(generation) || this.desiredMode !== DESIRED_PTT) return;
+      if (!this.capturing) await this._startMic(generation);
+      if (!this._isGenerationCurrent(generation) || this.desiredMode !== DESIRED_PTT) return;
       this.state = STATE_PTT_ACTIVE;
+      this._setReason('ptt_started');
     },
     async onHoldEnd() {
-      if (!this.pttActive) return;
+      if (!this.pttActive && this.desiredMode !== DESIRED_PTT) return;
+      const generation = this.connectionGeneration;
       this.pttActive = false;
-      // Send explicit end-of-utterance final frame so backend finalizes immediately.
-      await this._sendFinalFrame();
+      await this._sendFinalFrame(generation);
+      if (!this._isGenerationCurrent(generation)) return;
       if (this._pttOverlay) {
-        // Stay connected in conversational mode.
+        this.desiredMode = DESIRED_CONVERSATIONAL;
+        this.conversational = true;
         this.state = STATE_CONVERSATIONAL;
+        this._setReason('ptt_final_overlay');
       } else {
-        await this._stopMic();
-        await this._disconnect();
+        this.desiredMode = DESIRED_IDLE;
+        this.intentionalDisconnect = true;
+        this.connectionGeneration += 1;
+        this.state = STATE_STOPPING;
+        await this._stopMic('ptt_release');
+        await this._disconnect('ptt_release');
         this.conversational = false;
         this.state = STATE_IDLE;
+        this._setReason('ptt_final_disconnect');
       }
+      this._pttOverlay = false;
+      this._publishDebug();
     },
-    // --- Internals ---
-    async _ensureConnected() {
+    _beginLifecycle(desiredMode, reason) {
+      this.connectionGeneration += 1;
+      this.intentionalDisconnect = false;
+      this.desiredMode = desiredMode;
+      this.lastError = '';
+      this.state = STATE_CONNECTING;
+      this._setReason(reason, 'begin');
+      return this.connectionGeneration;
+    },
+    async _ensureConnected(generation = this.connectionGeneration) {
+      if (!this._isGenerationCurrent(generation)) return;
       if (this._socket && this.bearerToken) return;
+      if (this.desiredMode === DESIRED_IDLE) return;
       this.state = STATE_CONNECTING;
       try {
+        this._setReason('connecting_socket', 'socket_import');
         const ioMod = await import('/vendor/socket.io.esm.min.js');
+        if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) return;
         const ioFactory = ioMod.io || ioMod.default;
         const apiMod = await import('/js/api.js');
+        if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) return;
+        this._setReason('connecting_token', 'csrf');
         const csrf = apiMod.getCsrfToken ? await apiMod.getCsrfToken() : '';
-        const socket = ioFactory({ path: '/socket.io', auth: { csrf_token: csrf, handlers: [VOQUALIZER_HANDLER] } });
+        if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) return;
+        const socket = ioFactory('/ws', {
+          autoConnect: false,
+          reconnection: true,
+          transports: ['websocket', 'polling'],
+          withCredentials: true,
+          auth: { csrf_token: csrf, handlers: [VOQUALIZER_HANDLER] },
+        });
         this._socket = socket;
-        socket.on('voqualizer_ready', (payload) => {
-          const data = (payload && payload.data) || payload || {};
-          this.sessionId = data.session_id || this.sessionId;
-          this.bearerToken = data.bearer_token || this.bearerToken;
+        this._bindSocket(socket, generation);
+        this._setReason('connecting_socket', 'socket_connect');
+        socket.connect();
+        await new Promise((resolve) => {
+          let done = false;
+          const finish = () => { if (!done) { done = true; resolve(); } };
+          try { socket.once && socket.once('connect', finish); } catch (_e) {}
+          setTimeout(finish, 5000);
         });
-        socket.on('voqualizer_tts_chunk', (payload) => this._handleTtsChunk(payload));
-        socket.on('voqualizer_tts_done', (payload) => this._handleTtsDone(payload));
-        socket.on('voqualizer_error', (payload) => {
-          const data = (payload && payload.data) || payload || {};
-          this.lastError = data.message || data.code || 'voqualizer_error';
-          this.state = STATE_ERROR;
-        });
-        await new Promise((resolve, reject) => {
-          socket.emit('voqualizer_init', {
-            context_id: this.contextId || '',
-            input_codec: INPUT_CODEC,
-            output_codec: OUTPUT_CODEC,
-            tts: { enabled: this.isTtsEnabled() },
-          }, (response) => {
-            if (response && response.results && response.results[0] && response.results[0].data) {
-              const data = response.results[0].data;
+        if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) return;
+        this._setReason('connecting_init', 'init');
+        await new Promise((resolve) => {
+          let done = false;
+          const finish = () => { if (!done) { done = true; resolve(); } };
+          try {
+            socket.emit('voqualizer_init', {
+              context_id: this.contextId || '',
+              input_codec: INPUT_CODEC,
+              output_codec: OUTPUT_CODEC,
+              tts: { enabled: this.isTtsEnabled() },
+            }, (response) => {
+              if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) { finish(); return; }
+              const data = this._unwrapPayload(response);
               this.sessionId = data.session_id || this.sessionId;
               this.bearerToken = data.bearer_token || this.bearerToken;
-            }
-            resolve();
-          });
-          setTimeout(() => resolve(), 5000);
+              this._setReason('ready', 'init_ack');
+              finish();
+            });
+          } catch (_e) { finish(); }
+          setTimeout(finish, 5000);
         });
       } catch (err) {
+        if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE || this.intentionalDisconnect) return;
         this.lastError = err && err.message ? err.message : String(err);
         this.state = STATE_ERROR;
+        this._setReason('connect_error');
       }
     },
-    async _disconnect() {
-      if (this._socket) {
+    _bindSocket(socket, generation) {
+      const guard = (fn) => (payload) => {
+        if (socket !== this._socket || !this._isGenerationCurrent(generation)) return;
+        fn(payload);
+      };
+      socket.on('connect', guard(() => {
+        this.lastSocketEvent = 'connect';
+        if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) {
+          this._setReason('socket_reconnect_ignored');
+          try { socket.disconnect(); } catch (_e) {}
+          return;
+        }
+        this._setReason('connecting_socket', 'socket_connect');
+      }));
+      socket.on('reconnect', guard(() => {
+        this.lastSocketEvent = 'reconnect';
+        if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) {
+          this._setReason('socket_reconnect_ignored');
+          try { socket.disconnect(); } catch (_e) {}
+          return;
+        }
+        this._setReason('socket_reconnect', 'socket_reconnect');
+      }));
+      socket.on('reconnect_attempt', guard(() => {
+        this.lastSocketEvent = 'reconnect_attempt';
+        if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) {
+          this._setReason('socket_reconnect_ignored');
+          return;
+        }
+        this._setReason('socket_reconnect_attempt');
+      }));
+      socket.on('disconnect', guard((reason) => {
+        this.lastSocketEvent = 'disconnect';
+        this.lastDisconnectReason = reason || this.lastDisconnectReason;
+        if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) {
+          this._setReason('intentional_disconnect');
+          return;
+        }
+        this._setReason('socket_disconnect');
+      }));
+      socket.on('connect_error', guard((err) => {
+        this.lastSocketEvent = 'connect_error';
+        if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) return;
+        this.lastError = err && err.message ? err.message : String(err);
+        this.state = STATE_ERROR;
+        this._setReason('connect_error');
+      }));
+      socket.on('voqualizer_ready', guard((payload) => {
+        if (this.desiredMode === DESIRED_IDLE) return;
+        const data = this._unwrapPayload(payload);
+        this.sessionId = data.session_id || this.sessionId;
+        this.bearerToken = data.bearer_token || this.bearerToken;
+        this._setReason('ready', 'ready_event');
+      }));
+      socket.on('voqualizer_tts_chunk', guard((payload) => this._handleTtsChunk(payload)));
+      socket.on('voqualizer_tts_done', guard((payload) => this._handleTtsDone(payload)));
+      socket.on('voqualizer_error', guard((payload) => {
+        if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) return;
+        const data = this._unwrapPayload(payload);
+        this.lastError = data.message || data.code || 'voqualizer_error';
+        this.state = STATE_ERROR;
+        this._setReason('voqualizer_error');
+      }));
+    },
+    _unwrapPayload(payload) {
+      if (payload && payload.results && payload.results[0] && payload.results[0].data) return payload.results[0].data;
+      return (payload && payload.data) || payload || {};
+    },
+    async _disconnect(reason = 'manual_stop') {
+      this.lastDisconnectReason = reason;
+      this.intentionalDisconnect = true;
+      const socket = this._socket;
+      if (socket) {
         try {
-          this._socket.emit('voqualizer_control', { action: 'end_session', bearer_token: this.bearerToken });
-          this._socket.disconnect();
+          if (this.bearerToken) socket.emit('voqualizer_control', { action: 'end_session', bearer_token: this.bearerToken });
+          socket.disconnect();
         } catch (_e) {}
       }
-      this._socket = null;
+      if (socket === this._socket) this._socket = null;
       this.bearerToken = '';
       this.sessionId = '';
+      this._setReason('intentional_disconnect');
     },
-    async _startMic() {
+    async _startMic(generation = this.connectionGeneration) {
+      if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) return;
       if (this.capturing) return;
+      this.lastConnectPhase = 'mic_init';
       this.startTs = Date.now();
       this.seq = 0;
       const mic = await initMicWorklet({
-        onAudio: ({ pcm16, seq, tsMs }) => this._sendAudio(pcm16, seq, tsMs),
+        onAudio: ({ pcm16, seq, tsMs }) => this._sendAudio(pcm16, seq, tsMs, generation),
         onVu: (vu) => maybeLocalBargeInFromMic(vu, tracker),
         sampleRate: PCM_SAMPLE_RATE,
       });
+      if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) {
+        try { mic && mic.stop && mic.stop(); } catch (_e) {}
+        return;
+      }
       this._mic = mic;
       this.capturing = true;
+      this._setReason('mic_started', 'mic_started');
     },
-    async _stopMic() {
-      if (!this.capturing) return;
+    async _stopMic(reason = 'manual_stop') {
+      if (!this.capturing && !this._mic) return;
       try { this._mic && this._mic.stop(); } catch (_e) {}
       this._mic = null;
       this.capturing = false;
+      this.lastDisconnectReason = reason;
+      this._setReason('mic_stopped');
     },
-    _sendAudio(pcm16, seq, tsMs) {
-      if (!this._socket || !this.bearerToken) return;
-      this.seq = (seq | 0) || (this.seq + 1) & 0xffff;
-      const tsRel = (tsMs | 0) || ((Date.now() - this.startTs) & 0xffff);
+    _sendAudio(pcm16, seq, tsMs, generation = this.connectionGeneration) {
+      if (!this._isGenerationCurrent(generation)) return;
+      if (!this._socket || !this.bearerToken || this.desiredMode === DESIRED_IDLE) return;
+      this.seq = ((seq | 0) || (this.seq + 1)) & 0xffff;
+      const tsRel = ((tsMs | 0) || (Date.now() - this.startTs)) & 0xffff;
       const payload = audioChunkPayload(this.seq, tsRel, pcm16, { bearer_token: this.bearerToken });
       try { this._socket.emit('voqualizer_audio_chunk', payload); this.audioFramesSent += 1; } catch (_e) {}
     },
-    async _sendFinalFrame() {
+    async _sendFinalFrame(generation = this.connectionGeneration) {
+      if (!this._isGenerationCurrent(generation)) return;
       if (!this._socket || !this.bearerToken) return;
       const payload = audioChunkPayload((this.seq + 1) & 0xffff, ((Date.now() - this.startTs) & 0xffff), new Uint8Array(0), { bearer_token: this.bearerToken, is_final: true });
-      try { this._socket.emit('voqualizer_audio_chunk', payload); } catch (_e) {}
+      try { this._socket.emit('voqualizer_audio_chunk', payload); this._setReason('final_frame_sent'); } catch (_e) {}
     },
     _handleTtsChunk(payload) {
-      if (!this.isTtsEnabled()) return; // hard-mute when speaker is off
-      const data = (payload && payload.data) || payload || {};
+      if (!this.isTtsEnabled()) return;
+      const data = this._unwrapPayload(payload);
       const audio = bytesFromUnknownAudio(data.audio_bytes || data.audio || data.pcm16);
       const utteranceId = data.utterance_id || 'default';
       if (tracker.cancelledTtsUtterances.has(utteranceId)) return;
@@ -272,11 +536,9 @@ export function createVoqualizerStore(options = {}) {
       tracker.activePlaybackSources.get(utteranceId).push(source);
     },
     _handleTtsDone(payload) {
-      const data = (payload && payload.data) || payload || {};
+      const data = this._unwrapPayload(payload);
       const utteranceId = data.utterance_id || 'default';
-      if (data.cancelled || data.reason === 'barge_in') {
-        tracker.stopPlaybackForUtterance(utteranceId);
-      }
+      if (data.cancelled || data.reason === 'barge_in') tracker.stopPlaybackForUtterance(utteranceId);
     },
     _ensurePlaybackContext(sampleRate) {
       if (!this._playbackCtx) this._playbackCtx = new (globalThis.AudioContext || globalThis.webkitAudioContext)({ sampleRate });
@@ -287,8 +549,25 @@ export function createVoqualizerStore(options = {}) {
 }
 
 export function registerVoqualizerStore() {
-  if (!globalThis.Alpine || globalThis.Alpine.store('voqualizer')) return;
+  if (globalThis.__a0VoqualizerConversationStore) {
+    const existing = globalThis.__a0VoqualizerConversationStore;
+    if (globalThis.Alpine && globalThis.Alpine.store) {
+      try { if (!globalThis.Alpine.store('voqualizer')) globalThis.Alpine.store('voqualizer', existing); } catch (_e) {}
+    }
+    try { existing.init && existing.init(); } catch (_e) {}
+    return existing;
+  }
+  if (!globalThis.Alpine || !globalThis.Alpine.store) return undefined;
+  try {
+    const alpineExisting = globalThis.Alpine.store('voqualizer');
+    if (alpineExisting) {
+      globalThis.__a0VoqualizerConversationStore = alpineExisting;
+      try { alpineExisting.init && alpineExisting.init(); } catch (_e) {}
+      return alpineExisting;
+    }
+  } catch (_e) {}
   const store = createVoqualizerStore();
+  globalThis.__a0VoqualizerConversationStore = store;
   globalThis.Alpine.store('voqualizer', store);
   try { store.init && store.init(); } catch (_e) {}
   return store;

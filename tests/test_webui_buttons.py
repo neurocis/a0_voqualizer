@@ -19,7 +19,7 @@ def test_extension_renders_status_pill_and_two_dedicated_buttons():
     assert 'id="voqualizer-status-pill"' in s
     assert 'id="voqualizer-speaker-button"' in s
     assert 'id="voqualizer-mic-button"' in s
-    for marker in ('Voq: Off', 'Voq: Listening', 'Voq: Push-to-talk', 'TTS muted', 'Voq: Connecting', 'Voq: Error'):
+    for marker in ('Voq: Off', 'Voq: Listening', 'Voq: Push-to-talk', 'TTS muted', 'Voq: Connecting', 'Voq: Stopping', 'Voq: Error'):
         assert marker in s, f'missing status marker {marker!r}'
 
 
@@ -70,6 +70,8 @@ def test_extension_uses_dynamic_labels_and_tooltips():
         'Voqualizer listening. Tap to stop. Hold for push-to-talk finalization.',
         'Voqualizer push-to-talk active. Release to send final.',
         'Voqualizer error. Tap to retry.',
+        'Voqualizer stopping…',
+        'lastTransitionReason',
     ):
         assert marker in s, f'missing dynamic label marker {marker!r}'
 

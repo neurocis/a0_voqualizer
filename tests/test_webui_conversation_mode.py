@@ -40,3 +40,57 @@ def test_per_context_session_storage_key():
     s = CM.read_text()
     assert "TTS_PREF_PREFIX = 'a0_voqualizer.tts_enabled.'" in s
     assert 'sessionStorage' in s
+
+
+def test_connection_flapping_hardening_markers_present():
+    s = CM.read_text()
+    for marker in (
+        '__a0VoqualizerConversationStore',
+        'globalThis.__voqualizer_conversation',
+        'desiredMode',
+        "DESIRED_IDLE = 'idle'",
+        "DESIRED_CONVERSATIONAL = 'conversational'",
+        "DESIRED_PTT = 'ptt'",
+        'connectionGeneration',
+        '_isGenerationCurrent(generation)',
+        'stale_generation_ignored',
+        'intentionalDisconnect',
+        'socket_reconnect_ignored',
+        'pendingContextId',
+        'pendingContextSince',
+        'contextChangeDebounceMs',
+        'CONTEXT_CHANGE_DEBOUNCE_MS = 850',
+        'context_changed',
+        'normalizeContextCandidate',
+        "text !== '[object Object]'",
+        'lastTransitionReason',
+        'lastConnectPhase',
+        'lastDisconnectReason',
+        'lastSocketEvent',
+        'debugSnapshot()',
+    ):
+        assert marker in s, f'missing flapping hardening marker {marker!r}'
+
+
+def test_register_store_reuses_existing_singleton():
+    s = CM.read_text()
+    assert "Alpine.store('voqualizer'" in s
+    assert 'if (globalThis.__a0VoqualizerConversationStore)' in s
+    assert 'return existing' in s
+    assert 'globalThis.__a0VoqualizerConversationStore = store' in s
+
+
+def test_socket_and_async_lifecycle_are_guarded_by_intent_and_generation():
+    s = CM.read_text()
+    for marker in (
+        'const generation = this._beginLifecycle',
+        'this.desiredMode === DESIRED_IDLE',
+        'this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE',
+        "socket.on('connect'",
+        "socket.on('reconnect'",
+        "socket.on('reconnect_attempt'",
+        "socket.on('disconnect'",
+        "socket.on('connect_error'",
+        'socket.disconnect()',
+    ):
+        assert marker in s, f'missing lifecycle guard marker {marker!r}'
