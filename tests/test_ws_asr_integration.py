@@ -298,3 +298,12 @@ def test_ws_final_transcript_context_bridge_markers():
     assert 'get_default_context_bridge' in source
     assert 'bridge.inject_transcript' in source
     assert 'context transcript injection failed' in source
+
+
+def test_ws_barge_in_source_markers():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert '_cancel_tts_for_barge_in' in src
+    assert 'await self._cancel_tts_for_barge_in(session)' in src
+    assert 'tts_active_utterance_id' in src
+    assert 'tts_barge_in_notified' in src

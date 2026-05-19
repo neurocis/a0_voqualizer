@@ -122,6 +122,38 @@ def _asr_provider_label(metadata: dict[str, Any] | None) -> str:
     return "unknown"
 
 
+def _log_visible_user_prompt(context: Any, *, text: str, message_id: str, metadata: dict[str, Any] | None) -> None:
+    """Write submitted ASR prompts to the target context's visible chat log.
+
+    ``AgentContext.communicate`` adds the message to agent history, but A0's
+    visible chat log is maintained separately through ``context.log.log``.  The
+    external API does both explicitly; Voqualizer should do the same, but only
+    after a final ASR transcript is actually being injected.
+    """
+
+    if not isinstance(metadata, dict):
+        return
+    source = str(metadata.get("source") or "")
+    is_asr = source == "voqualizer_asr_final" or bool(metadata.get("asr_prompt"))
+    if not is_asr:
+        return
+    log = getattr(context, "log", None)
+    log_fn = getattr(log, "log", None)
+    if not callable(log_fn):
+        return
+    try:
+        log_fn(
+            type="user",
+            heading="",
+            content=text,
+            kvps={"source": "a0_voqualizer_asr", "asr_provider": _asr_provider_label(metadata)},
+            id=message_id,
+        )
+    except TypeError:
+        # Some test doubles expose a smaller log signature.
+        log_fn(type="user", heading="", content=text, id=message_id)
+
+
 def _visible_asr_prompt(text: str, metadata: dict[str, Any] | None) -> str:
     """Return the visible prompt text for ASR-originated injections.
 
@@ -338,6 +370,7 @@ class ContextBridge:
             )
 
         visible_text = _visible_asr_prompt(text, metadata)
+        _log_visible_user_prompt(context, text=visible_text, message_id=message_id, metadata=metadata)
         msg = self._user_message_factory(message=visible_text, id=message_id)
         task = context.communicate(msg, broadcast_level=broadcast_level)
         return TranscriptInjectionResult(

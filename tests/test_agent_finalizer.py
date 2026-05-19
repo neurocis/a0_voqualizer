@@ -355,3 +355,10 @@ def test_structured_response_stream_detection_defers_partial_json():
 def test_extract_streaming_text_section_from_partial_json():
     partial = '{"thoughts":["hidden"],"tool_args":{"text":"## Answer\n\n- **Hello'
     assert _extract_streaming_text_section(partial) == "## Answer\n\n- **Hello"
+
+
+def test_agent_finalizer_tracks_tts_chunks_for_barge_in_source_marker():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/helpers/agent_finalizer.py').read_text()
+    assert 'tts_chunks_emitted' in src
+    assert 'tts_barge_in_notified' in src

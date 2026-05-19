@@ -21,6 +21,14 @@ class FakeUserMessage:
     attachments: list[str] = field(default_factory=list)
 
 
+class FakeLog:
+    def __init__(self):
+        self.items = []
+    def log(self, **kwargs):
+        self.items.append(kwargs)
+        return kwargs
+
+
 class FakeContext:
     counter = 0
 
@@ -31,6 +39,7 @@ class FakeContext:
         self.name = name
         self.data = data or {}
         self.calls = []
+        self.log = FakeLog()
 
     def communicate(self, msg, broadcast_level=1):
         task = {"task": len(self.calls) + 1, "context_id": self.id}
@@ -232,3 +241,25 @@ def test_inject_transcript_does_not_prefix_non_asr_metadata():
 
     msg, _broadcast_level, _task = context.calls[0]
     assert msg.message == "plain prompt"
+
+
+def test_inject_transcript_logs_visible_asr_prompt_to_context_log():
+    runtime = FakeRuntime()
+    context = runtime.add(FakeContext(id="chat-visible"))
+    bridge = make_bridge(runtime)
+
+    bridge.inject_transcript(
+        "sess-visible",
+        "visible prompt",
+        context_id="chat-visible",
+        message_id="msg-visible",
+        metadata={"source": "voqualizer_asr_final", "asr_provider": "Whisper Test"},
+    )
+
+    assert context.log.items == [{
+        "type": "user",
+        "heading": "",
+        "content": "{ASR: Whisper Test} visible prompt",
+        "kvps": {"source": "a0_voqualizer_asr", "asr_provider": "Whisper Test"},
+        "id": "msg-visible",
+    }]

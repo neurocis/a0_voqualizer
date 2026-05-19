@@ -376,6 +376,9 @@ async def synthesize_agent_response_tts(
         speed = float(spec.get("speed") or spec_options.get("speed") or 1.0)
         if reset_cancel:
             session.reset_cancel()
+        session.metadata["tts_chunks_emitted"] = 0
+        if isinstance(session.metadata.get("tts_barge_in_notified"), set):
+            session.metadata["tts_barge_in_notified"].clear()
         session.metadata["tts_active_utterance_id"] = utterance_id
         try:
             session.transition_to("speaking")
@@ -411,6 +414,7 @@ async def synthesize_agent_response_tts(
                 return {"status": "cancelled", "reason": "barge_in", "chunks": chunks}
             await _emit_tts_chunk(session, chunk, metadata_defaults=request_metadata)
             chunks += 1
+            session.metadata["tts_chunks_emitted"] = chunks
             if session.cancel_tts.is_set():
                 await _emit_tts_done(
                     session,

@@ -818,6 +818,36 @@ class WsVoqualizer(WsHandler):
             tasks.add(task)
             task.add_done_callback(tasks.discard)
 
+    async def _cancel_tts_for_barge_in(self, session: BridgeSession, *, reason: str = "barge_in") -> None:
+        """Immediately stop any active TTS playback for user barge-in.
+
+        Setting ``session.cancel_tts`` stops backend TTS pumps at their next
+        cancellation check.  Emitting ``voqualizer_tts_done(cancelled=True)``
+        here also lets the browser stop queued playback immediately instead of
+        waiting for the provider stream to yield again.
+        """
+
+        session.cancel_in_flight_tts()
+        utterance_id = str(session.metadata.get("tts_active_utterance_id") or "")
+        if not utterance_id or session.sender is None:
+            return
+        notified = session.metadata.setdefault("tts_barge_in_notified", set())
+        if isinstance(notified, set) and utterance_id in notified:
+            return
+        if isinstance(notified, set):
+            notified.add(utterance_id)
+        try:
+            await self._emit_tts_done(
+                session,
+                utterance_id=utterance_id,
+                cancelled=True,
+                chunks=int(session.metadata.get("tts_chunks_emitted", 0) or 0),
+                reason=reason,
+            )
+        except Exception:
+            pass
+
+
     async def _process_batch_asr_chunk(
         self,
         session: BridgeSession,
@@ -848,9 +878,12 @@ class WsVoqualizer(WsHandler):
 
         rms = self._chunk_rms(chunk)
         if rms >= speech_rms:
+            was_speaking = bool(state.get("has_speech"))
             state["has_speech"] = True
             state["speech_ms"] = float(state.get("speech_ms", 0.0)) + chunk_ms
             state["trailing_silence_ms"] = 0.0
+            if session.barge_in and not was_speaking and session.metadata.get("tts_active_utterance_id"):
+                await self._cancel_tts_for_barge_in(session)
         elif state.get("has_speech"):
             state["trailing_silence_ms"] = float(state.get("trailing_silence_ms", 0.0)) + chunk_ms
 
@@ -1126,6 +1159,9 @@ class WsVoqualizer(WsHandler):
             metadata.setdefault("response_format", provider_format)
 
         session.reset_cancel()
+        session.metadata["tts_chunks_emitted"] = 0
+        if isinstance(session.metadata.get("tts_barge_in_notified"), set):
+            session.metadata["tts_barge_in_notified"].clear()
         request = TTSRequest(
             text=text,
             utterance_id=utterance_id,
@@ -1161,6 +1197,7 @@ class WsVoqualizer(WsHandler):
                     }
                 await self._emit_tts_chunk(session, chunk)
                 chunks += 1
+                session.metadata["tts_chunks_emitted"] = chunks
                 if session.cancel_tts.is_set():
                     await self._emit_tts_done(
                         session,

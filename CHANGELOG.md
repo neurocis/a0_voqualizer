@@ -1,4 +1,6 @@
 ## [Unreleased]
+- Automatic barge-in now cancels active streaming TTS on detected user speech and emits an immediate cancelled `voqualizer_tts_done`.
+- ASR final injections now explicitly write the prefixed `{ASR: provider}` prompt to the target context visible chat log before `communicate()`.
 - Reworked structured response TTS compromise: stream only extracted `text` field content while suppressing envelope keys and normalize final flush.
 - Deferred streaming TTS for structured JSON/tool responses so final TTS speaks only normalized `tool_args.text` instead of envelope keys or Markdown.
 - Final-response TTS now extracts only the response text section and normalizes Markdown into speech-friendly plain text.
