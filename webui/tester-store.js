@@ -141,6 +141,7 @@ export function createVoqualizerTesterStore(options = {}) {
   let mediaSource = null;
   let playbackContext = null;
   let playbackTail = 0;
+  const activePlaybackSources = new Map();
   const encodedTtsBuffers = new Map();
   const pcm16CarryBytes = new Map();
 
@@ -415,6 +416,45 @@ export function createVoqualizerTesterStore(options = {}) {
     pcm16CarryBytes.delete(utteranceId || 'default');
   }
 
+  function stopPlaybackForUtterance(utteranceId = 'default') {
+    const key = utteranceId || 'default';
+    const sources = activePlaybackSources.get(key) || [];
+    for (const source of sources) {
+      try {
+        source.stop(0);
+      } catch (_err) {
+        // Already ended or not started yet.
+      }
+      try {
+        source.disconnect();
+      } catch (_err) {
+        // Ignore disconnect races.
+      }
+    }
+    activePlaybackSources.delete(key);
+    encodedTtsBuffers.delete(key);
+    clearPcm16Carry(key);
+    if (playbackContext) {
+      playbackTail = playbackContext.currentTime + 0.01;
+    } else {
+      playbackTail = 0;
+    }
+  }
+
+  function stopAllPlayback() {
+    for (const key of Array.from(activePlaybackSources.keys())) {
+      stopPlaybackForUtterance(key);
+    }
+    activePlaybackSources.clear();
+    encodedTtsBuffers.clear();
+    pcm16CarryBytes.clear();
+    if (playbackContext) {
+      playbackTail = playbackContext.currentTime + 0.01;
+    } else {
+      playbackTail = 0;
+    }
+  }
+
   async function playEncodedAudio(bytes, mimeType) {
     const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
@@ -479,6 +519,20 @@ export function createVoqualizerTesterStore(options = {}) {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
+    if (!activePlaybackSources.has(utteranceId)) {
+      activePlaybackSources.set(utteranceId, []);
+    }
+    activePlaybackSources.get(utteranceId).push(source);
+    source.addEventListener('ended', () => {
+      const list = activePlaybackSources.get(utteranceId) || [];
+      const idx = list.indexOf(source);
+      if (idx >= 0) {
+        list.splice(idx, 1);
+      }
+      if (!list.length) {
+        activePlaybackSources.delete(utteranceId);
+      }
+    }, { once: true });
     const startAt = Math.max(ctx.currentTime + 0.01, playbackTail);
     source.start(startAt);
     playbackTail = startAt + buffer.duration;
@@ -502,8 +556,16 @@ export function createVoqualizerTesterStore(options = {}) {
   function handleTtsDone(payload) {
     const data = eventData(payload);
     const utteranceId = data.utterance_id || payload.utterance_id || 'default';
-    clearPcm16Carry(utteranceId);
-    flushEncodedTts(utteranceId).catch(setError);
+    if (data.cancelled || payload.cancelled || data.reason === 'barge_in' || payload.reason === 'barge_in') {
+      if (utteranceId && utteranceId !== 'default') {
+        stopPlaybackForUtterance(utteranceId);
+      } else {
+        stopAllPlayback();
+      }
+    } else {
+      clearPcm16Carry(utteranceId);
+      flushEncodedTts(utteranceId).catch(setError);
+    }
     appendEvent('voqualizer_tts_done', payload);
   }
 

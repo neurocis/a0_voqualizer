@@ -175,3 +175,13 @@ def test_tester_pcm16_carry_byte_alignment():
     assert 'pcm16CarryBytes.set(key, input[input.length - 1])' in store
     assert 'clearPcm16Carry(utteranceId);' in store
     assert 'pcm16ToFloat32(alignedAudio)' in store
+
+
+def test_tester_stops_queued_playback_on_cancelled_tts_done():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/webui/tester-store.js').read_text()
+    assert 'activePlaybackSources' in src
+    assert 'stopPlaybackForUtterance' in src
+    assert 'stopAllPlayback' in src
+    assert "data.reason === 'barge_in'" in src
+    assert 'source.stop(0)' in src
