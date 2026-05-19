@@ -165,3 +165,13 @@ def test_tester_context_picklist_and_connect_binding():
     assert "action: 'contexts'" in store
     assert 'selectedContextId' in store
     assert "context_id: init.context_id || init.contextId || state.selectedContextId || ''" in store
+
+
+def test_tester_pcm16_carry_byte_alignment():
+    store = TESTER_STORE.read_text()
+    assert 'const pcm16CarryBytes = new Map()' in store
+    assert 'function alignPcm16Bytes' in store
+    assert 'input.length % 2 === 1' in store
+    assert 'pcm16CarryBytes.set(key, input[input.length - 1])' in store
+    assert 'clearPcm16Carry(utteranceId);' in store
+    assert 'pcm16ToFloat32(alignedAudio)' in store

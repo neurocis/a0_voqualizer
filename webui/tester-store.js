@@ -142,6 +142,7 @@ export function createVoqualizerTesterStore(options = {}) {
   let playbackContext = null;
   let playbackTail = 0;
   const encodedTtsBuffers = new Map();
+  const pcm16CarryBytes = new Map();
 
   function snapshot() {
     return {
@@ -392,6 +393,28 @@ export function createVoqualizerTesterStore(options = {}) {
     return value instanceof Uint8Array ? value : new Uint8Array(value || []);
   }
 
+  function alignPcm16Bytes(bytes, utteranceId = 'default') {
+    let input = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    const key = utteranceId || 'default';
+    const carry = pcm16CarryBytes.get(key);
+    if (carry !== undefined) {
+      const merged = new Uint8Array(input.length + 1);
+      merged[0] = carry;
+      merged.set(input, 1);
+      input = merged;
+      pcm16CarryBytes.delete(key);
+    }
+    if (input.length % 2 === 1) {
+      pcm16CarryBytes.set(key, input[input.length - 1]);
+      input = input.slice(0, input.length - 1);
+    }
+    return input;
+  }
+
+  function clearPcm16Carry(utteranceId = 'default') {
+    pcm16CarryBytes.delete(utteranceId || 'default');
+  }
+
   async function playEncodedAudio(bytes, mimeType) {
     const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
@@ -443,7 +466,9 @@ export function createVoqualizerTesterStore(options = {}) {
       }
       return;
     }
-    const samples = pcm16ToFloat32(audio);
+    const utteranceId = data.utterance_id || payload.utterance_id || 'default';
+    const alignedAudio = alignPcm16Bytes(audio, utteranceId);
+    const samples = pcm16ToFloat32(alignedAudio);
     if (!samples.length) {
       return;
     }
@@ -477,6 +502,7 @@ export function createVoqualizerTesterStore(options = {}) {
   function handleTtsDone(payload) {
     const data = eventData(payload);
     const utteranceId = data.utterance_id || payload.utterance_id || 'default';
+    clearPcm16Carry(utteranceId);
     flushEncodedTts(utteranceId).catch(setError);
     appendEvent('voqualizer_tts_done', payload);
   }
