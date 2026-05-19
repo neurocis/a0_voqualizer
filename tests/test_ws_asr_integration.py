@@ -316,3 +316,16 @@ def test_ws_asr_strips_repeated_thank_you_source_marker():
     assert 'thank\\s+you' in src or 'thank\s+you' in src
     assert '_clean_asr_transcript_text(str(payload.get("text")' in src
     assert 'leading_thanks = re.match' in src
+
+
+def test_ws_asr_quality_preroll_and_hallucination_markers():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'asr_preroll_ms' in src
+    assert 'preroll_chunks' in src
+    assert 'speech_start_seq' in src
+    assert 'first_seq' in src
+    assert '_asr_text_is_repeated_no_speech_hallucination' in src
+    assert 'asr_last_suppressed_text' in src
+    assert 'asr_request_ms' in src
+    assert 'asr_final_silence_ms", 1000.0' in src

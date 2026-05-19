@@ -116,9 +116,19 @@ export function createVoqualizerTesterStore(options = {}) {
       connectedAt: 0,
       captureStartedAt: 0,
       lastAudioSentAt: 0,
+      firstAudioSentAt: 0,
+      firstAudioSeq: null,
+      firstAudioTsMs: null,
       lastAudioAckAt: 0,
       lastAsrPartialAt: 0,
       lastAsrFinalAt: 0,
+      lastAsrFinalText: '',
+      lastAsrFinalProvider: '',
+      lastAsrRequestMs: null,
+      lastAsrBufferedChunks: null,
+      lastAsrBufferedMs: null,
+      lastAsrFirstSeq: null,
+      lastAsrFirstTsMs: null,
       lastAgentDeltaAt: 0,
       lastTtsChunkAt: 0,
       firstTtsChunkAt: 0,
@@ -840,12 +850,21 @@ export function createVoqualizerTesterStore(options = {}) {
         const audioPayload = audioChunkPayload(message.seq || 0, message.tsMs || 0, message.pcm16);
         recordFrameInspection(audioPayload.frame);
         const sentAt = nowMs();
+        if (!state.diagnostics.firstAudioSentAt) {
+          state.diagnostics.firstAudioSentAt = sentAt;
+          state.diagnostics.firstAudioSeq = audioPayload.seq;
+          state.diagnostics.firstAudioTsMs = audioPayload.ts_ms;
+          appendEvent('voqualizer_audio_first_frame', { seq: audioPayload.seq, ts_ms: audioPayload.ts_ms, sent_at: sentAt });
+        }
         emitWithAck('voqualizer_audio_chunk', sessionPayload(audioPayload))
           .then((ack) => { markAudioAck(sentAt); appendEvent('voqualizer_audio_ack', ack); })
           .catch((error) => { appendEvent('voqualizer_audio_error', { message: error.message || String(error), code: 'BAD_AUDIO_CHUNK' }); setError(error); });
       }
     };
     state.diagnostics.captureStartedAt = nowMs();
+    state.diagnostics.firstAudioSentAt = 0;
+    state.diagnostics.firstAudioSeq = null;
+    state.diagnostics.firstAudioTsMs = null;
     setState({ capturing: true });
   }
 
@@ -915,9 +934,19 @@ export function createVoqualizerTesterStore(options = {}) {
     state.frameInspector.splice(0);
     Object.assign(state.diagnostics, {
       lastAudioSentAt: 0,
+      firstAudioSentAt: 0,
+      firstAudioSeq: null,
+      firstAudioTsMs: null,
       lastAudioAckAt: 0,
       lastAsrPartialAt: 0,
       lastAsrFinalAt: 0,
+      lastAsrFinalText: '',
+      lastAsrFinalProvider: '',
+      lastAsrRequestMs: null,
+      lastAsrBufferedChunks: null,
+      lastAsrBufferedMs: null,
+      lastAsrFirstSeq: null,
+      lastAsrFirstTsMs: null,
       lastAgentDeltaAt: 0,
       lastTtsChunkAt: 0,
       firstTtsChunkAt: 0,

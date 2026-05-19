@@ -191,6 +191,13 @@ class OpenAIWhisperASRProvider(ASRProvider):
         prompt = (metadata or {}).get("prompt") if metadata else None
         if prompt:
             fields["prompt"] = str(prompt)
+        asr_options = dict(self.spec.options.get("asr_options", {}) or {})
+        for key in ("temperature", "no_speech_threshold", "compression_ratio_threshold", "logprob_threshold", "suppress_tokens"):
+            if key in self.spec.options and key not in asr_options:
+                asr_options[key] = self.spec.options[key]
+        for key, value in asr_options.items():
+            if value is not None and value != "":
+                fields[str(key)] = str(value)
         return fields
 
     @staticmethod

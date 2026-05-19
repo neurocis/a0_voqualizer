@@ -206,3 +206,13 @@ def test_tester_mutes_worklet_monitor_path():
     assert 'monitorGainNode.gain.value = 0' in src
     assert 'workletNode.connect(monitorGainNode)' in src
     assert 'workletNode.connect(audioContext.destination)' not in src
+
+
+def test_tester_asr_quality_diagnostics_markers():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/webui/tester-store.js').read_text()
+    assert 'firstAudioSentAt' in src
+    assert 'voqualizer_audio_first_frame' in src
+    assert 'lastAsrRequestMs' in src
+    assert 'lastAsrBufferedChunks' in src
+    assert 'lastAsrFinalProvider' in src

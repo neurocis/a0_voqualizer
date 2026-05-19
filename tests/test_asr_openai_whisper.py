@@ -192,3 +192,12 @@ def test_stream_emits_partials_then_final_and_stops_on_final_chunk():
         assert events[2].metadata['stream'] is True
 
     asyncio.run(run())
+
+
+def test_openai_whisper_source_includes_quality_options():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/helpers/asr/openai_whisper.py').read_text()
+    assert 'asr_options' in src
+    assert 'no_speech_threshold' in src
+    assert 'temperature' in src
+    assert 'suppress_tokens' in src

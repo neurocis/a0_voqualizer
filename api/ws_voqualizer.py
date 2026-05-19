@@ -137,6 +137,46 @@ def _clean_asr_transcript_text(text: str) -> str:
     return clean
 
 
+def _asr_text_is_repeated_no_speech_hallucination(text: str) -> bool:
+    """Detect low-information repeated Whisper no-speech hallucinations.
+
+    Lemonade/Whisper-compatible endpoints can return repeated filler on silence
+    or echo-contaminated audio, especially "Thank you Thank you Thank you".
+    This suppresses repeated filler-only finals while preserving utterances that
+    contain additional user content such as "thank you thank you can you...".
+    """
+
+    clean = " ".join(str(text or "").strip().split())
+    if not clean:
+        return True
+    normalized = re.sub(r"[^a-z0-9']+", " ", clean.lower()).strip()
+    words = normalized.split()
+    if not words:
+        return True
+
+    # Repeated "thank you" pairs/triples are a common no-speech hallucination.
+    if len(words) >= 4 and len(words) % 2 == 0 and all(
+        words[i:i + 2] == ["thank", "you"] for i in range(0, len(words), 2)
+    ):
+        return True
+    if len(words) >= 3 and all(word in {"thank", "you", "thanks"} for word in words):
+        return True
+
+    repeated_single_fillers = {"you", "um", "uh", "thanks", "bye", "goodbye"}
+    if len(words) >= 3 and len(set(words)) == 1 and words[0] in repeated_single_fillers:
+        return True
+
+    filler_phrases = {
+        "thank you thank you",
+        "thank you thank you thank you",
+        "thanks thanks thanks",
+        "you you you",
+    }
+    return normalized in filler_phrases
+
+
+
+
 def _safe_load_config() -> dict:
     """Load merged config. Falls back to defaults if overlay is corrupted."""
     try:
@@ -743,10 +783,17 @@ class WsVoqualizer(WsHandler):
             return state
         state = {
             "chunks": [],
+            "preroll_chunks": [],
             "duration_ms": 0.0,
             "speech_ms": 0.0,
             "trailing_silence_ms": 0.0,
             "has_speech": False,
+            "speech_started_at_ms": None,
+            "first_seq": None,
+            "first_ts_ms": None,
+            "first_audio_at_ms": None,
+            "speech_start_seq": None,
+            "speech_start_ts_ms": None,
             "last_partial_at_ms": 0.0,
             "last_partial_text": "",
             "last_final_text": "",
@@ -759,6 +806,8 @@ class WsVoqualizer(WsHandler):
         """Filter empty and very low-value batch Whisper fragments."""
         clean = " ".join(str(text or "").strip().split())
         if not clean:
+            return False
+        if _asr_text_is_repeated_no_speech_hallucination(clean):
             return False
         # Single filler tokens from tiny/noisy windows are usually worse than no
         # update. Keep meaningful one-word utterances once final if punctuation
@@ -776,11 +825,22 @@ class WsVoqualizer(WsHandler):
         metadata: Mapping[str, Any],
     ) -> TranscriptResult | None:
         """Run provider.transcribe() and coerce the event kind for utterance ASR."""
+        request_started = _server_time_ms()
         result = await provider.transcribe(segment, language=language, metadata=metadata)
+        request_ms = round(_server_time_ms() - request_started, 3)
         text = " ".join(result.text.strip().split())
         if not self._asr_text_is_useful(text):
             session.metadata["asr_empty_results_suppressed"] = int(session.metadata.get("asr_empty_results_suppressed", 0)) + 1
+            session.metadata["asr_last_suppressed_text"] = text
+            session.metadata["asr_last_request_ms"] = request_ms
             return None
+        result_metadata = dict(result.metadata or {})
+        result_metadata.update(dict(metadata or {}))
+        result_metadata.update({
+            "asr_request_ms": request_ms,
+            "provider": result.provider,
+            "final_transcript": text,
+        })
         return TranscriptResult(
             text=text,
             kind=kind,
@@ -789,7 +849,7 @@ class WsVoqualizer(WsHandler):
             t_end=result.t_end,
             language=result.language,
             provider=result.provider,
-            metadata=result.metadata,
+            metadata=result_metadata,
         )
 
     async def _emit_transcribed_utterance_segment(
@@ -922,23 +982,47 @@ class WsVoqualizer(WsHandler):
         max_segment_ms = float(session.metadata.get("asr_max_segment_ms", 8000.0) or 8000.0)
         min_speech_ms = float(session.metadata.get("asr_min_speech_ms", 500.0) or 500.0)
         speech_rms = float(session.metadata.get("asr_speech_rms", 250.0) or 250.0)
+        preroll_ms = float(session.metadata.get("asr_preroll_ms", 400.0) or 400.0)
 
         state = self._asr_utterance_state_for_session(session)
         chunks: list[AudioChunk] = state.setdefault("chunks", [])
-        chunks.append(chunk)
+        preroll_chunks: list[AudioChunk] = state.setdefault("preroll_chunks", [])
         chunk_ms = self._chunk_duration_ms(chunk)
-        state["duration_ms"] = float(state.get("duration_ms", 0.0)) + chunk_ms
+        preroll_max_chunks = max(1, int((preroll_ms / max(chunk_ms, 1.0)) + 0.999))
+
+        if state.get("first_seq") is None:
+            state["first_seq"] = chunk.seq
+            state["first_ts_ms"] = chunk.ts_ms
+            state["first_audio_at_ms"] = _server_time_ms()
+        state["last_seq"] = chunk.seq
+        state["last_ts_ms"] = chunk.ts_ms
 
         rms = self._chunk_rms(chunk)
         if rms >= speech_rms:
             was_speaking = bool(state.get("has_speech"))
+            if not was_speaking:
+                state["speech_started_at_ms"] = float(state.get("duration_ms", 0.0))
+                state["speech_start_seq"] = chunk.seq
+                state["speech_start_ts_ms"] = chunk.ts_ms
+                # Include pre-roll immediately before detected speech so first
+                # words/plosives are not clipped by RMS/VAD threshold crossing.
+                chunks.extend(preroll_chunks)
+                preroll_chunks.clear()
+            chunks.append(chunk)
             state["has_speech"] = True
             state["speech_ms"] = float(state.get("speech_ms", 0.0)) + chunk_ms
             state["trailing_silence_ms"] = 0.0
             if session.barge_in and not was_speaking and session.metadata.get("tts_active_utterance_id"):
                 await self._cancel_tts_for_barge_in(session)
         elif state.get("has_speech"):
+            chunks.append(chunk)
             state["trailing_silence_ms"] = float(state.get("trailing_silence_ms", 0.0)) + chunk_ms
+        else:
+            preroll_chunks.append(chunk)
+            if len(preroll_chunks) > preroll_max_chunks:
+                del preroll_chunks[:len(preroll_chunks) - preroll_max_chunks]
+
+        state["duration_ms"] = float(state.get("duration_ms", 0.0)) + chunk_ms
 
         duration_ms = float(state.get("duration_ms", 0.0))
         speech_ms = float(state.get("speech_ms", 0.0))
@@ -962,10 +1046,16 @@ class WsVoqualizer(WsHandler):
             "buffered_ms": round(duration_ms, 3),
             "speech_ms": round(speech_ms, 3),
             "trailing_silence_ms": round(trailing_ms, 3),
+            "first_seq": state.get("first_seq"),
+            "first_ts_ms": state.get("first_ts_ms"),
+            "speech_start_seq": state.get("speech_start_seq"),
+            "speech_start_ts_ms": state.get("speech_start_ts_ms"),
+            "speech_started_at_ms": state.get("speech_started_at_ms"),
             "asr_partial_interval_ms": partial_interval_ms,
             "asr_final_silence_ms": final_silence_ms,
             "asr_max_segment_ms": max_segment_ms,
             "asr_min_speech_ms": min_speech_ms,
+            "asr_preroll_ms": preroll_ms,
         }
 
         if should_partial:
