@@ -83,6 +83,57 @@ def _extract_text_section(value: Any) -> str:
     return text
 
 
+def _decode_partial_string_literal(value: str) -> str:
+    out: list[str] = []
+    i = 0
+    while i < len(value):
+        ch = value[i]
+        if ch != "\\":
+            out.append(ch)
+            i += 1
+            continue
+        if i + 1 >= len(value):
+            break
+        esc = value[i + 1]
+        mapping = {"n": "\n", "r": "\r", "t": "\t", "\\": "\\", '"': '"', "'": "'"}
+        out.append(mapping.get(esc, esc))
+        i += 2
+    return "".join(out)
+
+
+def _extract_streaming_text_section(value: Any) -> str:
+    """Extract current tool/text field content from a partial structured stream.
+
+    Unlike ``_extract_text_section``, this works before the surrounding JSON or
+    Python-literal dict is complete.  It lets streaming TTS start once the
+    response reaches ``tool_args.text`` while avoiding speech for envelope keys
+    like thoughts/headline/tool_name.
+    """
+
+    text = _clean_text(value)
+    if not text:
+        return ""
+    match = re.search(r"[\"']text[\"']\s*:\s*([\"'])", text)
+    if not match:
+        return ""
+    quote = match.group(1)
+    start = match.end()
+    escaped = False
+    end = len(text)
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\":
+            escaped = True
+            continue
+        if ch == quote:
+            end = i
+            break
+    return _decode_partial_string_literal(text[start:end])
+
+
 def _looks_like_structured_response_stream(text: Any) -> bool:
     """Return true while a streamed response appears to be a JSON/tool envelope.
 
@@ -469,4 +520,5 @@ __all__ = [
     "_markdown_to_speech_text",
     "_tts_speakable_text",
     "_looks_like_structured_response_stream",
+    "_extract_streaming_text_section",
 ]

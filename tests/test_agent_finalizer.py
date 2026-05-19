@@ -48,7 +48,7 @@ sys.modules["agent"] = agent_mod
 from usr.plugins.a0_voqualizer.extensions.python.process_chain_end._50_voqualizer import (  # noqa: E402
     VoqualizerProcessChainEnd,
 )
-from usr.plugins.a0_voqualizer.helpers.agent_finalizer import finalize_agent_response_for_context, _looks_like_structured_response_stream, _tts_speakable_text  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.agent_finalizer import finalize_agent_response_for_context, _extract_streaming_text_section, _looks_like_structured_response_stream, _tts_speakable_text  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.context_bridge import ContextBridge  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.registry import BridgeRegistry  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.tts import AudioChunk as TTSAudioChunk  # noqa: E402
@@ -350,3 +350,8 @@ def test_structured_response_stream_detection_defers_partial_json():
 
     assert _looks_like_structured_response_stream(partial) is True
     assert _looks_like_structured_response_stream("Plain **markdown** answer.") is False
+
+
+def test_extract_streaming_text_section_from_partial_json():
+    partial = '{"thoughts":["hidden"],"tool_args":{"text":"## Answer\n\n- **Hello'
+    assert _extract_streaming_text_section(partial) == "## Answer\n\n- **Hello"

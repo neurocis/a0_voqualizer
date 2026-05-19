@@ -190,5 +190,12 @@ def test_sentence_chunker_respects_barge_in_cancellation():
 def test_sentence_chunker_defers_structured_response_stream_source_marker():
     src = Path('/a0/usr/plugins/a0_voqualizer/helpers/sentence_chunker.py').read_text()
     assert '_looks_like_structured_response_stream' in src
-    assert 'deferred_structured_response' in src
-    assert 'state.buffer = final_text' in src
+    assert 'structured_response_streaming' in src
+    assert 'state.speech_buffer = final_text' in src or 'state.speech_buffer = final_text[len(state.spoken_text):].lstrip()' in src
+
+
+def test_sentence_chunker_streams_structured_text_section_source_marker():
+    src = Path('/a0/usr/plugins/a0_voqualizer/helpers/sentence_chunker.py').read_text()
+    assert '_extract_streaming_text_section' in src
+    assert 'structured_response_streaming' in src
+    assert 'extract_ready_speech_text' in src

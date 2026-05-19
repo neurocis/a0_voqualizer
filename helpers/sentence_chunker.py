@@ -54,6 +54,9 @@ class SentenceChunkState:
     started_at: float | None = None
     sequence: int = 0
     spoken_text: str = ""
+    structured_response: bool = False
+    structured_text: str = ""
+    speech_buffer: str = ""
     pending_tasks: list[Any] = field(default_factory=list)
 
 
@@ -122,6 +125,18 @@ class SentenceTTSChunker:
             return ready
         return ""
 
+    def extract_ready_speech_text(self, state: SentenceChunkState, *, final: bool = False) -> str:
+        """Return ready text from the speech-only buffer for structured streams."""
+
+        original = state.buffer
+        state.buffer = state.speech_buffer
+        try:
+            ready = self.extract_ready_text(state, final=final)
+            state.speech_buffer = state.buffer
+            return ready
+        finally:
+            state.buffer = original
+
     async def process_session_delta(
         self,
         session: BridgeSession,
@@ -139,10 +154,33 @@ class SentenceTTSChunker:
             state.started_at = self.clock()
         state.buffer += text
         try:
-            from usr.plugins.a0_voqualizer.helpers.agent_finalizer import _looks_like_structured_response_stream
+            from usr.plugins.a0_voqualizer.helpers.agent_finalizer import (
+                _extract_streaming_text_section,
+                _looks_like_structured_response_stream,
+            )
 
-            if _looks_like_structured_response_stream(state.buffer):
-                return {"status": "buffered", "buffer_chars": len(state.buffer), "deferred_structured_response": True}
+            if state.structured_response or _looks_like_structured_response_stream(state.buffer):
+                state.structured_response = True
+                current_text = _extract_streaming_text_section(state.buffer)
+                if current_text.startswith(state.structured_text):
+                    delta = current_text[len(state.structured_text):]
+                else:
+                    delta = current_text
+                    state.speech_buffer = ""
+                state.structured_text = current_text
+                if delta:
+                    if not state.speech_buffer:
+                        state.started_at = self.clock()
+                    state.speech_buffer += delta
+                ready = self.extract_ready_speech_text(state)
+                if not ready:
+                    return {
+                        "status": "buffered",
+                        "buffer_chars": len(state.buffer),
+                        "speech_buffer_chars": len(state.speech_buffer),
+                        "structured_response_streaming": True,
+                    }
+                return await self._synthesize_ready(session, state, ready, final=False)
         except Exception:
             pass
         ready = self.extract_ready_text(state)
@@ -190,14 +228,20 @@ class SentenceTTSChunker:
 
         state = self._state(session, context_id)
         final_text = _clean_text(final_text)
-        if final_text and not state.spoken_text:
-            # If streaming was deferred for a structured JSON/tool response, use
-            # the finalizer-supplied clean speech text instead of the raw stream
-            # buffer so TTS does not read response-envelope keys or Markdown.
-            state.buffer = final_text
-        if not state.buffer:
-            return {"status": "ok", "chunks": 0, "final_flush": False, "spoken_text": state.spoken_text}
-        ready = self.extract_ready_text(state, final=True)
+        if state.structured_response:
+            if final_text.startswith(state.spoken_text):
+                state.speech_buffer = final_text[len(state.spoken_text):].lstrip()
+            elif final_text and not state.spoken_text:
+                state.speech_buffer = final_text
+            if not state.speech_buffer:
+                return {"status": "ok", "chunks": 0, "final_flush": False, "spoken_text": state.spoken_text}
+            ready = self.extract_ready_speech_text(state, final=True)
+        else:
+            if final_text and not state.spoken_text:
+                state.buffer = final_text
+            if not state.buffer:
+                return {"status": "ok", "chunks": 0, "final_flush": False, "spoken_text": state.spoken_text}
+            ready = self.extract_ready_text(state, final=True)
         if not ready:
             return {"status": "ok", "chunks": 0, "final_flush": False, "spoken_text": state.spoken_text}
         result = await self._synthesize_ready(
