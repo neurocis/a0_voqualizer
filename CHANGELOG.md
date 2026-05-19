@@ -1,4 +1,6 @@
 ## [Unreleased]
+- Final ASR transcript handling now strips repeated leading Whisper silence hallucinations like `Thank you. Thank you.` when real prompt text follows.
+- Tester mic capture now uses a muted Web Audio monitor path instead of connecting the worklet directly to speakers, reducing echo-fed ASR hallucinations.
 - Tester now performs local mic-VAD barge-in: detected speech stops queued browser TTS immediately and then notifies backend `barge_in`.
 - Increased default ASR final-silence threshold from 800 ms to 1000 ms to reduce premature utterance finalization.
 - Tester playback now stops queued Web Audio sources immediately when `voqualizer_tts_done(cancelled=true, reason=barge_in)` arrives.

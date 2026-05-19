@@ -307,3 +307,11 @@ def test_ws_barge_in_source_markers():
     assert 'await self._cancel_tts_for_barge_in(session)' in src
     assert 'tts_active_utterance_id' in src
     assert 'tts_barge_in_notified' in src
+
+
+def test_ws_asr_strips_repeated_thank_you_source_marker():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert '_clean_asr_transcript_text' in src
+    assert 'thank\\s+you' in src or 'thank\s+you' in src
+    assert '_clean_asr_transcript_text(str(payload.get("text")' in src

@@ -139,6 +139,7 @@ export function createVoqualizerTesterStore(options = {}) {
   let audioContext = null;
   let workletNode = null;
   let mediaSource = null;
+  let monitorGainNode = null;
   let playbackContext = null;
   let playbackTail = 0;
   const activePlaybackSources = new Map();
@@ -821,7 +822,14 @@ export function createVoqualizerTesterStore(options = {}) {
     });
     mediaSource = audioContext.createMediaStreamSource(mediaStream);
     mediaSource.connect(workletNode);
-    workletNode.connect(audioContext.destination);
+    // Keep the AudioWorklet graph alive without monitoring mic audio into the
+    // speakers. Directly connecting the processor to destination can leak local
+    // microphone/TTS echo on some browsers/devices and poison ASR with repeated
+    // Whisper silence hallucinations such as "Thank you".
+    monitorGainNode = audioContext.createGain();
+    monitorGainNode.gain.value = 0;
+    workletNode.connect(monitorGainNode);
+    monitorGainNode.connect(audioContext.destination);
     workletNode.port.onmessage = (event) => {
       const message = event.data || {};
       if (message.type === 'vu') {
@@ -846,6 +854,10 @@ export function createVoqualizerTesterStore(options = {}) {
       workletNode.port.postMessage({ type: 'setEnabled', enabled: false });
       workletNode.disconnect();
       workletNode = null;
+    }
+    if (monitorGainNode) {
+      monitorGainNode.disconnect();
+      monitorGainNode = null;
     }
     if (mediaSource) {
       mediaSource.disconnect();

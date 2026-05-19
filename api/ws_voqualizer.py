@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import re
 import time
 import traceback
 import uuid
@@ -106,6 +107,31 @@ _UNSET = object()
 def _server_time_ms() -> float:
     """Wall-clock epoch milliseconds (used for `server_time` and RTT math)."""
     return time.time() * 1000.0
+
+
+
+def _clean_asr_transcript_text(text: str) -> str:
+    """Remove common Whisper silence/echo hallucinations from final ASR text.
+
+    Whisper-family endpoints often produce leading repeated filler like
+    "Thank you. Thank you." when an utterance starts with silence, echo, or
+    very low-information audio. Strip only a repeated leading run when
+    additional prompt text follows, so legitimate short "thank you" messages
+    remain intact.
+    """
+
+    if not isinstance(text, str):
+        return ""
+    clean = text.strip()
+    if not clean:
+        return ""
+    clean = re.sub(
+        r"^(?:\s*thank\s+you[.!?,;:\-]*\s*){2,}(?=\S)",
+        "",
+        clean,
+        flags=re.IGNORECASE,
+    ).strip()
+    return clean
 
 
 def _safe_load_config() -> dict:
@@ -620,6 +646,11 @@ class WsVoqualizer(WsHandler):
     async def _emit_transcript(self, session: BridgeSession, result) -> None:
         payload = result.to_protocol_event()
         event = payload.pop("event")
+        if event == "voqualizer_asr_final":
+            cleaned_text = _clean_asr_transcript_text(str(payload.get("text") or ""))
+            if not cleaned_text:
+                return
+            payload["text"] = cleaned_text
         payload["session_id"] = session.session_id
         if session.sender is not None:
             await session.sender(event, payload)
