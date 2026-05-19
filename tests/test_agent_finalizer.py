@@ -48,7 +48,7 @@ sys.modules["agent"] = agent_mod
 from usr.plugins.a0_voqualizer.extensions.python.process_chain_end._50_voqualizer import (  # noqa: E402
     VoqualizerProcessChainEnd,
 )
-from usr.plugins.a0_voqualizer.helpers.agent_finalizer import finalize_agent_response_for_context  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.agent_finalizer import finalize_agent_response_for_context, _tts_speakable_text  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.context_bridge import ContextBridge  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.registry import BridgeRegistry  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.tts import AudioChunk as TTSAudioChunk  # noqa: E402
@@ -177,6 +177,7 @@ def test_finalize_emits_final_response_and_tts_chunks_done():
             "session_id": "sess-1",
             "context_id": "ctx-1",
             "text": "Assistant final answer.",
+            "speech_text": "Assistant final answer.",
             "utterance_id": "utt-final",
         }
         assert emitted[1][1]["audio"] == b"one"
@@ -249,6 +250,42 @@ def test_finalize_obeys_existing_barge_in_cancel_flag():
         assert [event for event, _payload in emitted] == ["voqualizer_agent_response_final", "voqualizer_tts_done"]
         assert emitted[-1][1]["cancelled"] is True
         assert emitted[-1][1]["reason"] == "barge_in"
+
+    run(scenario())
+
+
+def test_tts_speakable_text_extracts_json_tool_text_and_normalizes_markdown():
+    raw = '{"thoughts":["hidden"],"headline":"h","tool_name":"response","tool_args":{"text":"## Answer\n\n- **Hello** [world](https://example.test)\n- `code` sample\n\n```python\nprint(1)\n```"}}'
+
+    spoken = _tts_speakable_text(raw)
+
+    assert "thoughts" not in spoken
+    assert "tool_args" not in spoken
+    assert "##" not in spoken
+    assert "**" not in spoken
+    assert "https://" not in spoken
+    assert "print(1)" not in spoken
+    assert "Hello world" in spoken
+    assert "code sample" in spoken
+
+
+def test_finalize_sends_original_final_text_but_tts_uses_speech_text():
+    async def scenario():
+        _bridge, _session, emitted = await install_session()
+        provider = FakeTTSProvider({"name": "fake-tts", "type": "mock"})
+        raw = '{"tool_args":{"text":"# Spoken title\n\n- say **this** only"},"thoughts":["silent"]}'
+
+        await finalize_agent_response_for_context(
+            context_id="ctx-1",
+            text=raw,
+            config_loader=cfg,
+            tts_provider_factory=lambda spec: provider,
+            utterance_id_factory=lambda: "utt-speech",
+        )
+
+        assert emitted[0][1]["text"] == raw
+        assert emitted[0][1]["speech_text"] == "Spoken title\nsay this only"
+        assert provider.requests[0].text == "Spoken title\nsay this only"
 
     run(scenario())
 

@@ -9,6 +9,8 @@ machinery to synthesize the final response for the voice client.
 from __future__ import annotations
 
 import base64
+import json
+import re
 import uuid
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -26,6 +28,113 @@ UtteranceIdFactory = Callable[[], str]
 
 def _clean_text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
+
+
+def _extract_text_section(value: Any) -> str:
+    """Extract the user-facing text section from A0/JSON-style responses.
+
+    Some Agent Zero responses are JSON envelopes or Markdown code-fenced JSON
+    with fields such as ``thoughts``, ``headline``, ``tool_name`` and
+    ``tool_args``.  Voice playback should speak only the actual response text,
+    not internal routing/metadata.  For plain Markdown strings this returns the
+    original text unchanged.
+    """
+
+    if isinstance(value, Mapping):
+        for path in (("tool_args", "text"), ("response", "text"), ("message",), ("text",), ("content",)):
+            cur: Any = value
+            ok = True
+            for key in path:
+                if isinstance(cur, Mapping) and key in cur:
+                    cur = cur[key]
+                else:
+                    ok = False
+                    break
+            if ok and isinstance(cur, str) and cur.strip():
+                return cur.strip()
+        return ""
+
+    text = _clean_text(value)
+    if not text:
+        return ""
+
+    candidate = text
+    fence = re.fullmatch(r"\s*```(?:json)?\s*(.*?)\s*```\s*", candidate, flags=re.IGNORECASE | re.DOTALL)
+    if fence:
+        candidate = fence.group(1).strip()
+
+    if candidate.startswith("{") and candidate.endswith("}"):
+        try:
+            extracted = _extract_text_section(json.loads(candidate))
+            if extracted:
+                return extracted
+        except Exception:
+            pass
+
+    return text
+
+
+def _markdown_to_speech_text(value: Any) -> str:
+    """Convert Markdown-ish assistant text into TTS-friendly plain speech.
+
+    This intentionally avoids heavy Markdown dependencies and focuses on the
+    structures that sound bad when spoken raw: code fences, inline code ticks,
+    links, images, headings, bullets, tables, blockquotes, emphasis markers and
+    horizontal rules.
+    """
+
+    text = _clean_text(value)
+    if not text:
+        return ""
+
+    # Remove fenced code blocks rather than reading symbols/code aloud.
+    text = re.sub(r"```[\s\S]*?```", " Code block omitted. ", text)
+    # Replace inline code with its readable content.
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    # Images: keep alt text if present.
+    text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    # Links: speak visible label only.
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+
+    lines: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            lines.append("")
+            continue
+        if re.fullmatch(r"[-*_]{3,}", line):
+            continue
+        # Drop Markdown table separator rows.
+        if "|" in line and re.fullmatch(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?", line):
+            continue
+        # Convert table cells to comma-separated phrases.
+        if "|" in line:
+            cells = [c.strip() for c in line.strip("|").split("|") if c.strip()]
+            if cells:
+                line = ", ".join(cells)
+        line = re.sub(r"^#{1,6}\s+", "", line)
+        line = re.sub(r"^>+\s*", "", line)
+        line = re.sub(r"^[-*+]\s+", "", line)
+        line = re.sub(r"^\d+[.)]\s+", "", line)
+        line = re.sub(r"^\[[ xX]\]\s+", "", line)
+        lines.append(line)
+
+    text = "\n".join(lines)
+    # Remove common emphasis/strikethrough markers while preserving words.
+    text = re.sub(r"(\*\*|__|~~)", "", text)
+    text = re.sub(r"(?<!\w)[*_](?!\s)(.*?)(?<!\s)[*_](?!\w)", r"\1", text)
+    # Collapse excessive punctuation that TTS reads awkwardly.
+    text = text.replace("→", " to ").replace("←", " from ").replace("=>", " to ")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"\s+([,.!?;:])", r"\1", text)
+    return text.strip()
+
+
+def _tts_speakable_text(value: Any) -> str:
+    """Return only the assistant text section, normalized for speech."""
+
+    return _markdown_to_speech_text(_extract_text_section(value))
 
 
 def _default_config_loader() -> dict[str, Any]:
@@ -154,7 +263,8 @@ async def synthesize_agent_response_tts(
     Agent Zero process-chain hook.
     """
 
-    text = _clean_text(text)
+    original_text = _clean_text(text)
+    text = _tts_speakable_text(text)
     if not text:
         return {"status": "skipped", "reason": "empty_text", "chunks": 0}
     if session.sender is None:
@@ -199,6 +309,8 @@ async def synthesize_agent_response_tts(
             source=metadata_source,
             context_id=context_id,
         )
+        if original_text != text:
+            request_metadata["speech_normalized"] = True
         request = TTSRequest(
             text=text,
             utterance_id=utterance_id,
@@ -259,6 +371,7 @@ async def finalize_agent_response_for_context(
 
     context_id = _clean_text(context_id)
     text = _clean_text(text)
+    speech_text = _tts_speakable_text(text)
     if not context_id or not text:
         return {"emitted": 0, "tts": [], "reason": "empty_context_or_text"}
 
@@ -286,6 +399,7 @@ async def finalize_agent_response_for_context(
                 "session_id": session.session_id,
                 "context_id": binding.context_id,
                 "text": text,
+                "speech_text": speech_text,
                 "utterance_id": utterance_id,
             },
         )
@@ -303,14 +417,14 @@ async def finalize_agent_response_for_context(
             tts_result = await chunker.finalize_session(
                 session,
                 context_id=binding.context_id,
-                final_text=text,
+                final_text=speech_text,
                 config_loader=config_loader,
                 tts_provider_factory=tts_provider_factory,
             )
         else:
             tts_result = await synthesize_agent_response_tts(
                 session,
-                text,
+                speech_text,
                 context_id=binding.context_id,
                 utterance_id=utterance_id,
                 config_loader=config_loader,
@@ -324,4 +438,7 @@ async def finalize_agent_response_for_context(
 __all__ = [
     "finalize_agent_response_for_context",
     "synthesize_agent_response_tts",
+    "_extract_text_section",
+    "_markdown_to_speech_text",
+    "_tts_speakable_text",
 ]
