@@ -103,6 +103,7 @@
         <label><span>Model</span><input class="provider-model" autocomplete="off" placeholder="model name"></label>
         <label><span>API key env</span><input class="provider-api-key-env" autocomplete="off" placeholder="API_KEY_LEMONADE"></label>
         <label class="asr-only"><span>Silence to Final (ms)</span><input class="provider-asr-final-silence-ms" autocomplete="off" inputmode="numeric" placeholder="1000"></label>
+        <label class="asr-only"><span>ASR Pre-roll (ms)</span><input class="provider-asr-preroll-ms" autocomplete="off" inputmode="numeric" placeholder="600"></label>
         <label class="tts-only"><span>Voice</span><input class="provider-voice" autocomplete="off" placeholder="TTS voice"></label>
         <label class="tts-only"><span>TTS speed</span><input class="provider-speed" autocomplete="off" inputmode="decimal" placeholder="1.0"></label>
       </div>
@@ -226,6 +227,7 @@
         const voice = node.querySelector('.provider-voice');
         const apiKeyEnv = node.querySelector('.provider-api-key-env');
         const asrFinalSilence = node.querySelector('.provider-asr-final-silence-ms');
+        const asrPreroll = node.querySelector('.provider-asr-preroll-ms');
         const speed = node.querySelector('.provider-speed');
         const options = node.querySelector('.provider-options');
         const result = node.querySelector('.provider-result');
@@ -246,6 +248,8 @@
         apiKeyEnv.value = provider.api_key_env || '';
         asrFinalSilence.value = side === 'asr' ? String(provider.asr_final_silence_ms == null ? 1000 : provider.asr_final_silence_ms) : '';
         asrFinalSilence.disabled = side !== 'asr';
+        asrPreroll.value = side === 'asr' ? String(provider.asr_preroll_ms == null ? 600 : provider.asr_preroll_ms) : '';
+        asrPreroll.disabled = side !== 'asr';
         speed.value = side === 'tts' && provider.speed != null ? String(provider.speed) : '';
         speed.disabled = side !== 'tts';
         for (const item of node.querySelectorAll('.asr-only')) {
@@ -292,6 +296,13 @@
               return;
             }
             patch.asr_final_silence_ms = parsedFinalSilence;
+            const asrPrerollValue = asrPreroll.value.trim() || '600';
+            const parsedPreroll = Number(asrPrerollValue);
+            if (!Number.isFinite(parsedPreroll) || parsedPreroll < 0 || parsedPreroll > 3000) {
+              $('error').textContent = `Invalid ASR Pre-roll for ${originalName}: ${asrPrerollValue}`;
+              return;
+            }
+            patch.asr_preroll_ms = parsedPreroll;
           }
           if (side === 'tts') {
             if (speedValue) {

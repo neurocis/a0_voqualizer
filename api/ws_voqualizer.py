@@ -560,6 +560,24 @@ class WsVoqualizer(WsHandler):
                 message="asr_final_silence_ms must be between 100 and 10000 ms",
             )
 
+        asr_preroll_ms = asr_block.get("preroll_ms")
+        if asr_preroll_ms is None:
+            asr_preroll_ms = asr_block.get("asr_preroll_ms")
+        if asr_preroll_ms is None:
+            asr_preroll_ms = asr_providers[asr_provider].get("asr_preroll_ms", 600.0)
+        try:
+            asr_preroll_ms = float(asr_preroll_ms)
+        except (TypeError, ValueError):
+            return WsResult.error(
+                code=BAD_REQUEST,
+                message="asr_preroll_ms must be numeric milliseconds",
+            )
+        if asr_preroll_ms < 0 or asr_preroll_ms > 3000:
+            return WsResult.error(
+                code=BAD_REQUEST,
+                message="asr_preroll_ms must be between 0 and 3000 ms",
+            )
+
         # Session id: client-supplied or generated.
         session_id = data.get("session_id") or uuid.uuid4().hex
         if not isinstance(session_id, str) or not session_id.strip():
@@ -592,6 +610,7 @@ class WsVoqualizer(WsHandler):
             )
 
         session.metadata["asr_final_silence_ms"] = asr_final_silence_ms
+        session.metadata["asr_preroll_ms"] = asr_preroll_ms
         # A8.4+/v0.1.1: honor optional `tts.enabled=false` from init so the Speaker
         # toggle in the in-GUI buttons can hard-mute TTS for this session.
         tts_enabled_init = tts_block.get("enabled")
@@ -631,6 +650,8 @@ class WsVoqualizer(WsHandler):
                 "output_codec": output_codec,
                 "language": language,
                 "barge_in": barge_in,
+                "asr_final_silence_ms": asr_final_silence_ms,
+                "asr_preroll_ms": asr_preroll_ms,
             },
         }
 

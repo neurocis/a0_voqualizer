@@ -347,3 +347,13 @@ def test_asr_provider_accepts_final_silence_source_marker():
     assert 'asr_final_silence_ms' in schema
     assert 'asr_final_silence_ms: 1000' in default.split('# --- TTS', 1)[0]
     assert 'asr_final_silence_ms: 1000' not in default.split('behavior:', 1)[1]
+
+
+def test_asr_provider_preroll_schema_and_defaults():
+    from pathlib import Path
+    root = Path('/a0/usr/plugins/a0_voqualizer')
+    schema = (root / 'helpers/config_schema.py').read_text()
+    default = (root / 'default_config.yaml').read_text()
+    assert '"asr_preroll_ms": {"type": "number", "minimum": 0, "maximum": 3000}' in schema
+    assert default.count('      asr_preroll_ms: 600') >= 3
+    assert '\nasr_preroll_ms: 600' not in default

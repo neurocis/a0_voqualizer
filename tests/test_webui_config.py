@@ -282,3 +282,20 @@ def test_provider_page_hides_side_inapplicable_fields():
     assert 'normalized.sample_rate = TTS_FIXED_SAMPLE_RATE' in store
     assert 'delete normalized.voice' in store
     assert 'delete normalized.speed' in store
+
+
+def test_asr_provider_preroll_ui_and_normalization_markers():
+    from pathlib import Path
+    root = Path('/a0/usr/plugins/a0_voqualizer')
+    providers = (root / 'webui/providers.html').read_text()
+    store = (root / 'webui/config-store.js').read_text()
+    defaults = (root / 'default_config.yaml').read_text()
+    assert 'ASR Pre-roll (ms)' in providers
+    assert 'provider-asr-preroll-ms' in providers
+    assert 'min="0"' in providers
+    assert 'max="3000"' in providers
+    assert 'asr_preroll_ms' in store
+    assert 'asr_preroll_ms: 600' in defaults
+    assert '\nasr_preroll_ms: 600' not in defaults
+    assert 'parsedPreroll' in store
+    assert 'delete normalized.asr_preroll_ms' in store

@@ -51,6 +51,7 @@ function defaultProvider(side) {
     enabled: true,
     language: 'en',
     asr_final_silence_ms: 1000,
+    asr_preroll_ms: 600,
     options: {},
   };
 }
@@ -73,7 +74,7 @@ function normalizeProvider(side, provider = {}) {
   // options JSON. Keep top-level fields authoritative when present, but lift
   // common keys from options so endpoint/model/key/voice/etc. are always
   // visible and editable in the Providers UI.
-  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'speed', 'language', 'streaming', 'asr_final_silence_ms']) {
+  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'speed', 'language', 'streaming', 'asr_final_silence_ms', 'asr_preroll_ms']) {
     if ((normalized[key] == null || normalized[key] === '') && options[key] != null && options[key] !== '') {
       normalized[key] = options[key];
     }
@@ -87,6 +88,8 @@ function normalizeProvider(side, provider = {}) {
   if (side === 'asr') {
     const parsedFinalSilence = Number(normalized.asr_final_silence_ms == null || normalized.asr_final_silence_ms === '' ? 1000 : normalized.asr_final_silence_ms);
     normalized.asr_final_silence_ms = Number.isFinite(parsedFinalSilence) ? parsedFinalSilence : 1000;
+    const parsedPreroll = Number(normalized.asr_preroll_ms == null || normalized.asr_preroll_ms === '' ? 600 : normalized.asr_preroll_ms);
+    normalized.asr_preroll_ms = Number.isFinite(parsedPreroll) ? parsedPreroll : 600;
     delete normalized.voice;
     delete normalized.format;
     delete normalized.response_format;
@@ -101,6 +104,7 @@ function normalizeProvider(side, provider = {}) {
     normalized.response_format = TTS_FIXED_FORMAT;
     normalized.sample_rate = TTS_FIXED_SAMPLE_RATE;
     delete normalized.asr_final_silence_ms;
+    delete normalized.asr_preroll_ms;
   }
   for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'speed']) {
     if (normalized[key] === '') {

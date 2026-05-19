@@ -91,3 +91,12 @@ def test_always_on_leading_audio_ring_markers():
         'leading_ring_ms',
     ):
         assert marker in src
+
+
+def test_ws_init_reads_provider_asr_preroll():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'asr_providers[asr_provider].get("asr_preroll_ms", 600.0)' in src
+    assert 'session.metadata["asr_preroll_ms"] = asr_preroll_ms' in src
+    assert 'asr_preroll_ms must be between 0 and 3000 ms' in src
+    assert '"asr_preroll_ms": asr_preroll_ms' in src

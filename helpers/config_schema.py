@@ -55,6 +55,7 @@ CONFIG_SCHEMA: dict = {
                             "name": {"type": "string", "minLength": 1, "pattern": r"^[a-zA-Z0-9_\-]+$"},
                             "type": {"type": "string", "enum": list(ASR_PROVIDER_TYPES)},
                             "asr_final_silence_ms": {"type": "number", "minimum": 100, "maximum": 10000},
+                            "asr_preroll_ms": {"type": "number", "minimum": 0, "maximum": 3000},
                         },
                     },
                 },

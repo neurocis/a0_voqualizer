@@ -17,17 +17,20 @@ asr:
       vad: true
       language: auto
       asr_final_silence_ms: 1000
+      asr_preroll_ms: 600
     - name: openai-whisper
       type: openai
       endpoint: https://api.openai.com/v1/audio/transcriptions
       model: whisper-1
       api_key_env: OPENAI_API_KEY
       asr_final_silence_ms: 1000
+      asr_preroll_ms: 600
     - name: localai
       type: openai-compatible
       endpoint: http://198.18.88.45/v1/audio/transcriptions
       model: whisper-base
       asr_final_silence_ms: 1000
+      asr_preroll_ms: 600
   default: whisper-local
 
 # --- TTS (text-to-speech) providers ---
