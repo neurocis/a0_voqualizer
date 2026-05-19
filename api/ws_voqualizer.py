@@ -644,6 +644,7 @@ class WsVoqualizer(WsHandler):
                         metadata={
                             "source": "voqualizer_asr_final",
                             "provider": session.asr_provider,
+                            "asr_provider": session.asr_provider,
                         },
                     )
                     session.metadata["context_injections"] = int(session.metadata.get("context_injections", 0)) + 1

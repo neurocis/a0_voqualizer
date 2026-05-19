@@ -203,3 +203,32 @@ def test_unbind_session_removes_binding():
 
     assert bridge.unbind_session("sess") is binding
     assert bridge.get_binding("sess") is None
+
+
+def test_inject_transcript_prefixes_visible_asr_prompt_when_submitted():
+    runtime = FakeRuntime()
+    context = runtime.add(FakeContext(id="chat-1"))
+    bridge = make_bridge(runtime)
+
+    result = bridge.inject_transcript(
+        "sess-1",
+        "What is the status?",
+        context_id="chat-1",
+        message_id="msg-asr",
+        metadata={"source": "voqualizer_asr_final", "asr_provider": "Lemonade / Whisper-Large-v3-Turbo"},
+    )
+
+    msg, _broadcast_level, _task = context.calls[0]
+    assert msg.message == "{ASR: Lemonade / Whisper-Large-v3-Turbo} What is the status?"
+    assert result.text == msg.message
+
+
+def test_inject_transcript_does_not_prefix_non_asr_metadata():
+    runtime = FakeRuntime()
+    context = runtime.add(FakeContext(id="chat-1"))
+    bridge = make_bridge(runtime)
+
+    bridge.inject_transcript("sess-1", "plain prompt", context_id="chat-1", metadata={"source": "manual"})
+
+    msg, _broadcast_level, _task = context.calls[0]
+    assert msg.message == "plain prompt"

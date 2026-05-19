@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Added visible `{ASR: provider}` prefix for final ASR prompts injected into target A0 chat contexts.
 - Added tester PCM16 carry-byte alignment so streamed raw PCM chunks split mid-sample do not desynchronize playback into static.
 - Routed context-driven final assistant responses through the same reliable PCM/provider-default TTS path as direct tester text, including base64 audio fallback.
 - Made Voqualizer admin handler robust against plugin-local `helpers` import shadowing during context-list diagnostics.

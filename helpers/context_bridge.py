@@ -112,6 +112,37 @@ def _clean_non_empty(value: Any, name: str) -> str:
     return value.strip()
 
 
+def _asr_provider_label(metadata: dict[str, Any] | None) -> str:
+    if not isinstance(metadata, dict):
+        return "unknown"
+    for key in ("asr_provider_display_name", "provider_display_name", "asr_provider", "provider"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "unknown"
+
+
+def _visible_asr_prompt(text: str, metadata: dict[str, Any] | None) -> str:
+    """Return the visible prompt text for ASR-originated injections.
+
+    A0's normal ``AgentContext.communicate(UserMessage)`` path is what writes
+    submitted user prompts into the visible chat log.  Prefixing exactly here
+    guarantees the log entry is created only when the final ASR transcript is
+    actually injected into the target context, never for partial transcripts or
+    suppressed candidates.
+    """
+
+    if not isinstance(metadata, dict):
+        return text
+    source = str(metadata.get("source") or "")
+    is_asr = source == "voqualizer_asr_final" or bool(metadata.get("asr_prompt"))
+    if not is_asr:
+        return text
+    if text.lstrip().startswith("{ASR:"):
+        return text
+    return f"{{ASR: {_asr_provider_label(metadata)}}} {text}"
+
+
 def _load_runtime() -> tuple[type, type]:
     """Load Agent Zero runtime classes lazily.
 
@@ -306,13 +337,14 @@ class ContextBridge:
                 details={"session_id": session_id, "context_id": binding.context_id},
             )
 
-        msg = self._user_message_factory(message=text, id=message_id)
+        visible_text = _visible_asr_prompt(text, metadata)
+        msg = self._user_message_factory(message=visible_text, id=message_id)
         task = context.communicate(msg, broadcast_level=broadcast_level)
         return TranscriptInjectionResult(
             session_id=session_id,
             context_id=binding.context_id,
             message_id=message_id,
-            text=text,
+            text=visible_text,
             task=task,
         )
 
