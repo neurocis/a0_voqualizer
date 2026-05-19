@@ -209,7 +209,7 @@ def test_batch_asr_utterance_buffer_emits_partial_then_final(monkeypatch):
         await init_mock_session(handler, monkeypatch)
         session = handler._registry().get("asr-1")
         session.metadata["asr_partial_interval_ms"] = 1000.0
-        session.metadata["asr_final_silence_ms"] = 800.0
+        session.metadata["asr_final_silence_ms"] = 1000.0
         session.metadata["asr_min_speech_ms"] = 500.0
 
         class BatchProvider:
@@ -259,7 +259,7 @@ def test_batch_asr_utterance_buffer_emits_partial_then_final(monkeypatch):
         assert [event for _sid, event, _data in handler.emitted] == ["voqualizer_asr_partial"]
         assert handler.emitted[0][2]["text"] == "hello partial"
 
-        # 40 silence frames = 800ms trailing silence, which finalizes utterance.
+        # 50 silence frames = 1000ms trailing silence, which finalizes utterance.
         for idx in range(50, 89):
             ack = await handler.process(
                 "voqualizer_audio_chunk",
@@ -280,7 +280,7 @@ def test_batch_asr_utterance_buffer_emits_partial_then_final(monkeypatch):
         assert handler.emitted[1][2]["text"] == "hello final"
         assert provider.calls[0][1]["utterance_event"] == "partial"
         assert provider.calls[1][1]["utterance_event"] == "final"
-        assert provider.calls[1][1]["trailing_silence_ms"] == 800.0
+        assert provider.calls[1][1]["trailing_silence_ms"] == 1000.0
 
     run(scenario())
 

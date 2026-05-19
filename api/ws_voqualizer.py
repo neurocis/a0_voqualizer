@@ -865,7 +865,7 @@ class WsVoqualizer(WsHandler):
         """
 
         partial_interval_ms = float(session.metadata.get("asr_partial_interval_ms", 1000.0) or 1000.0)
-        final_silence_ms = float(session.metadata.get("asr_final_silence_ms", 800.0) or 800.0)
+        final_silence_ms = float(session.metadata.get("asr_final_silence_ms", 1000.0) or 1000.0)
         max_segment_ms = float(session.metadata.get("asr_max_segment_ms", 8000.0) or 8000.0)
         min_speech_ms = float(session.metadata.get("asr_min_speech_ms", 500.0) or 500.0)
         speech_rms = float(session.metadata.get("asr_speech_rms", 250.0) or 250.0)
