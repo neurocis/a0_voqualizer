@@ -299,3 +299,20 @@ def test_asr_provider_preroll_ui_and_normalization_markers():
     assert '\nasr_preroll_ms: 600' not in defaults
     assert 'parsedPreroll' in store
     assert 'delete normalized.asr_preroll_ms' in store
+
+
+def test_provider_page_asr_timing_fields_are_not_flipped():
+    from pathlib import Path
+    html = Path('/a0/usr/plugins/a0_voqualizer/webui/providers.html').read_text()
+    silence_label = html.index('Silence to Final (ms)')
+    silence_class = html.index('provider-asr-final-silence-ms')
+    preroll_label = html.index('ASR Pre-roll (ms)')
+    preroll_class = html.index('provider-asr-preroll-ms')
+    assert silence_label < silence_class < preroll_label < preroll_class
+    assert 'data-field="asr_final_silence_ms"' in html
+    assert 'data-field="asr_preroll_ms"' in html
+    assert "provider.asr_final_silence_ms == null ? 1000 : provider.asr_final_silence_ms" in html
+    assert "provider.asr_preroll_ms == null ? 600 : provider.asr_preroll_ms" in html
+    assert 'patch.asr_final_silence_ms = parsedFinalSilence' in html
+    assert 'patch.asr_preroll_ms = parsedPreroll' in html
+    assert html.index('patch.asr_final_silence_ms = parsedFinalSilence') < html.index('patch.asr_preroll_ms = parsedPreroll')
