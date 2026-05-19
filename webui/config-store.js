@@ -109,6 +109,10 @@ function normalizeConfig(config = {}) {
       providers: tts,
       default: config.tts && tts.some((provider) => provider.name === config.tts.default) ? config.tts.default : tts[0].name,
     },
+    behavior: {
+      ...(config.behavior || {}),
+      asr_final_silence_ms: Number((config.behavior && config.behavior.asr_final_silence_ms) || 1000),
+    },
   };
 }
 
@@ -135,6 +139,10 @@ export function overlayFromConfig(config) {
     tts: {
       default: config.tts.default,
       providers: config.tts.providers,
+    },
+    behavior: {
+      ...(config.behavior || {}),
+      asr_final_silence_ms: Number((config.behavior && config.behavior.asr_final_silence_ms) || 1000),
     },
   };
 }
@@ -291,6 +299,13 @@ export function createVoqualizerConfigStore(options = {}) {
     return updated;
   }
 
+
+  function setBehaviorValue(key, value) {
+    state.config.behavior = { ...(state.config.behavior || {}), [key]: value };
+    markDirty();
+    appendEvent('behavior:update', { key, value });
+  }
+
   function removeProvider(side, name) {
     if (!PROVIDER_SIDES.includes(side)) {
       throw new Error(`Unsupported provider side: ${side}`);
@@ -373,6 +388,7 @@ export function createVoqualizerConfigStore(options = {}) {
     addProvider,
     updateProvider,
     removeProvider,
+    setBehaviorValue,
     setDefault,
     testProvider,
     overlayFromConfig: () => overlayFromConfig(state.config),

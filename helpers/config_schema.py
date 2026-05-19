@@ -124,6 +124,7 @@ CONFIG_SCHEMA: dict = {
                 "barge_in": {"type": "boolean"},
                 "auto_spawn_context": {"type": "boolean"},
                 "sentence_chunking": {"type": "boolean"},
+                "asr_final_silence_ms": {"type": "number", "minimum": 100, "maximum": 10000},
             },
         },
     },

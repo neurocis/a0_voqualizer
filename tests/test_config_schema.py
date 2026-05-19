@@ -338,3 +338,11 @@ class TestSaveOverlay:
         with pytest.raises(registry.ConfigError):
             registry.save_overlay(bad_overlay)
         assert not os.path.exists(r)
+
+
+def test_behavior_accepts_asr_final_silence_ms_source_marker():
+    from pathlib import Path
+    schema = Path('/a0/usr/plugins/a0_voqualizer/helpers/config_schema.py').read_text()
+    default = Path('/a0/usr/plugins/a0_voqualizer/default_config.yaml').read_text()
+    assert 'asr_final_silence_ms' in schema
+    assert 'asr_final_silence_ms: 1000' in default

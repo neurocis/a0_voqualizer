@@ -254,3 +254,16 @@ def test_providers_page_exposes_tts_speed_field():
     assert "TTS speed" in source
     assert "Number.parseFloat(speedValue)" in source
     assert "patch.speed = parsedSpeed" in source
+
+
+def test_providers_page_has_asr_silence_to_final_setting():
+    from pathlib import Path
+    html = Path('/a0/usr/plugins/a0_voqualizer/webui/providers.html').read_text()
+    store = Path('/a0/usr/plugins/a0_voqualizer/webui/config-store.js').read_text()
+    ws = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'Silence to Final (ms)' in html
+    assert 'id="asr-final-silence-ms"' in html
+    assert "setBehaviorValue('asr_final_silence_ms', value)" in html
+    assert 'setBehaviorValue' in store
+    assert 'asr_final_silence_ms' in store
+    assert 'configured_final_silence_ms' in ws

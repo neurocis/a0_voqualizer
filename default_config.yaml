@@ -83,6 +83,8 @@ limits:
 
 # --- Behavior ---
 behavior:
+  # ASR trailing silence required before finalizing an utterance, in milliseconds.
+  asr_final_silence_ms: 1000
   # Allow voice barge-in to cancel in-flight TTS playback
   barge_in: true
   # Auto-spawn an AgentContext on init if session_id is fresh
