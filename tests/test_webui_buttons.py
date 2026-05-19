@@ -14,10 +14,13 @@ def test_new_extension_file_exists():
     assert EXT.exists(), 'voqualizer-buttons.html missing'
 
 
-def test_extension_renders_two_dedicated_buttons():
+def test_extension_renders_status_pill_and_two_dedicated_buttons():
     s = EXT.read_text()
+    assert 'id="voqualizer-status-pill"' in s
     assert 'id="voqualizer-speaker-button"' in s
     assert 'id="voqualizer-mic-button"' in s
+    for marker in ('Voq: Off', 'Voq: Listening', 'Voq: Push-to-talk', 'TTS muted', 'Voq: Connecting', 'Voq: Error'):
+        assert marker in s, f'missing status marker {marker!r}'
 
 
 def test_extension_does_not_intercept_a0_native_buttons():
@@ -33,11 +36,45 @@ def test_extension_uses_tap_hold_threshold_and_state_classes():
     s = EXT.read_text()
     assert 'TAP_HOLD_THRESHOLD_MS' in s
     assert '250' in s
-    assert 'voqualizer-tts-off' in s
-    assert 'voqualizer-active' in s
-    assert 'voqualizer-ptt' in s
-    assert 'voqualizer-connecting' in s
-    assert 'voqualizer-error' in s
+    for marker in (
+        'voqualizer-idle',
+        'voqualizer-tts-off',
+        'voqualizer-active',
+        'voqualizer-ptt',
+        'voqualizer-connecting',
+        'voqualizer-error',
+    ):
+        assert marker in s, f'missing class marker {marker!r}'
+
+
+def test_extension_uses_dynamic_labels_and_tooltips():
+    s = EXT.read_text()
+    for marker in (
+        'speakerLabel(ttsOff)',
+        'micLabel(s)',
+        'setAttribute(\'aria-label\'',
+        'setAttribute(\'title\'',
+        'Voqualizer TTS is on. Click to mute TTS for this chat.',
+        'Voqualizer TTS is muted. Click to enable TTS for this chat.',
+        'Voqualizer mic off. Tap for conversation. Hold for push-to-talk.',
+        'Voqualizer listening. Tap to stop. Hold for push-to-talk finalization.',
+        'Voqualizer push-to-talk active. Release to send final.',
+        'Voqualizer error. Tap to retry.',
+    ):
+        assert marker in s, f'missing dynamic label marker {marker!r}'
+
+
+def test_extension_uses_transition_notices():
+    s = EXT.read_text()
+    for marker in (
+        'flashNotice(text)',
+        'Conversation mode on',
+        'Conversation mode off',
+        'Push-to-talk: release to send',
+        'TTS muted for this chat',
+        'TTS enabled for this chat',
+    ):
+        assert marker in s, f'missing notice marker {marker!r}'
 
 
 def test_extension_uses_pointer_and_keyboard_handlers():
@@ -56,6 +93,7 @@ def test_extension_uses_pointer_and_keyboard_handlers():
 
 def test_extension_aria_markers_present():
     s = EXT.read_text()
+    assert 'aria-live="polite"' in s
     assert 'aria-pressed' in s
     assert 'aria-label="Voqualizer microphone' in s
     assert 'aria-label="Voqualizer speaker' in s
