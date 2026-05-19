@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import time
+import traceback
 import uuid
 from collections.abc import Mapping
 from typing import Any
@@ -408,11 +409,13 @@ class WsVoqualizer(WsHandler):
                 message=f"voqualizer does not handle {event!r}",
             )
         except Exception as e:
-            # Defensive: never let an exception escape the dispatcher.
-            log_voqualizer_error(HANDLER_ERROR, f"voqualizer handler error: {e}", operation=event, severity="error")
+            # Defensive: never let an exception escape the dispatcher. Include
+            # exception type/repr because asyncio timeouts often stringify blank.
+            message = f"voqualizer handler error: {type(e).__name__}: {e!r}"
+            log_voqualizer_error(HANDLER_ERROR, message, operation=event, severity="error")
             return WsResult.error(
                 code=HANDLER_ERROR,
-                message=f"voqualizer handler error: {e}",
+                message=message,
             )
 
     # ------------------------------------------------------------------
@@ -702,6 +705,85 @@ class WsVoqualizer(WsHandler):
             metadata=result.metadata,
         )
 
+    async def _emit_transcribed_utterance_segment(
+        self,
+        session: BridgeSession,
+        provider: ASRProvider,
+        segment: list[AudioChunk],
+        *,
+        language: str | None,
+        kind: TranscriptKind,
+        metadata: Mapping[str, Any],
+        duplicate_key: str | None = None,
+    ) -> None:
+        """Transcribe and emit outside the audio-chunk ack path.
+
+        Batch HTTP ASR calls can exceed the Socket.IO event ack budget.  Running
+        them inline made ``voqualizer_audio_chunk`` fail with blank
+        ``HANDLER_ERROR``/timeout logs and caused the browser to think audio
+        ingress was broken.  The audio handler should only ingest/ack frames;
+        transcript events can arrive asynchronously.
+        """
+        try:
+            result = await self._transcribe_utterance_segment(
+                session,
+                provider,
+                segment,
+                language=language,
+                kind=kind,
+                metadata=metadata,
+            )
+            if result is None:
+                return
+            if duplicate_key:
+                previous = str(session.metadata.get(duplicate_key, ""))
+                if result.text == previous:
+                    return
+                session.metadata[duplicate_key] = result.text
+            await self._emit_transcript(session, result)
+        except ASRError as exc:
+            session.metadata["asr_background_errors"] = int(session.metadata.get("asr_background_errors", 0)) + 1
+            if session.sender is not None:
+                payload = exc.to_dict()
+                payload["session_id"] = session.session_id
+                await session.sender("voqualizer_error", payload)
+        except Exception as exc:
+            session.metadata["asr_background_errors"] = int(session.metadata.get("asr_background_errors", 0)) + 1
+            log_voqualizer_error(
+                HANDLER_ERROR,
+                f"background ASR transcription failed: {type(exc).__name__}: {exc!r}",
+                session_id=session.session_id,
+                operation="voqualizer_audio_chunk",
+                severity="error",
+            )
+
+    def _schedule_asr_utterance_transcription(
+        self,
+        session: BridgeSession,
+        provider: ASRProvider,
+        segment: list[AudioChunk],
+        *,
+        language: str | None,
+        kind: TranscriptKind,
+        metadata: Mapping[str, Any],
+        duplicate_key: str | None = None,
+    ) -> None:
+        task = asyncio.create_task(
+            self._emit_transcribed_utterance_segment(
+                session,
+                provider,
+                segment,
+                language=language,
+                kind=kind,
+                metadata=metadata,
+                duplicate_key=duplicate_key,
+            )
+        )
+        tasks = session.metadata.setdefault("asr_background_tasks", set())
+        if isinstance(tasks, set):
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
     async def _process_batch_asr_chunk(
         self,
         session: BridgeSession,
@@ -767,34 +849,29 @@ class WsVoqualizer(WsHandler):
         }
 
         if should_partial:
-            result = await self._transcribe_utterance_segment(
+            state["last_partial_at_ms"] = duration_ms
+            self._schedule_asr_utterance_transcription(
                 session,
                 provider,
                 segment,
                 language=language,
                 kind=TranscriptKind.PARTIAL,
                 metadata={**metadata, "utterance_event": "partial"},
+                duplicate_key="asr_last_partial_text",
             )
-            state["last_partial_at_ms"] = duration_ms
-            if result is None:
-                return 0
-            if result.text == state.get("last_partial_text"):
-                return 0
-            state["last_partial_text"] = result.text
-            await self._emit_transcript(session, result)
-            return 1
+            return 0
 
-        # Final: transcribe, emit if useful/non-duplicate, then reset utterance.
-        result = await self._transcribe_utterance_segment(
+        # Final: schedule transcription and reset utterance immediately so audio
+        # acks remain fast even when the HTTP ASR endpoint is slow.
+        self._schedule_asr_utterance_transcription(
             session,
             provider,
             segment,
             language=language,
             kind=TranscriptKind.FINAL,
             metadata={**metadata, "utterance_event": "final"},
+            duplicate_key="asr_last_final_text",
         )
-        last_final = str(state.get("last_final_text", ""))
-        preserved_last_final = result.text if result is not None else last_final
         state.clear()
         state.update({
             "chunks": [],
@@ -804,12 +881,9 @@ class WsVoqualizer(WsHandler):
             "has_speech": False,
             "last_partial_at_ms": 0.0,
             "last_partial_text": "",
-            "last_final_text": preserved_last_final,
+            "last_final_text": str(session.metadata.get("asr_last_final_text", "")),
         })
-        if result is None or result.text == last_final:
-            return 0
-        await self._emit_transcript(session, result)
-        return 1
+        return 0
 
     async def _handle_audio_chunk(self, data: Any, sid: str) -> dict[str, Any] | WsResult:
         if self._session_id is None:

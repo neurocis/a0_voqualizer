@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Decoupled batch ASR transcription from the `voqualizer_audio_chunk` ack path so slow HTTP ASR calls cannot turn mic ingress into `HANDLER_ERROR`/timeout failures.
 - Fixed Providers TTS smoke test to honor provider-configured `format` and `sample_rate` (e.g. `pcm` @ 24000 Hz) instead of forcing `pcm16/16k`, producing audible previews on Kokoro-style PCM endpoints.
 - Added configurable TTS speed as a provider field used by smoke tests, tester/direct TTS, and agent-response TTS requests.
 - Fixed slow PCM TTS playback from the tester by no longer forcing 16 kHz text-to-speech requests over provider-configured sample rates.

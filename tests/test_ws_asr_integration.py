@@ -283,3 +283,11 @@ def test_batch_asr_utterance_buffer_emits_partial_then_final(monkeypatch):
         assert provider.calls[1][1]["trailing_silence_ms"] == 800.0
 
     run(scenario())
+
+
+def test_batch_asr_transcription_is_scheduled_off_audio_ack_path():
+    source = Path(__file__).resolve().parents[1].joinpath("api/ws_voqualizer.py").read_text()
+    assert "_schedule_asr_utterance_transcription" in source
+    assert "asyncio.create_task" in source
+    assert "Batch HTTP ASR calls can exceed the Socket.IO event ack budget" in source
+    assert "message = f\"voqualizer handler error: {type(e).__name__}: {e!r}\"" in source
