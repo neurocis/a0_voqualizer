@@ -315,3 +315,4 @@ def test_ws_asr_strips_repeated_thank_you_source_marker():
     assert '_clean_asr_transcript_text' in src
     assert 'thank\\s+you' in src or 'thank\s+you' in src
     assert '_clean_asr_transcript_text(str(payload.get("text")' in src
+    assert 'leading_thanks = re.match' in src

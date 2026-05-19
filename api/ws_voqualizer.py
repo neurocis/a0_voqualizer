@@ -125,12 +125,15 @@ def _clean_asr_transcript_text(text: str) -> str:
     clean = text.strip()
     if not clean:
         return ""
-    clean = re.sub(
-        r"^(?:\s*thank\s+you[.!?,;:\-]*\s*){2,}(?=\S)",
-        "",
+    leading_thanks = re.match(
+        r"^((?:\s*thank\s+you[.!?,;:\-]*\s*){2,})(.*)$",
         clean,
-        flags=re.IGNORECASE,
-    ).strip()
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if leading_thanks is not None:
+        remainder = leading_thanks.group(2).strip()
+        if re.search(r"[A-Za-z0-9]", remainder):
+            clean = remainder
     return clean
 
 
