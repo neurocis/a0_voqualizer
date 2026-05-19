@@ -287,3 +287,12 @@ def test_agent_finalizer_uses_provider_tts_speed_source_marker():
     source = Path('/a0/usr/plugins/a0_voqualizer/helpers/agent_finalizer.py').read_text()
     assert 'speed = float(spec.get("speed")' in source
     assert 'speed=speed' in source
+
+
+def test_agent_finalizer_uses_provider_pcm_and_base64_markers():
+    source = Path('/a0/usr/plugins/a0_voqualizer/helpers/agent_finalizer.py').read_text()
+    assert '_codec_for_tts_spec' in source
+    assert 'response_format' in source
+    assert 'audio_b64' in source
+    assert 'base64.b64encode' in source
+    assert 'pcm16/24k' in source

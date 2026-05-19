@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Routed context-driven final assistant responses through the same reliable PCM/provider-default TTS path as direct tester text, including base64 audio fallback.
 - Made Voqualizer admin handler robust against plugin-local `helpers` import shadowing during context-list diagnostics.
 - Hardened tester context refresh to use A0 `callJsonApi` admin helper before fetch fallback so the context picklist populates reliably.
 - Added tester context-id picklist backed by admin `contexts` action and final-ASR ContextBridge injection for selected A0 chat pipeline binding.

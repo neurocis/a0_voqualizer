@@ -8,6 +8,7 @@ machinery to synthesize the final response for the voice client.
 
 from __future__ import annotations
 
+import base64
 import uuid
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -54,6 +55,38 @@ def _sample_rate_for_codec(codec: str) -> int:
     return 16000
 
 
+def _codec_for_tts_spec(spec: Mapping[str, Any], fallback_codec: str) -> str:
+    """Resolve final-response TTS codec from provider format/sample-rate.
+
+    The direct ``voqualizer_user_text`` path already learned to honor provider
+    ``format: pcm`` + ``sample_rate: 24000``.  The agent finalizer must mirror
+    that behavior; otherwise context-driven assistant responses can be routed to
+    TTS with stale session/protocol defaults such as ``pcm16/16k``.
+    """
+
+    fmt = str(spec.get("format") or spec.get("response_format") or "").strip().lower()
+    if fmt in {"mp3", "opus", "wav"}:
+        return fmt
+    if fmt == "pcm":
+        try:
+            rate = int(spec.get("sample_rate") or 24000)
+        except Exception:
+            rate = 24000
+        return "pcm16/24k" if rate >= 24000 else "pcm16/16k"
+    return fallback_codec or "pcm16/16k"
+
+
+def _request_metadata_for_tts_spec(spec: Mapping[str, Any], *, source: str, context_id: str) -> dict[str, Any]:
+    metadata = {
+        "source": source,
+        "context_id": context_id,
+    }
+    fmt = str(spec.get("format") or spec.get("response_format") or "").strip().lower()
+    if fmt:
+        metadata["response_format"] = fmt
+    return metadata
+
+
 async def _emit_tts_chunk(
     session: BridgeSession,
     chunk: TTSAudioChunk,
@@ -64,6 +97,10 @@ async def _emit_tts_chunk(
     event = payload.pop("event")
     payload["session_id"] = session.session_id
     payload["audio"] = chunk.data
+    # Match the direct WS TTS path: A0/Socket.IO/browser dispatch may not always
+    # preserve nested binary payloads, while the tester reliably decodes base64.
+    payload["audio_b64"] = base64.b64encode(chunk.data).decode("ascii")
+    payload["audio_encoding"] = "base64"
     if metadata_defaults:
         payload["metadata"] = {**metadata_defaults, **dict(payload.get("metadata") or {})}
     if session.sender is not None:
@@ -144,7 +181,8 @@ async def synthesize_agent_response_tts(
             await provider.start()
             session.metadata["tts_provider_instance"] = provider
 
-        codec = session.output_codec or cfg.get("protocol", {}).get("default_output_codec") or "pcm16/16k"
+        fallback_codec = session.output_codec or cfg.get("protocol", {}).get("default_output_codec") or "pcm16/16k"
+        codec = _codec_for_tts_spec(spec, fallback_codec)
         sample_rate = int(spec.get("sample_rate") or _sample_rate_for_codec(codec))
         spec_options = spec.get("options") if isinstance(spec.get("options"), Mapping) else {}
         speed = float(spec.get("speed") or spec_options.get("speed") or 1.0)
@@ -156,10 +194,11 @@ async def synthesize_agent_response_tts(
         except Exception:
             pass
 
-        request_metadata = {
-            "source": metadata_source,
-            "context_id": context_id,
-        }
+        request_metadata = _request_metadata_for_tts_spec(
+            spec,
+            source=metadata_source,
+            context_id=context_id,
+        )
         request = TTSRequest(
             text=text,
             utterance_id=utterance_id,
