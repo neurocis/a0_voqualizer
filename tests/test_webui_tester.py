@@ -185,3 +185,15 @@ def test_tester_stops_queued_playback_on_cancelled_tts_done():
     assert 'stopAllPlayback' in src
     assert "data.reason === 'barge_in'" in src
     assert 'source.stop(0)' in src
+
+
+def test_tester_local_mic_barge_in_stops_playback_immediately():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/webui/tester-store.js').read_text()
+    assert 'maybeLocalBargeInFromMic' in src
+    assert 'BARGE_IN_RMS_THRESHOLD' in src
+    assert 'stopAllPlayback();' in src
+    assert "control('barge_in')" in src
+    assert 'local_barge_in_playback_stop' in src
+    assert 'cancelledTtsUtterances' in src
+    assert 'voqualizer_tts_chunk_ignored_cancelled' in src

@@ -142,6 +142,8 @@ export function createVoqualizerTesterStore(options = {}) {
   let playbackContext = null;
   let playbackTail = 0;
   const activePlaybackSources = new Map();
+  const cancelledTtsUtterances = new Set();
+  let lastLocalBargeInAt = 0;
   const encodedTtsBuffers = new Map();
   const pcm16CarryBytes = new Map();
 
@@ -328,6 +330,10 @@ export function createVoqualizerTesterStore(options = {}) {
     if (text) {
       setState({ agentText: text });
     }
+    const utteranceId = data.utterance_id || payload.utterance_id || '';
+    if (utteranceId) {
+      cancelledTtsUtterances.delete(utteranceId);
+    }
     appendEvent('voqualizer_agent_response_final', payload);
   }
 
@@ -418,6 +424,7 @@ export function createVoqualizerTesterStore(options = {}) {
 
   function stopPlaybackForUtterance(utteranceId = 'default') {
     const key = utteranceId || 'default';
+    cancelledTtsUtterances.add(key);
     const sources = activePlaybackSources.get(key) || [];
     for (const source of sources) {
       try {
@@ -453,6 +460,34 @@ export function createVoqualizerTesterStore(options = {}) {
     } else {
       playbackTail = 0;
     }
+  }
+
+  function hasActivePlayback() {
+    if (activePlaybackSources.size > 0) {
+      return true;
+    }
+    return !!(playbackContext && playbackTail > playbackContext.currentTime + 0.05);
+  }
+
+  function maybeLocalBargeInFromMic(vu = {}) {
+    if (!state.bearerToken || state.muted || !hasActivePlayback()) {
+      return;
+    }
+    const rms = Number(vu.rms || vu.level || 0);
+    const peak = Number(vu.peak || 0);
+    if (rms < BARGE_IN_RMS_THRESHOLD && peak < BARGE_IN_RMS_THRESHOLD * 2.5) {
+      return;
+    }
+    const now = nowMs();
+    if (now - lastLocalBargeInAt < BARGE_IN_COOLDOWN_MS) {
+      return;
+    }
+    lastLocalBargeInAt = now;
+    stopAllPlayback();
+    appendEvent('local_barge_in_playback_stop', { rms, peak });
+    // Tell the backend too, but do not wait for the control ACK before stopping
+    // browser playback. This is the critical low-latency path.
+    control('barge_in').catch((error) => appendEvent('local_barge_in_control_error', { message: error.message || String(error) }));
   }
 
   async function playEncodedAudio(bytes, mimeType) {
@@ -549,7 +584,12 @@ export function createVoqualizerTesterStore(options = {}) {
     }
     notify();
     const data = eventData(payload);
+    const utteranceId = data.utterance_id || payload.utterance_id || 'default';
     appendEvent('voqualizer_tts_chunk', { ...data, audio: '[binary]' });
+    if (cancelledTtsUtterances.has(utteranceId)) {
+      appendEvent('voqualizer_tts_chunk_ignored_cancelled', { utterance_id: utteranceId });
+      return;
+    }
     playPcm16Chunk(payload).catch(setError);
   }
 
@@ -563,6 +603,7 @@ export function createVoqualizerTesterStore(options = {}) {
         stopAllPlayback();
       }
     } else {
+      cancelledTtsUtterances.delete(utteranceId);
       clearPcm16Carry(utteranceId);
       flushEncodedTts(utteranceId).catch(setError);
     }
@@ -784,7 +825,9 @@ export function createVoqualizerTesterStore(options = {}) {
     workletNode.port.onmessage = (event) => {
       const message = event.data || {};
       if (message.type === 'vu') {
-        setState({ vu: { level: message.level || 0, peak: message.peak || 0, rms: message.rms || 0, clipped: !!message.clipped } });
+        const vu = { level: message.level || 0, peak: message.peak || 0, rms: message.rms || 0, clipped: !!message.clipped };
+        setState({ vu });
+        maybeLocalBargeInFromMic(vu);
       } else if (message.type === 'audio' && !state.muted) {
         const audioPayload = audioChunkPayload(message.seq || 0, message.tsMs || 0, message.pcm16);
         recordFrameInspection(audioPayload.frame);

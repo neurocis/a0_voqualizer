@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Tester now performs local mic-VAD barge-in: detected speech stops queued browser TTS immediately and then notifies backend `barge_in`.
 - Increased default ASR final-silence threshold from 800 ms to 1000 ms to reduce premature utterance finalization.
 - Tester playback now stops queued Web Audio sources immediately when `voqualizer_tts_done(cancelled=true, reason=barge_in)` arrives.
 - Automatic barge-in now cancels active streaming TTS on detected user speech and emits an immediate cancelled `voqualizer_tts_done`.
