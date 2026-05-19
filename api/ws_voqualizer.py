@@ -1009,7 +1009,7 @@ class WsVoqualizer(WsHandler):
         max_segment_ms = float(session.metadata.get("asr_max_segment_ms", 8000.0) or 8000.0)
         min_speech_ms = float(session.metadata.get("asr_min_speech_ms", 500.0) or 500.0)
         speech_rms = float(session.metadata.get("asr_speech_rms", 250.0) or 250.0)
-        preroll_ms = float(session.metadata.get("asr_preroll_ms", 400.0) or 400.0)
+        preroll_ms = float(session.metadata.get("asr_preroll_ms", 600.0) or 600.0)
 
         state = self._asr_utterance_state_for_session(session)
         chunks: list[AudioChunk] = state.setdefault("chunks", [])
