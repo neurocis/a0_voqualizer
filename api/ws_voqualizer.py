@@ -592,6 +592,11 @@ class WsVoqualizer(WsHandler):
             )
 
         session.metadata["asr_final_silence_ms"] = asr_final_silence_ms
+        # A8.4+/v0.1.1: honor optional `tts.enabled=false` from init so the Speaker
+        # toggle in the in-GUI buttons can hard-mute TTS for this session.
+        tts_enabled_init = tts_block.get("enabled")
+        if isinstance(tts_enabled_init, bool):
+            session.tts_enabled = tts_enabled_init
 
         # Wire up sender + bookkeeping for this connection.
         await self._bind_sender(session, sid)
@@ -1463,6 +1468,27 @@ class WsVoqualizer(WsHandler):
                 "action": action,
                 "session_id": session.session_id,
                 "state": session.state,
+            }
+
+        if action == "set_tts_enabled":
+            enabled = data.get("enabled")
+            if not isinstance(enabled, bool):
+                return WsResult.error(
+                    code=BAD_REQUEST,
+                    message="voqualizer_control.set_tts_enabled requires boolean 'enabled'",
+                )
+            session.tts_enabled = enabled
+            if not enabled:
+                # Hard-mute: cancel any in-flight TTS immediately.
+                try: session.cancel_in_flight_tts()
+                except Exception: pass
+            session.touch()
+            return {
+                "event": "voqualizer_control_ack",
+                "action": action,
+                "session_id": session.session_id,
+                "state": session.state,
+                "tts_enabled": session.tts_enabled,
             }
 
         return WsResult.error(

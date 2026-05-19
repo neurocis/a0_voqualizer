@@ -149,6 +149,8 @@ class SentenceTTSChunker:
         text = _clean_text(text)
         if not text or session.sender is None:
             return {"status": "skipped", "reason": "empty_or_no_sender"}
+        if not getattr(session, "tts_enabled", True):
+            return {"status": "skipped", "reason": "tts_disabled"}
         state = self._state(session, context_id)
         if not state.buffer:
             state.started_at = self.clock()

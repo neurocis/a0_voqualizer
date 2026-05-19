@@ -117,6 +117,7 @@ class BridgeSession:
     output_codec: str = ""
     language: str = "auto"
     barge_in: bool = True
+    tts_enabled: bool = True
     audio_queue_max_frames: int = 256
     state: SessionState = STATE_INIT
     created_at: float = field(default_factory=time.monotonic)

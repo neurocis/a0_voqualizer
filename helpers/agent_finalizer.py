@@ -347,6 +347,8 @@ async def synthesize_agent_response_tts(
         return {"status": "skipped", "reason": "empty_text", "chunks": 0}
     if session.sender is None:
         return {"status": "skipped", "reason": "missing_sender", "chunks": 0}
+    if not getattr(session, "tts_enabled", True):
+        return {"status": "skipped", "reason": "tts_disabled", "chunks": 0}
 
     cfg_loader = config_loader or _default_config_loader
     provider_factory = tts_provider_factory or _default_tts_provider_factory
