@@ -502,6 +502,23 @@ class WsVoqualizer(WsHandler):
         language = asr_block.get("language") or asr_providers[asr_provider].get(
             "language", "auto"
         )
+        asr_final_silence_ms = asr_block.get("final_silence_ms")
+        if asr_final_silence_ms is None:
+            asr_final_silence_ms = asr_block.get("asr_final_silence_ms")
+        if asr_final_silence_ms is None:
+            asr_final_silence_ms = asr_providers[asr_provider].get("asr_final_silence_ms", 1000.0)
+        try:
+            asr_final_silence_ms = float(asr_final_silence_ms)
+        except (TypeError, ValueError):
+            return WsResult.error(
+                code=BAD_REQUEST,
+                message="asr_final_silence_ms must be numeric milliseconds",
+            )
+        if asr_final_silence_ms < 100 or asr_final_silence_ms > 10000:
+            return WsResult.error(
+                code=BAD_REQUEST,
+                message="asr_final_silence_ms must be between 100 and 10000 ms",
+            )
 
         # Session id: client-supplied or generated.
         session_id = data.get("session_id") or uuid.uuid4().hex
@@ -533,6 +550,8 @@ class WsVoqualizer(WsHandler):
                 message=str(e),
                 details={"limit": e.limit, "current": e.current},
             )
+
+        session.metadata["asr_final_silence_ms"] = asr_final_silence_ms
 
         # Wire up sender + bookkeeping for this connection.
         await self._bind_sender(session, sid)
@@ -899,9 +918,7 @@ class WsVoqualizer(WsHandler):
         """
 
         partial_interval_ms = float(session.metadata.get("asr_partial_interval_ms", 1000.0) or 1000.0)
-        behavior = load_config().get("behavior", {})
-        configured_final_silence_ms = behavior.get("asr_final_silence_ms", 1000.0)
-        final_silence_ms = float(session.metadata.get("asr_final_silence_ms", configured_final_silence_ms) or 1000.0)
+        final_silence_ms = float(session.metadata.get("asr_final_silence_ms", 1000.0) or 1000.0)
         max_segment_ms = float(session.metadata.get("asr_max_segment_ms", 8000.0) or 8000.0)
         min_speech_ms = float(session.metadata.get("asr_min_speech_ms", 500.0) or 500.0)
         speech_rms = float(session.metadata.get("asr_speech_rms", 250.0) or 250.0)

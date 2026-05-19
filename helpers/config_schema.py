@@ -54,6 +54,7 @@ CONFIG_SCHEMA: dict = {
                         "properties": {
                             "name": {"type": "string", "minLength": 1, "pattern": r"^[a-zA-Z0-9_\-]+$"},
                             "type": {"type": "string", "enum": list(ASR_PROVIDER_TYPES)},
+                            "asr_final_silence_ms": {"type": "number", "minimum": 100, "maximum": 10000},
                         },
                     },
                 },
@@ -124,7 +125,6 @@ CONFIG_SCHEMA: dict = {
                 "barge_in": {"type": "boolean"},
                 "auto_spawn_context": {"type": "boolean"},
                 "sentence_chunking": {"type": "boolean"},
-                "asr_final_silence_ms": {"type": "number", "minimum": 100, "maximum": 10000},
             },
         },
     },

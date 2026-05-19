@@ -16,15 +16,18 @@ asr:
       streaming: true
       vad: true
       language: auto
+      asr_final_silence_ms: 1000
     - name: openai-whisper
       type: openai
       endpoint: https://api.openai.com/v1/audio/transcriptions
       model: whisper-1
       api_key_env: OPENAI_API_KEY
+      asr_final_silence_ms: 1000
     - name: localai
       type: openai-compatible
       endpoint: http://198.18.88.45/v1/audio/transcriptions
       model: whisper-base
+      asr_final_silence_ms: 1000
   default: whisper-local
 
 # --- TTS (text-to-speech) providers ---
@@ -83,8 +86,6 @@ limits:
 
 # --- Behavior ---
 behavior:
-  # ASR trailing silence required before finalizing an utterance, in milliseconds.
-  asr_final_silence_ms: 1000
   # Allow voice barge-in to cancel in-flight TTS playback
   barge_in: true
   # Auto-spawn an AgentContext on init if session_id is fresh

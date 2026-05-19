@@ -66,17 +66,6 @@
       <a href="../docs/performance/load-test-32-sessions.md">Load test report</a>
     </nav>
 
-    <section id="asr-runtime-settings">
-      <h2>ASR runtime settings</h2>
-      <div class="fields">
-        <label>
-          <span>Silence to Final (ms)</span>
-          <input id="asr-final-silence-ms" type="number" min="100" max="10000" step="50" inputmode="numeric" placeholder="1000">
-        </label>
-      </div>
-      <p class="result">Trailing silence required before the current utterance is finalized and sent to the selected A0 context. Default: 1000 ms.</p>
-    </section>
-
     <div class="grid">
       <section>
         <h2>ASR providers</h2>
@@ -115,6 +104,7 @@
         <label><span>Voice</span><input class="provider-voice" autocomplete="off" placeholder="TTS voice"></label>
         <label><span>API key env</span><input class="provider-api-key-env" autocomplete="off" placeholder="API_KEY_LEMONADE"></label>
         <label><span>Format</span><input class="provider-format" autocomplete="off" placeholder="wav / pcm / mp3"></label>
+        <label class="asr-only"><span>Silence to Final (ms)</span><input class="provider-asr-final-silence-ms" autocomplete="off" inputmode="numeric" placeholder="1000"></label>
         <label><span>Sample rate</span><input class="provider-sample-rate" autocomplete="off" inputmode="numeric" placeholder="24000"></label>
         <label><span>TTS speed</span><input class="provider-speed" autocomplete="off" inputmode="decimal" placeholder="1.0"></label>
       </div>
@@ -239,6 +229,7 @@
         const apiKeyEnv = node.querySelector('.provider-api-key-env');
         const format = node.querySelector('.provider-format');
         const sampleRate = node.querySelector('.provider-sample-rate');
+        const asrFinalSilence = node.querySelector('.provider-asr-final-silence-ms');
         const speed = node.querySelector('.provider-speed');
         const options = node.querySelector('.provider-options');
         const result = node.querySelector('.provider-result');
@@ -257,6 +248,8 @@
         voice.value = provider.voice || '';
         apiKeyEnv.value = provider.api_key_env || '';
         format.value = provider.format || provider.response_format || '';
+        asrFinalSilence.value = side === 'asr' ? String(provider.asr_final_silence_ms == null ? 1000 : provider.asr_final_silence_ms) : '';
+        asrFinalSilence.disabled = side !== 'asr';
         sampleRate.value = provider.sample_rate == null ? '' : String(provider.sample_rate);
         speed.value = provider.speed == null ? '' : String(provider.speed);
         isDefault.name = `${side}-default`;
@@ -285,6 +278,7 @@
           const voiceValue = voice.value.trim();
           const apiKeyEnvValue = apiKeyEnv.value.trim();
           const formatValue = format.value.trim();
+          const asrFinalSilenceValue = asrFinalSilence.value.trim();
           const sampleRateValue = sampleRate.value.trim();
           const speedValue = speed.value.trim();
           if (endpointValue) { patch.endpoint = endpointValue; } else { patch.endpoint = ''; patch.base_url = ''; }
@@ -292,6 +286,14 @@
           if (voiceValue) { patch.voice = voiceValue; } else { patch.voice = ''; }
           if (apiKeyEnvValue) { patch.api_key_env = apiKeyEnvValue; } else { patch.api_key_env = ''; }
           if (formatValue) { patch.format = formatValue; } else { patch.format = ''; patch.response_format = ''; }
+          if (side === 'asr') {
+            const parsedFinalSilence = Number.parseInt(asrFinalSilenceValue || '1000', 10);
+            if (!Number.isFinite(parsedFinalSilence) || parsedFinalSilence < 100 || parsedFinalSilence > 10000) {
+              $('error').textContent = `Invalid Silence to Final for ${originalName}: ${asrFinalSilenceValue}`;
+              return;
+            }
+            patch.asr_final_silence_ms = parsedFinalSilence;
+          }
           if (sampleRateValue) {
             const parsedSampleRate = Number.parseInt(sampleRateValue, 10);
             if (!Number.isFinite(parsedSampleRate) || parsedSampleRate <= 0) {
@@ -327,6 +329,7 @@
         voice.addEventListener('change', commit);
         apiKeyEnv.addEventListener('change', commit);
         format.addEventListener('change', commit);
+        asrFinalSilence.addEventListener('change', commit);
         sampleRate.addEventListener('change', commit);
         speed.addEventListener('change', commit);
         options.addEventListener('change', commit);
@@ -369,10 +372,6 @@
       }
 
       function render(state) {
-        const finalSilence = $('asr-final-silence-ms');
-        if (finalSilence && document.activeElement !== finalSilence) {
-          finalSilence.value = String((state.config.behavior && state.config.behavior.asr_final_silence_ms) || 1000);
-        }
         $('status').innerHTML = state.dirty
           ? '<span class="dirty">Unsaved provider changes</span>'
           : 'No unsaved changes — Save will rewrite the current provider config.';
@@ -386,15 +385,6 @@
       store.subscribe(render);
       $('load').addEventListener('click', () => store.load().catch((error) => { $('error').textContent = error.message; }));
       $('save').addEventListener('click', () => store.save().catch((error) => { $('error').textContent = error.message; }));
-      $('asr-final-silence-ms').addEventListener('change', () => {
-        const value = Number.parseInt($('asr-final-silence-ms').value || '1000', 10);
-        if (!Number.isFinite(value) || value < 100 || value > 10000) {
-          $('error').textContent = 'Silence to Final must be between 100 and 10000 ms.';
-          return;
-        }
-        $('error').textContent = '';
-        store.setBehaviorValue('asr_final_silence_ms', value);
-      });
       $('add-asr').addEventListener('click', () => store.addProvider('asr'));
       $('add-tts').addEventListener('click', () => store.addProvider('tts'));
       store.load().catch((error) => { $('error').textContent = error.message; });

@@ -256,14 +256,14 @@ def test_providers_page_exposes_tts_speed_field():
     assert "patch.speed = parsedSpeed" in source
 
 
-def test_providers_page_has_asr_silence_to_final_setting():
+def test_providers_page_has_per_asr_provider_silence_to_final_setting():
     from pathlib import Path
     html = Path('/a0/usr/plugins/a0_voqualizer/webui/providers.html').read_text()
     store = Path('/a0/usr/plugins/a0_voqualizer/webui/config-store.js').read_text()
     ws = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
     assert 'Silence to Final (ms)' in html
-    assert 'id="asr-final-silence-ms"' in html
-    assert "setBehaviorValue('asr_final_silence_ms', value)" in html
-    assert 'setBehaviorValue' in store
+    assert 'provider-asr-final-silence-ms' in html
+    assert 'patch.asr_final_silence_ms = parsedFinalSilence' in html
+    assert 'setBehaviorValue' not in store
     assert 'asr_final_silence_ms' in store
-    assert 'configured_final_silence_ms' in ws
+    assert 'asr_providers[asr_provider].get("asr_final_silence_ms", 1000.0)' in ws

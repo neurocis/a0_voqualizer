@@ -48,6 +48,7 @@ function defaultProvider(side) {
     type: 'mock',
     enabled: true,
     language: 'en',
+    asr_final_silence_ms: 1000,
     options: {},
   };
 }
@@ -70,7 +71,7 @@ function normalizeProvider(side, provider = {}) {
   // options JSON. Keep top-level fields authoritative when present, but lift
   // common keys from options so endpoint/model/key/voice/etc. are always
   // visible and editable in the Providers UI.
-  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'speed', 'language', 'streaming']) {
+  for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'speed', 'language', 'streaming', 'asr_final_silence_ms']) {
     if ((normalized[key] == null || normalized[key] === '') && options[key] != null && options[key] !== '') {
       normalized[key] = options[key];
     }
@@ -80,6 +81,10 @@ function normalizeProvider(side, provider = {}) {
   }
   if (side === 'asr' && !normalized.language) {
     normalized.language = 'en';
+  }
+  if (side === 'asr') {
+    const parsedFinalSilence = Number(normalized.asr_final_silence_ms == null || normalized.asr_final_silence_ms === '' ? 1000 : normalized.asr_final_silence_ms);
+    normalized.asr_final_silence_ms = Number.isFinite(parsedFinalSilence) ? parsedFinalSilence : 1000;
   }
   if (side === 'tts' && !normalized.voice) {
     normalized.voice = 'mock';
@@ -109,10 +114,6 @@ function normalizeConfig(config = {}) {
       providers: tts,
       default: config.tts && tts.some((provider) => provider.name === config.tts.default) ? config.tts.default : tts[0].name,
     },
-    behavior: {
-      ...(config.behavior || {}),
-      asr_final_silence_ms: Number((config.behavior && config.behavior.asr_final_silence_ms) || 1000),
-    },
   };
 }
 
@@ -139,10 +140,6 @@ export function overlayFromConfig(config) {
     tts: {
       default: config.tts.default,
       providers: config.tts.providers,
-    },
-    behavior: {
-      ...(config.behavior || {}),
-      asr_final_silence_ms: Number((config.behavior && config.behavior.asr_final_silence_ms) || 1000),
     },
   };
 }
@@ -300,11 +297,6 @@ export function createVoqualizerConfigStore(options = {}) {
   }
 
 
-  function setBehaviorValue(key, value) {
-    state.config.behavior = { ...(state.config.behavior || {}), [key]: value };
-    markDirty();
-    appendEvent('behavior:update', { key, value });
-  }
 
   function removeProvider(side, name) {
     if (!PROVIDER_SIDES.includes(side)) {
@@ -388,7 +380,6 @@ export function createVoqualizerConfigStore(options = {}) {
     addProvider,
     updateProvider,
     removeProvider,
-    setBehaviorValue,
     setDefault,
     testProvider,
     overlayFromConfig: () => overlayFromConfig(state.config),
