@@ -802,6 +802,8 @@ class WsVoqualizer(WsHandler):
             "last_partial_at_ms": 0.0,
             "last_partial_text": "",
             "last_final_text": "",
+            "utterance_generation": int(session.metadata.get("asr_utterance_generation", 0)),
+            "utterance_id": str(session.metadata.get("asr_current_utterance_id", "")),
         }
         session.metadata["asr_utterance_state"] = state
         return state
@@ -887,6 +889,26 @@ class WsVoqualizer(WsHandler):
             )
             if result is None:
                 return
+            meta = dict(result.metadata or {})
+            utterance_generation = meta.get("utterance_generation")
+            if utterance_generation is not None:
+                current_generation = int(session.metadata.get("asr_utterance_generation", 0) or 0)
+                generation_is_stale = int(utterance_generation) < current_generation
+                if generation_is_stale and result.kind != TranscriptKind.FINAL:
+                    session.metadata["stale_asr_result_ignored"] = int(session.metadata.get("stale_asr_result_ignored", 0)) + 1
+                    session.metadata["asr_last_stale_generation"] = int(utterance_generation)
+                    return
+                if generation_is_stale and result.kind == TranscriptKind.FINAL:
+                    words = [w for w in result.text.split() if w]
+                    # Conversational-mode first-word splits show up as a short
+                    # stale final after a newer utterance generation has already
+                    # started. Suppress those stale leading fragments, but keep
+                    # explicit PTT/stop finals and longer natural utterances.
+                    if meta.get("final_reason") != "forced_final" and len(words) <= 4:
+                        session.metadata["stale_asr_result_ignored"] = int(session.metadata.get("stale_asr_result_ignored", 0)) + 1
+                        session.metadata["asr_last_stale_generation"] = int(utterance_generation)
+                        session.metadata["asr_last_stale_final_text"] = result.text
+                        return
             if duplicate_key:
                 previous = str(session.metadata.get(duplicate_key, ""))
                 if result.text == previous:
@@ -1006,6 +1028,12 @@ class WsVoqualizer(WsHandler):
         if rms >= speech_rms:
             was_speaking = bool(state.get("has_speech"))
             if not was_speaking:
+                generation = int(session.metadata.get("asr_utterance_generation", 0) or 0) + 1
+                session.metadata["asr_utterance_generation"] = generation
+                utterance_id = f"asr-{session.session_id}-{generation}"
+                session.metadata["asr_current_utterance_id"] = utterance_id
+                state["utterance_generation"] = generation
+                state["utterance_id"] = utterance_id
                 state["speech_started_at_ms"] = float(state.get("duration_ms", 0.0))
                 state["speech_start_seq"] = chunk.seq
                 state["speech_start_ts_ms"] = chunk.ts_ms
@@ -1033,7 +1061,9 @@ class WsVoqualizer(WsHandler):
         speech_ms = float(state.get("speech_ms", 0.0))
         trailing_ms = float(state.get("trailing_silence_ms", 0.0))
         has_speech = bool(state.get("has_speech")) and speech_ms >= min_speech_ms
-        should_final = bool(chunk.is_final) or (has_speech and trailing_ms >= final_silence_ms) or (has_speech and duration_ms >= max_segment_ms)
+        is_forced_final = bool(chunk.is_final)
+        final_reason = "forced_final" if is_forced_final else ("trailing_silence" if (has_speech and trailing_ms >= final_silence_ms) else ("max_segment_ms" if (has_speech and duration_ms >= max_segment_ms) else ""))
+        should_final = is_forced_final or bool(final_reason)
         should_partial = (
             has_speech
             and not should_final
@@ -1061,6 +1091,13 @@ class WsVoqualizer(WsHandler):
             "asr_max_segment_ms": max_segment_ms,
             "asr_min_speech_ms": min_speech_ms,
             "asr_preroll_ms": preroll_ms,
+            "utterance_id": state.get("utterance_id"),
+            "utterance_generation": state.get("utterance_generation"),
+            "is_forced_final": is_forced_final,
+            "chunk_is_final": bool(chunk.is_final),
+            "final_reason": final_reason,
+            "last_seq": state.get("last_seq"),
+            "last_ts_ms": state.get("last_ts_ms"),
         }
 
         if should_partial:
@@ -1097,6 +1134,8 @@ class WsVoqualizer(WsHandler):
             "last_partial_at_ms": 0.0,
             "last_partial_text": "",
             "last_final_text": str(session.metadata.get("asr_last_final_text", "")),
+            "utterance_generation": int(session.metadata.get("asr_utterance_generation", 0) or 0),
+            "utterance_id": "",
         })
         return 0
 

@@ -16,6 +16,7 @@ import {
   alignPcm16Bytes,
   pcm16ToFloat32,
   bytesFromUnknownAudio,
+  bytesFromTtsPayload,
   maybeLocalBargeInFromMic,
   PCM_SAMPLE_RATE,
   INPUT_CODEC,
@@ -131,6 +132,22 @@ export function createVoqualizerStore(options = {}) {
     lastConnectPhase: '',
     lastDisconnectReason: '',
     lastSocketEvent: '',
+    lastTtsEnabledSent: null,
+    lastTtsControlAck: null,
+    lastTtsChunkAt: 0,
+    lastTtsDoneAt: 0,
+    lastTtsChunkBytes: 0,
+    lastTtsUtteranceId: '',
+    lastTtsSkipReason: '',
+    lastPlaybackStartAt: 0,
+    lastPlaybackStopReason: '',
+    lastAgentFinalAt: 0,
+    lastAgentFinalText: '',
+    lastFinalFrameSentAt: 0,
+    lastFinalFrameReason: '',
+    lastAudioSeqSent: 0,
+    lastAsrFinalText: '',
+    lastAsrFinalUtteranceId: '',
     audioFramesSent: 0,
     seq: 0,
     startTs: 0,
@@ -181,6 +198,23 @@ export function createVoqualizerStore(options = {}) {
         lastConnectPhase: this.lastConnectPhase,
         lastDisconnectReason: this.lastDisconnectReason,
         lastSocketEvent: this.lastSocketEvent,
+        ttsEnabled: this.isTtsEnabled(),
+        lastTtsEnabledSent: this.lastTtsEnabledSent,
+        lastTtsControlAck: this.lastTtsControlAck,
+        lastTtsChunkAt: this.lastTtsChunkAt,
+        lastTtsDoneAt: this.lastTtsDoneAt,
+        lastTtsChunkBytes: this.lastTtsChunkBytes,
+        lastTtsUtteranceId: this.lastTtsUtteranceId,
+        lastTtsSkipReason: this.lastTtsSkipReason,
+        lastPlaybackStartAt: this.lastPlaybackStartAt,
+        lastPlaybackStopReason: this.lastPlaybackStopReason,
+        lastAgentFinalAt: this.lastAgentFinalAt,
+        lastAgentFinalText: this.lastAgentFinalText,
+        lastFinalFrameSentAt: this.lastFinalFrameSentAt,
+        lastFinalFrameReason: this.lastFinalFrameReason,
+        lastAudioSeqSent: this.lastAudioSeqSent,
+        lastAsrFinalText: this.lastAsrFinalText,
+        lastAsrFinalUtteranceId: this.lastAsrFinalUtteranceId,
         audioFramesSent: this.audioFramesSent,
       };
     },
@@ -249,10 +283,15 @@ export function createVoqualizerStore(options = {}) {
       this._setReason(enabled ? 'tts_enabled' : 'tts_muted');
       if (this._socket && this.bearerToken) {
         try {
+          this.lastTtsEnabledSent = enabled;
+          this._publishDebug();
           this._socket.emit('voqualizer_control', {
             action: 'set_tts_enabled',
             enabled,
             bearer_token: this.bearerToken,
+          }, (ack) => {
+            this.lastTtsControlAck = this._unwrapPayload(ack);
+            this._publishDebug();
           });
         } catch (_e) {}
       }
@@ -368,6 +407,8 @@ export function createVoqualizerStore(options = {}) {
           let done = false;
           const finish = () => { if (!done) { done = true; resolve(); } };
           try {
+            this.lastTtsEnabledSent = this.isTtsEnabled();
+            this._publishDebug();
             socket.emit('voqualizer_init', {
               context_id: this.contextId || '',
               input_codec: INPUT_CODEC,
@@ -445,6 +486,8 @@ export function createVoqualizerStore(options = {}) {
         this.bearerToken = data.bearer_token || this.bearerToken;
         this._setReason('ready', 'ready_event');
       }));
+      socket.on('voqualizer_agent_response_final', guard((payload) => this._handleAgentFinal(payload)));
+      socket.on('voqualizer_asr_final', guard((payload) => this._handleAsrFinal(payload)));
       socket.on('voqualizer_tts_chunk', guard((payload) => this._handleTtsChunk(payload)));
       socket.on('voqualizer_tts_done', guard((payload) => this._handleTtsDone(payload)));
       socket.on('voqualizer_error', guard((payload) => {
@@ -507,23 +550,38 @@ export function createVoqualizerStore(options = {}) {
       this.seq = ((seq | 0) || (this.seq + 1)) & 0xffff;
       const tsRel = ((tsMs | 0) || (Date.now() - this.startTs)) & 0xffff;
       const payload = audioChunkPayload(this.seq, tsRel, pcm16, { bearer_token: this.bearerToken });
-      try { this._socket.emit('voqualizer_audio_chunk', payload); this.audioFramesSent += 1; } catch (_e) {}
+      try { this._socket.emit('voqualizer_audio_chunk', payload); this.audioFramesSent += 1; this.lastAudioSeqSent = this.seq; this._publishDebug(); } catch (_e) {}
     },
     async _sendFinalFrame(generation = this.connectionGeneration) {
       if (!this._isGenerationCurrent(generation)) return;
       if (!this._socket || !this.bearerToken) return;
       const payload = audioChunkPayload((this.seq + 1) & 0xffff, ((Date.now() - this.startTs) & 0xffff), new Uint8Array(0), { bearer_token: this.bearerToken, is_final: true });
-      try { this._socket.emit('voqualizer_audio_chunk', payload); this._setReason('final_frame_sent'); } catch (_e) {}
+      try { this._socket.emit('voqualizer_audio_chunk', payload); this.lastFinalFrameSentAt = Date.now(); this.lastFinalFrameReason = this._pttOverlay ? 'ptt_overlay_release' : 'ptt_release'; this._setReason('final_frame_sent'); } catch (_e) {}
+    },
+    _handleAgentFinal(payload) {
+      const data = this._unwrapPayload(payload);
+      this.lastAgentFinalAt = Date.now();
+      this.lastAgentFinalText = String(data.speech_text || data.text || '').slice(0, 160);
+      this._publishDebug();
+    },
+    _handleAsrFinal(payload) {
+      const data = this._unwrapPayload(payload);
+      this.lastAsrFinalText = String(data.text || '').slice(0, 160);
+      this.lastAsrFinalUtteranceId = String((data.metadata && data.metadata.utterance_id) || data.utterance_id || '');
+      this._publishDebug();
     },
     _handleTtsChunk(payload) {
-      if (!this.isTtsEnabled()) return;
       const data = this._unwrapPayload(payload);
-      const audio = bytesFromUnknownAudio(data.audio_bytes || data.audio || data.pcm16);
       const utteranceId = data.utterance_id || 'default';
-      if (tracker.cancelledTtsUtterances.has(utteranceId)) return;
+      this.lastTtsChunkAt = Date.now();
+      this.lastTtsUtteranceId = utteranceId;
+      if (!this.isTtsEnabled()) { this.lastTtsSkipReason = 'tts_disabled_ui'; this._publishDebug(); return; }
+      const audio = bytesFromTtsPayload(payload);
+      this.lastTtsChunkBytes = audio.byteLength || 0;
+      if (tracker.cancelledTtsUtterances.has(utteranceId)) { this.lastTtsSkipReason = 'cancelled_utterance'; this._publishDebug(); return; }
       const aligned = alignPcm16Bytes(audio, carryMap, utteranceId);
       const samples = pcm16ToFloat32(aligned);
-      if (!samples.length) return;
+      if (!samples.length) { this.lastTtsSkipReason = 'empty_audio'; this._publishDebug(); return; }
       const sampleRate = data.sample_rate || PCM_SAMPLE_RATE;
       const ctx = this._ensurePlaybackContext(sampleRate);
       const buffer = ctx.createBuffer(1, samples.length, sampleRate);
@@ -531,14 +589,22 @@ export function createVoqualizerStore(options = {}) {
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
+      try { if (ctx.state === 'suspended' && ctx.resume) ctx.resume(); } catch (_e) {}
       source.start();
+      this.lastPlaybackStartAt = Date.now();
+      this.lastTtsSkipReason = '';
+      this._publishDebug();
       if (!tracker.activePlaybackSources.has(utteranceId)) tracker.activePlaybackSources.set(utteranceId, []);
       tracker.activePlaybackSources.get(utteranceId).push(source);
     },
     _handleTtsDone(payload) {
       const data = this._unwrapPayload(payload);
       const utteranceId = data.utterance_id || 'default';
-      if (data.cancelled || data.reason === 'barge_in') tracker.stopPlaybackForUtterance(utteranceId);
+      this.lastTtsDoneAt = Date.now();
+      this.lastTtsUtteranceId = utteranceId;
+      if (data.reason) this.lastTtsSkipReason = data.reason;
+      if (data.cancelled || data.reason === 'barge_in') { this.lastPlaybackStopReason = data.reason || 'cancelled'; tracker.stopPlaybackForUtterance(utteranceId); }
+      this._publishDebug();
     },
     _ensurePlaybackContext(sampleRate) {
       if (!this._playbackCtx) this._playbackCtx = new (globalThis.AudioContext || globalThis.webkitAudioContext)({ sampleRate });

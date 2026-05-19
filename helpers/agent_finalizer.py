@@ -344,10 +344,16 @@ async def synthesize_agent_response_tts(
     original_text = _clean_text(text)
     text = _tts_speakable_text(text)
     if not text:
-        return {"status": "skipped", "reason": "empty_text", "chunks": 0}
+        if session.sender is not None:
+            await _emit_tts_done(session, utterance_id=utterance_id, cancelled=True, chunks=0, reason="empty_speech_text")
+        session.metadata["tts_last_skip_reason"] = "empty_speech_text"
+        return {"status": "skipped", "reason": "empty_speech_text", "chunks": 0}
     if session.sender is None:
+        session.metadata["tts_last_skip_reason"] = "missing_sender"
         return {"status": "skipped", "reason": "missing_sender", "chunks": 0}
     if not getattr(session, "tts_enabled", True):
+        await _emit_tts_done(session, utterance_id=utterance_id, cancelled=True, chunks=0, reason="tts_disabled")
+        session.metadata["tts_last_skip_reason"] = "tts_disabled"
         return {"status": "skipped", "reason": "tts_disabled", "chunks": 0}
 
     cfg_loader = config_loader or _default_config_loader
@@ -427,11 +433,14 @@ async def synthesize_agent_response_tts(
                 )
                 return {"status": "cancelled", "reason": "barge_in", "chunks": chunks}
         await _emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
+        session.metadata["tts_last_skip_reason"] = ""
         return {"status": "ok", "chunks": chunks, "utterance_id": utterance_id}
     except TTSError as exc:
+        session.metadata["tts_last_skip_reason"] = "provider_error"
         await _emit_tts_error(session, exc)
         return {"status": "error", "error": exc.to_dict(), "chunks": chunks}
     except Exception as exc:
+        session.metadata["tts_last_skip_reason"] = "provider_error"
         err = TTSError(str(exc), code="TTS_FINALIZATION_ERROR", recoverable=True)
         await _emit_tts_error(session, err)
         return {"status": "error", "error": err.to_dict(), "chunks": chunks}

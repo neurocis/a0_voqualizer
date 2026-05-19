@@ -94,3 +94,41 @@ def test_socket_and_async_lifecycle_are_guarded_by_intent_and_generation():
         'socket.disconnect()',
     ):
         assert marker in s, f'missing lifecycle guard marker {marker!r}'
+
+
+def test_tts_playback_diagnostics_and_base64_decode_markers():
+    s = CM.read_text()
+    for marker in (
+        'bytesFromTtsPayload',
+        'lastTtsEnabledSent',
+        'lastTtsControlAck',
+        'lastTtsChunkAt',
+        'lastTtsDoneAt',
+        'lastTtsChunkBytes',
+        'lastTtsUtteranceId',
+        'lastTtsSkipReason',
+        'lastPlaybackStartAt',
+        'lastPlaybackStopReason',
+        'lastAgentFinalAt',
+        'lastAgentFinalText',
+        'lastFinalFrameSentAt',
+        'lastFinalFrameReason',
+        'lastAudioSeqSent',
+        'lastAsrFinalText',
+        'lastAsrFinalUtteranceId',
+        "socket.on('voqualizer_agent_response_final'",
+        "socket.on('voqualizer_asr_final'",
+        '_handleTtsChunk(payload)',
+        "ctx.state === 'suspended'",
+        'ctx.resume',
+    ):
+        assert marker in s, f'missing TTS diagnostic marker {marker!r}'
+
+
+def test_tts_init_and_control_send_enabled_truth_to_backend():
+    s = CM.read_text()
+    assert 'tts: { enabled: this.isTtsEnabled() }' in s
+    assert 'this.lastTtsEnabledSent = this.isTtsEnabled()' in s
+    assert 'this.lastTtsEnabledSent = enabled' in s
+    assert "action: 'set_tts_enabled'" in s
+    assert 'this.lastTtsControlAck = this._unwrapPayload(ack)' in s

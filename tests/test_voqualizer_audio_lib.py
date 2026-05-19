@@ -29,3 +29,15 @@ def test_lib_exists_with_expected_exports():
 def test_conversation_mode_imports_from_shared_lib():
     s = CM.read_text()
     assert "from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js'" in s
+
+
+def test_tts_payload_base64_helpers_present():
+    s = LIB.read_text()
+    for marker in (
+        'export function base64ToBytes',
+        'export function bytesFromTtsPayload',
+        'audio_b64',
+        'atob(text)',
+        'bytesFromUnknownAudio(data.audio_bytes || data.audio || data.pcm16',
+    ):
+        assert marker in s, f'missing TTS payload helper marker {marker!r}'
