@@ -35,14 +35,38 @@ import time
 from pathlib import Path
 from typing import Any, Mapping
 
-from helpers.api import ApiHandler
+# Ensure framework imports win over the plugin-local ``helpers`` package when
+# this handler is imported from the plugin directory during diagnostics/tests.
+_A0_ROOT = "/a0"
+_PLUGIN_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def _import_framework_api_handler():
+    original_path = list(sys.path)
+    try:
+        # When cwd is the plugin directory, the implicit '' path can resolve
+        # top-level ``helpers`` to ``usr/plugins/a0_voqualizer/helpers``. Remove
+        # that ambiguity while importing the A0 framework helper package.
+        sys.modules.pop("helpers", None)
+        sys.modules.pop("helpers.api", None)
+        sys.path[:] = [p for p in sys.path if p not in ("", _PLUGIN_DIR)]
+        if _A0_ROOT in sys.path:
+            sys.path.remove(_A0_ROOT)
+        sys.path.insert(0, _A0_ROOT)
+        from helpers.api import ApiHandler as _ApiHandler
+        return _ApiHandler
+    finally:
+        sys.path[:] = original_path
+
+try:
+    from helpers.api import ApiHandler
+except ModuleNotFoundError:
+    ApiHandler = _import_framework_api_handler()
 from flask import Request, Response
 
 
 # Ensure plugin-relative imports work regardless of how the handler is loaded.
-_PLUGIN_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PLUGIN_DIR not in sys.path:
-    sys.path.insert(0, _PLUGIN_DIR)
+    sys.path.append(_PLUGIN_DIR)
 
 
 class VoqualizerAdmin(ApiHandler):

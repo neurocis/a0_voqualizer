@@ -1,4 +1,6 @@
 ## [Unreleased]
+- Made Voqualizer admin handler robust against plugin-local `helpers` import shadowing during context-list diagnostics.
+- Hardened tester context refresh to use A0 `callJsonApi` admin helper before fetch fallback so the context picklist populates reliably.
 - Added tester context-id picklist backed by admin `contexts` action and final-ASR ContextBridge injection for selected A0 chat pipeline binding.
 - Decoupled batch ASR transcription from the `voqualizer_audio_chunk` ack path so slow HTTP ASR calls cannot turn mic ingress into `HANDLER_ERROR`/timeout failures.
 - Fixed Providers TTS smoke test to honor provider-configured `format` and `sample_rate` (e.g. `pcm` @ 24000 Hz) instead of forcing `pcm16/16k`, producing audible previews on Kokoro-style PCM endpoints.

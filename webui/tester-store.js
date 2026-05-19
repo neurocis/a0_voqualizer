@@ -507,13 +507,44 @@ export function createVoqualizerTesterStore(options = {}) {
   }
 
   async function adminAction(payload) {
+    // Prefer A0's own API helper so auth, CSRF, runtime envelopes, and route
+    // prefixes match the rest of the WebUI. The previous raw fetch path could
+    // fail silently in live UI sessions, leaving the Context dropdown with only
+    // its default "New Voqualizer context" option.
+    try {
+      const apiMod = await import('/js/api.js');
+      const callJsonApi = apiMod.callJsonApi || apiMod.default;
+      if (typeof callJsonApi === 'function') {
+        const result = await callJsonApi('plugins/a0_voqualizer/voqualizer_admin', payload || {});
+        const unwrapped = result && result.results && result.results[0] && result.results[0].data
+          ? result.results[0].data
+          : result;
+        if (!unwrapped || unwrapped.ok === false) {
+          throw new Error((unwrapped && (unwrapped.message || unwrapped.code)) || 'admin request failed');
+        }
+        return unwrapped;
+      }
+    } catch (error) {
+      // If the helper reached the server/plugin and returned an error, surface it.
+      // Only continue to raw fetch if the helper is genuinely unavailable in a
+      // stripped-down test harness.
+      const message = String(error && error.message || error || '');
+      if (!message.includes('callJsonApi') && !message.includes('is not a function')) {
+        throw error;
+      }
+    }
+
     const body = JSON.stringify(payload || {});
     const headers = { 'Content-Type': 'application/json' };
     try {
       const apiMod = await import('/js/api.js');
       if (apiMod.getCsrfToken) {
         const token = await apiMod.getCsrfToken();
-        if (token) headers['X-CSRF-Token'] = token;
+        if (token) {
+          headers['X-CSRF-Token'] = token;
+          headers['X-CSRFToken'] = token;
+          headers['x-csrf-token'] = token;
+        }
       }
     } catch (_err) {
       // Same-origin authenticated sessions may still succeed without the helper.
