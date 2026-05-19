@@ -23,9 +23,19 @@ def test_extension_renders_status_pill_and_two_dedicated_buttons():
         assert marker in s, f'missing status marker {marker!r}'
 
 
+
+def test_extension_orders_controls_speaker_mic_status_pill():
+    s = EXT.read_text()
+    speaker = s.index('id="voqualizer-speaker-button"')
+    mic = s.index('id="voqualizer-mic-button"')
+    pill = s.index('id="voqualizer-status-pill"')
+    assert speaker < mic < pill, 'expected [Voq Speaker] [Voq Mic] [Voq Status Pill] order'
+
 def test_extension_does_not_intercept_a0_native_buttons():
     s = EXT.read_text()
     # Must not capture-phase override A0's own buttons.
+    assert 'microphone-button' not in s
+    assert 'stop-speech' not in s
     assert "getElementById('microphone-button')" not in s
     assert "getElementById('stop-speech')" not in s
     assert 'stopImmediatePropagation' not in s

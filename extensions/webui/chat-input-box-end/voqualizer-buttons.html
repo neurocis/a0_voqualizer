@@ -2,8 +2,8 @@
   A0 Voqualizer dedicated chat-input buttons.
 
   Renders two NEW circular buttons and a compact status pill at the far right
-  of the chat-input action row. Does NOT touch A0's existing #microphone-button
-  / #stop-speech controls.
+  of the chat-input action row. Does NOT touch A0's existing native
+  microphone/speaker controls.
 
   Buttons:
     #voqualizer-speaker-button — toggles Voqualizer TTS for the current
@@ -24,7 +24,6 @@
   data-a0-voqualizer-buttons="1"
   class="voqualizer-buttons-row"
 >
-  <span id="voqualizer-status-pill" class="voqualizer-status-pill voqualizer-idle" aria-live="polite">Voq: Off</span>
   <button
     type="button"
     id="voqualizer-speaker-button"
@@ -54,6 +53,7 @@
     <span class="material-symbols-outlined" aria-hidden="true">mic</span>
     <span class="voqualizer-button-ring" aria-hidden="true"></span>
   </button>
+  <span id="voqualizer-status-pill" class="voqualizer-status-pill voqualizer-idle" aria-live="polite">Voq: Off</span>
 </div>
 
 <style>
