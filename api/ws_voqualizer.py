@@ -792,6 +792,7 @@ class WsVoqualizer(WsHandler):
         return {
             "chunks": [],
             "preroll_chunks": [],
+            "leading_audio_chunks": [],
             "duration_ms": 0.0,
             "speech_ms": 0.0,
             "trailing_silence_ms": 0.0,
@@ -810,6 +811,11 @@ class WsVoqualizer(WsHandler):
             "preroll_chunks_available": 0,
             "preroll_chunks_merged": 0,
             "preroll_merged": False,
+            "leading_chunks_available": 0,
+            "leading_chunks_merged": 0,
+            "leading_first_seq": None,
+            "leading_last_seq": None,
+            "leading_ring_ms": 0.0,
             "segment_first_seq": None,
             "segment_last_seq": None,
         }
@@ -835,6 +841,19 @@ class WsVoqualizer(WsHandler):
         # update. Keep meaningful one-word utterances once final if punctuation
         # or length suggests intent; partials/finals call this as a basic guard.
         return len(clean) >= 2
+
+    @staticmethod
+    def _dedupe_audio_chunks_by_seq(chunks: list[AudioChunk]) -> list[AudioChunk]:
+        """Return chunks without duplicate seq values, preserving order."""
+        seen: set[int] = set()
+        out: list[AudioChunk] = []
+        for item in chunks:
+            seq = int(getattr(item, "seq", -1))
+            if seq in seen:
+                continue
+            seen.add(seq)
+            out.append(item)
+        return out
 
     async def _transcribe_utterance_segment(
         self,
@@ -1029,8 +1048,19 @@ class WsVoqualizer(WsHandler):
         state = self._asr_utterance_state_for_session(session)
         chunks: list[AudioChunk] = state.setdefault("chunks", [])
         preroll_chunks: list[AudioChunk] = state.setdefault("preroll_chunks", [])
+        leading_audio_chunks: list[AudioChunk] = state.setdefault("leading_audio_chunks", [])
         chunk_ms = self._chunk_duration_ms(chunk)
         preroll_max_chunks = max(1, int((preroll_ms / max(chunk_ms, 1.0)) + 0.999))
+        leading_max_chunks = preroll_max_chunks
+
+        # Always keep the last `asr_preroll_ms` of audio, regardless of whether
+        # current RMS/VAD thinks speech has started. This captures early speech
+        # frames when speech detection fires late, e.g. missing unique first
+        # tokens like Alpha/Pineapple.
+        leading_audio_chunks.append(chunk)
+        if len(leading_audio_chunks) > leading_max_chunks:
+            del leading_audio_chunks[:len(leading_audio_chunks) - leading_max_chunks]
+        state["leading_ring_ms"] = round(len(leading_audio_chunks) * chunk_ms, 3)
 
         if state.get("first_seq") is None:
             state["first_seq"] = chunk.seq
@@ -1052,18 +1082,26 @@ class WsVoqualizer(WsHandler):
                 state["speech_started_at_ms"] = float(state.get("duration_ms", 0.0))
                 state["speech_start_seq"] = chunk.seq
                 state["speech_start_ts_ms"] = chunk.ts_ms
-                # Include pre-roll immediately before detected speech so first
-                # words/plosives are not clipped by RMS/VAD threshold crossing.
-                # Copy it exactly once into the ASR provider segment; the live
-                # first-word regression happens when the provider request starts
-                # at speech_start_seq instead of before it.
-                preroll_snapshot = list(preroll_chunks)
-                state["preroll_chunks_available"] = len(preroll_snapshot)
-                chunks.extend(preroll_snapshot)
-                state["preroll_chunks_merged"] = len(preroll_snapshot)
-                state["preroll_merged"] = bool(preroll_snapshot)
+                # Include the always-on leading ring immediately before detected
+                # speech so first words/plosives are not clipped by RMS/VAD
+                # threshold crossing. Unlike the older pre-speech-only buffer,
+                # this ring also contains early speech frames if detection fires
+                # late. Copy it exactly once into the ASR provider segment.
+                leading_snapshot = list(leading_audio_chunks)
+                state["leading_chunks_available"] = len(leading_snapshot)
+                state["leading_first_seq"] = leading_snapshot[0].seq if leading_snapshot else None
+                state["leading_last_seq"] = leading_snapshot[-1].seq if leading_snapshot else None
+                chunks.extend(leading_snapshot)
+                chunks[:] = self._dedupe_audio_chunks_by_seq(chunks)
+                state["leading_chunks_merged"] = len(leading_snapshot)
+
+                # Keep legacy names populated for existing diagnostics/tests.
+                state["preroll_chunks_available"] = len(leading_snapshot)
+                state["preroll_chunks_merged"] = len(leading_snapshot)
+                state["preroll_merged"] = bool(leading_snapshot)
                 preroll_chunks.clear()
-            chunks.append(chunk)
+            if not chunks or chunks[-1].seq != chunk.seq:
+                chunks.append(chunk)
             state["has_speech"] = True
             state["speech_ms"] = float(state.get("speech_ms", 0.0)) + chunk_ms
             state["trailing_silence_ms"] = 0.0
@@ -1118,6 +1156,11 @@ class WsVoqualizer(WsHandler):
             "preroll_chunks_available": state.get("preroll_chunks_available"),
             "preroll_chunks_merged": state.get("preroll_chunks_merged"),
             "preroll_merged": state.get("preroll_merged"),
+            "leading_chunks_available": state.get("leading_chunks_available"),
+            "leading_chunks_merged": state.get("leading_chunks_merged"),
+            "leading_first_seq": state.get("leading_first_seq"),
+            "leading_last_seq": state.get("leading_last_seq"),
+            "leading_ring_ms": state.get("leading_ring_ms"),
             "segment_first_seq": state.get("segment_first_seq"),
             "segment_last_seq": state.get("segment_last_seq"),
             "utterance_id": state.get("utterance_id"),

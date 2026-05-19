@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Switched ASR utterance starts to an always-on 600 ms leading audio ring so early speech frames are merged even when VAD detects speech late, improving preservation of unique first tokens like Alpha/Pineapple.
 - Fixed ASR utterance state reset to reuse the complete state factory after each final, preventing later utterances from losing pre-roll/diagnostic fields after the first successful ASR.
 - Hardened ASR utterance construction by copying the leading pre-roll ring exactly once at speech start and exposing pre-roll/segment metadata for first-word-loss diagnostics.
 - Added live TTS/ASR pipeline diagnostics and playback hardening: in-GUI TTS now decodes base64 audio fallback, records TTS/playback/agent-final state in `window.__voqualizer_conversation`, emits clearer TTS skip reasons, and tags batch-ASR utterances with generation metadata to suppress stale short leading finals that split first words into separate prompts.

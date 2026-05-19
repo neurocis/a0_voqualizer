@@ -73,3 +73,21 @@ def test_asr_final_reset_reuses_complete_state_factory():
     factory = src[factory_start:factory_end]
     for marker in ('preroll_chunks', 'has_speech', 'first_seq', 'speech_start_seq', 'preroll_chunks_merged', 'segment_first_seq'):
         assert marker in factory
+
+
+def test_always_on_leading_audio_ring_markers():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'leading_audio_chunks' in src
+    assert 'leading_audio_chunks.append(chunk)' in src
+    assert 'leading_snapshot = list(leading_audio_chunks)' in src
+    assert 'chunks.extend(leading_snapshot)' in src
+    assert '_dedupe_audio_chunks_by_seq' in src
+    for marker in (
+        'leading_chunks_available',
+        'leading_chunks_merged',
+        'leading_first_seq',
+        'leading_last_seq',
+        'leading_ring_ms',
+    ):
+        assert marker in src
