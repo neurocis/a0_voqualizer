@@ -140,6 +140,25 @@ export function pcm16ToFloat32(pcm16) {
   return samples;
 }
 
+export async function fetchHeroContextId() {
+  // If the a0_superordinates plugin is installed and Hero Mode is enabled,
+  // return its designated Hero ContextID; otherwise return ''.
+  try {
+    const apiMod = await import('/js/api.js');
+    const callJsonApi = apiMod.callJsonApi || apiMod.default;
+    if (typeof callJsonApi !== 'function') return '';
+    const result = await callJsonApi('plugins/a0_superordinates/superordinate_config', {});
+    const heroId = String(
+      (result && (result.hero_mode_designated_hero
+        || (result.config && result.config.hero_mode_designated_hero))) || ''
+    ).trim();
+    if (!heroId || heroId.toLowerCase() === 'disabled') return '';
+    return heroId;
+  } catch (_err) {
+    return '';
+  }
+}
+
 export function createVoqualizerTesterStore(options = {}) {
   const listeners = new Set();
   const state = {
@@ -150,6 +169,7 @@ export function createVoqualizerTesterStore(options = {}) {
     sessionId: options.sessionId || makeSessionId(),
     bearerToken: '',
     selectedContextId: options.contextId || options.context_id || currentA0ContextId(),
+    userSelectedContext: !!(options.contextId || options.context_id),
     contexts: [],
     contextsLoading: false,
     negotiated: null,
@@ -755,12 +775,22 @@ export function createVoqualizerTesterStore(options = {}) {
   async function loadContexts() {
     setState({ contextsLoading: true, error: null });
     try {
-      const result = await adminAction({ action: 'contexts' });
+      const [result, heroContextId] = await Promise.all([
+        adminAction({ action: 'contexts' }),
+        fetchHeroContextId(),
+      ]);
       const contexts = Array.isArray(result.contexts) ? result.contexts : [];
       const currentContextId = currentA0ContextId();
-      const selectedContextId = state.selectedContextId || currentContextId;
+      // Default-selection precedence:
+      //   1. explicit user pick (setContextId/options.contextId)
+      //   2. Hero ContextID when a0_superordinates Hero Mode is enabled
+      //   3. existing state.selectedContextId (initialized from current A0 ctx)
+      //   4. live currentA0ContextId() fallback
+      const selectedContextId = state.userSelectedContext
+        ? state.selectedContextId
+        : (heroContextId || state.selectedContextId || currentContextId);
       setState({ contexts, selectedContextId, contextsLoading: false });
-      appendEvent('contexts_loaded', { count: contexts.length, selected_context_id: selectedContextId, current_context_id: currentContextId });
+      appendEvent('contexts_loaded', { count: contexts.length, selected_context_id: selectedContextId, current_context_id: currentContextId, hero_context_id: heroContextId });
       return contexts;
     } catch (error) {
       setState({ contextsLoading: false, error: error && error.message ? error.message : String(error) });
@@ -770,7 +800,7 @@ export function createVoqualizerTesterStore(options = {}) {
 
   function setContextId(contextId) {
     const clean = String(contextId || '').trim();
-    setState({ selectedContextId: clean });
+    setState({ selectedContextId: clean, userSelectedContext: true });
     appendEvent('context_selected', { context_id: clean });
   }
 

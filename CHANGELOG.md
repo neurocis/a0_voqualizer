@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Tester now defaults the context picker to the configured Hero ContextID when the `a0_superordinates` plugin is installed and Hero Mode is enabled, regardless of which A0 chat is currently focused.
 - Tester current-context defaulting now checks A0 global `getContext()` first so the active AIme/Hero chat is selected before connect.
 - Tester now defaults the context picker to the currently selected A0 chat context (for example Hero mode) when opened from the A0 UI.
 - ASR quality hardening now preserves first words with utterance pre-roll, suppresses repeated no-speech filler finals, forwards Whisper quality options, and surfaces first-frame/ASR request diagnostics in the tester.
