@@ -45,3 +45,17 @@ def test_tts_skip_diagnostics_are_emitted_or_recorded():
     for marker in ('empty_speech_text', 'tts_disabled', 'provider_error', 'tts_last_skip_reason'):
         assert marker in final, f'missing finalizer TTS diagnostic marker {marker!r}'
     assert 'tts_last_skip_reason' in chunker
+
+
+def test_structural_preroll_merge_metadata_markers():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'asr_preroll_ms", 600.0' in src
+    assert 'preroll_snapshot = list(preroll_chunks)' in src
+    assert 'chunks.extend(preroll_snapshot)' in src
+    assert 'preroll_chunks_available' in src
+    assert 'preroll_chunks_merged' in src
+    assert 'preroll_merged' in src
+    assert 'segment_first_seq' in src
+    assert 'segment_last_seq' in src
+    assert 'asr_last_final_metadata' in src

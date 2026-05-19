@@ -804,6 +804,11 @@ class WsVoqualizer(WsHandler):
             "last_final_text": "",
             "utterance_generation": int(session.metadata.get("asr_utterance_generation", 0)),
             "utterance_id": str(session.metadata.get("asr_current_utterance_id", "")),
+            "preroll_chunks_available": 0,
+            "preroll_chunks_merged": 0,
+            "preroll_merged": False,
+            "segment_first_seq": None,
+            "segment_last_seq": None,
         }
         session.metadata["asr_utterance_state"] = state
         return state
@@ -1039,7 +1044,14 @@ class WsVoqualizer(WsHandler):
                 state["speech_start_ts_ms"] = chunk.ts_ms
                 # Include pre-roll immediately before detected speech so first
                 # words/plosives are not clipped by RMS/VAD threshold crossing.
-                chunks.extend(preroll_chunks)
+                # Copy it exactly once into the ASR provider segment; the live
+                # first-word regression happens when the provider request starts
+                # at speech_start_seq instead of before it.
+                preroll_snapshot = list(preroll_chunks)
+                state["preroll_chunks_available"] = len(preroll_snapshot)
+                chunks.extend(preroll_snapshot)
+                state["preroll_chunks_merged"] = len(preroll_snapshot)
+                state["preroll_merged"] = bool(preroll_snapshot)
                 preroll_chunks.clear()
             chunks.append(chunk)
             state["has_speech"] = True
@@ -1074,6 +1086,8 @@ class WsVoqualizer(WsHandler):
             return 0
 
         segment = list(chunks)
+        state["segment_first_seq"] = segment[0].seq if segment else None
+        state["segment_last_seq"] = segment[-1].seq if segment else None
         metadata = {
             "session_id": session.session_id,
             "seq": chunk.seq,
@@ -1091,6 +1105,11 @@ class WsVoqualizer(WsHandler):
             "asr_max_segment_ms": max_segment_ms,
             "asr_min_speech_ms": min_speech_ms,
             "asr_preroll_ms": preroll_ms,
+            "preroll_chunks_available": state.get("preroll_chunks_available"),
+            "preroll_chunks_merged": state.get("preroll_chunks_merged"),
+            "preroll_merged": state.get("preroll_merged"),
+            "segment_first_seq": state.get("segment_first_seq"),
+            "segment_last_seq": state.get("segment_last_seq"),
             "utterance_id": state.get("utterance_id"),
             "utterance_generation": state.get("utterance_generation"),
             "is_forced_final": is_forced_final,
