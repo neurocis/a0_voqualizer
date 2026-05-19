@@ -1134,6 +1134,7 @@ class WsVoqualizer(WsHandler):
 
         # Final: schedule transcription and reset utterance immediately so audio
         # acks remain fast even when the HTTP ASR endpoint is slow.
+        session.metadata["asr_last_final_metadata"] = metadata
         self._schedule_asr_utterance_transcription(
             session,
             provider,
