@@ -222,6 +222,8 @@ def test_tester_defaults_to_current_a0_context_for_hero_mode():
     store = store_source()
     html = html_source()
     assert "export function currentA0ContextId" in store
+    assert "globalThis.getContext" in store
+    assert "candidates.push(globalThis.getContext())" in store
     assert "Alpine" in store
     assert "alpine.store('chats')" in store
     assert "chats.selectedContext && chats.selectedContext.id" in store

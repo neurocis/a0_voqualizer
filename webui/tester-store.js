@@ -84,6 +84,13 @@ export function audioChunkPayload(seq, tsMs, pcm16) {
 export function currentA0ContextId() {
   const candidates = [];
   try {
+    if (typeof globalThis.getContext === 'function') {
+      candidates.push(globalThis.getContext());
+    }
+  } catch (_err) {
+    // A0 exposes getContext() in the full app; standalone tester pages may not.
+  }
+  try {
     const alpine = globalThis.Alpine;
     if (alpine && typeof alpine.store === 'function') {
       const chats = alpine.store('chats');

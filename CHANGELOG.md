@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Tester current-context defaulting now checks A0 global `getContext()` first so the active AIme/Hero chat is selected before connect.
 - Tester now defaults the context picker to the currently selected A0 chat context (for example Hero mode) when opened from the A0 UI.
 - ASR quality hardening now preserves first words with utterance pre-roll, suppresses repeated no-speech filler finals, forwards Whisper quality options, and surfaces first-frame/ASR request diagnostics in the tester.
 - Providers UI now hides side-inapplicable fields: ASR cards only show ASR timing, while TTS cards keep voice/speed and force PCM 24 kHz output without editable format/sample-rate fields.
