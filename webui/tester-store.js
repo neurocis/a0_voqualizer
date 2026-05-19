@@ -80,6 +80,48 @@ export function audioChunkPayload(seq, tsMs, pcm16) {
   };
 }
 
+
+export function currentA0ContextId() {
+  const candidates = [];
+  try {
+    const alpine = globalThis.Alpine;
+    if (alpine && typeof alpine.store === 'function') {
+      const chats = alpine.store('chats');
+      if (chats) {
+        candidates.push(chats.selectedContext && chats.selectedContext.id);
+        candidates.push(typeof chats.getSelectedChatId === 'function' ? chats.getSelectedChatId() : '');
+        candidates.push(chats.selected);
+      }
+    }
+  } catch (_err) {
+    // The tester also runs as a standalone page where Alpine may not exist.
+  }
+  try {
+    if (globalThis.sessionStorage) {
+      candidates.push(globalThis.sessionStorage.getItem('lastSelectedChat'));
+    }
+  } catch (_err) {
+    // sessionStorage can be unavailable in strict/embed contexts.
+  }
+  try {
+    if (globalThis.location && globalThis.location.href) {
+      const params = new URL(globalThis.location.href).searchParams;
+      candidates.push(params.get('ctxid'));
+      candidates.push(params.get('context_id'));
+      candidates.push(params.get('contextId'));
+    }
+  } catch (_err) {
+    // Ignore URL parsing failures in non-browser tests.
+  }
+  for (const value of candidates) {
+    const clean = String(value || '').trim();
+    if (clean) {
+      return clean;
+    }
+  }
+  return '';
+}
+
 export function pcm16ToFloat32(pcm16) {
   const bytes = bytesFromUnknownAudio(pcm16);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -100,7 +142,7 @@ export function createVoqualizerTesterStore(options = {}) {
     muted: false,
     sessionId: options.sessionId || makeSessionId(),
     bearerToken: '',
-    selectedContextId: options.contextId || options.context_id || '',
+    selectedContextId: options.contextId || options.context_id || currentA0ContextId(),
     contexts: [],
     contextsLoading: false,
     negotiated: null,
@@ -708,8 +750,10 @@ export function createVoqualizerTesterStore(options = {}) {
     try {
       const result = await adminAction({ action: 'contexts' });
       const contexts = Array.isArray(result.contexts) ? result.contexts : [];
-      setState({ contexts, contextsLoading: false });
-      appendEvent('contexts_loaded', { count: contexts.length });
+      const currentContextId = currentA0ContextId();
+      const selectedContextId = state.selectedContextId || currentContextId;
+      setState({ contexts, selectedContextId, contextsLoading: false });
+      appendEvent('contexts_loaded', { count: contexts.length, selected_context_id: selectedContextId, current_context_id: currentContextId });
       return contexts;
     } catch (error) {
       setState({ contextsLoading: false, error: error && error.message ? error.message : String(error) });

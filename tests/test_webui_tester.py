@@ -216,3 +216,21 @@ def test_tester_asr_quality_diagnostics_markers():
     assert 'lastAsrRequestMs' in src
     assert 'lastAsrBufferedChunks' in src
     assert 'lastAsrFinalProvider' in src
+
+
+def test_tester_defaults_to_current_a0_context_for_hero_mode():
+    store = store_source()
+    html = html_source()
+    assert "export function currentA0ContextId" in store
+    assert "Alpine" in store
+    assert "alpine.store('chats')" in store
+    assert "chats.selectedContext && chats.selectedContext.id" in store
+    assert "chats.getSelectedChatId" in store
+    assert "sessionStorage.getItem('lastSelectedChat')" in store
+    assert "params.get('ctxid')" in store
+    assert "selectedContextId: options.contextId || options.context_id || currentA0ContextId()" in store
+    assert "const currentContextId = currentA0ContextId();" in store
+    assert "const selectedContextId = state.selectedContextId || currentContextId;" in store
+    assert "selected_context_id" in store
+    assert "current_context_id" in store
+    assert "selected A0 context" in html

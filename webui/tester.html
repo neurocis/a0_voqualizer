@@ -164,7 +164,8 @@
           contextSelect.innerHTML = '<option value="">New Voqualizer context</option>' + (state.contexts || []).map((ctx) => {
             const id = String(ctx.id || '');
             const name = String(ctx.name || id);
-            const label = `${name} (${id})`;
+            const isCurrent = state.selectedContextId && id === state.selectedContextId;
+            const label = `${name} (${id})${isCurrent ? ' — selected A0 context' : ''}`;
             return `<option value="${id.replaceAll('&', '&amp;').replaceAll('\"', '&quot;')}">${label.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</option>`;
           }).join('');
           contextSelect.value = selected;
