@@ -291,3 +291,10 @@ def test_batch_asr_transcription_is_scheduled_off_audio_ack_path():
     assert "asyncio.create_task" in source
     assert "Batch HTTP ASR calls can exceed the Socket.IO event ack budget" in source
     assert "message = f\"voqualizer handler error: {type(e).__name__}: {e!r}\"" in source
+
+
+def test_ws_final_transcript_context_bridge_markers():
+    source = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'get_default_context_bridge' in source
+    assert 'bridge.inject_transcript' in source
+    assert 'context transcript injection failed' in source

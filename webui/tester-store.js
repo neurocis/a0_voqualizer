@@ -100,6 +100,9 @@ export function createVoqualizerTesterStore(options = {}) {
     muted: false,
     sessionId: options.sessionId || makeSessionId(),
     bearerToken: '',
+    selectedContextId: options.contextId || options.context_id || '',
+    contexts: [],
+    contextsLoading: false,
     negotiated: null,
     capabilities: null,
     vu: { level: 0, peak: 0, rms: 0, clipped: false },
@@ -503,6 +506,52 @@ export function createVoqualizerTesterStore(options = {}) {
     });
   }
 
+  async function adminAction(payload) {
+    const body = JSON.stringify(payload || {});
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const apiMod = await import('/js/api.js');
+      if (apiMod.getCsrfToken) {
+        const token = await apiMod.getCsrfToken();
+        if (token) headers['X-CSRF-Token'] = token;
+      }
+    } catch (_err) {
+      // Same-origin authenticated sessions may still succeed without the helper.
+    }
+    const response = await fetch(ADMIN_ENDPOINT, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers,
+      body,
+    });
+    const data = await response.json();
+    const unwrapped = data && data.results && data.results[0] && data.results[0].data ? data.results[0].data : data;
+    if (!response.ok || !unwrapped || unwrapped.ok === false) {
+      throw new Error((unwrapped && (unwrapped.message || unwrapped.code)) || `admin request failed: ${response.status}`);
+    }
+    return unwrapped;
+  }
+
+  async function loadContexts() {
+    setState({ contextsLoading: true, error: null });
+    try {
+      const result = await adminAction({ action: 'contexts' });
+      const contexts = Array.isArray(result.contexts) ? result.contexts : [];
+      setState({ contexts, contextsLoading: false });
+      appendEvent('contexts_loaded', { count: contexts.length });
+      return contexts;
+    } catch (error) {
+      setState({ contextsLoading: false, error: error && error.message ? error.message : String(error) });
+      throw error;
+    }
+  }
+
+  function setContextId(contextId) {
+    const clean = String(contextId || '').trim();
+    setState({ selectedContextId: clean });
+    appendEvent('context_selected', { context_id: clean });
+  }
+
   async function connect(init = {}) {
     // A0 ships Socket.IO as an ES module at /vendor/socket.io.esm.min.js and
     // performs CSRF-protected auth (csrf_token + handlers) — see /a0/webui/js/
@@ -585,7 +634,7 @@ export function createVoqualizerTesterStore(options = {}) {
         session_id: sessionId,
         asr: { codec: INPUT_CODEC, ...(init.asr || {}) },
         tts: { codec: OUTPUT_CODEC, ...(init.tts || {}) },
-        context_id: init.context_id || init.contextId || '',
+        context_id: init.context_id || init.contextId || state.selectedContextId || '',
         barge_in: init.barge_in !== undefined ? init.barge_in : true,
       });
       handleReady(ready);
@@ -720,6 +769,8 @@ export function createVoqualizerTesterStore(options = {}) {
     getState: snapshot,
     subscribe,
     connect,
+    loadContexts,
+    setContextId,
     startCapture,
     stopCapture,
     sendText,

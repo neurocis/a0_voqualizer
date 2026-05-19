@@ -206,3 +206,10 @@ def test_tts_provider_smoke_uses_configured_speed_source_marker():
     assert 'speed = float(spec.get("speed")' in source
     assert 'speed=speed' in source
     assert '"speed": speed' in source
+
+
+def test_admin_contexts_action_source_markers():
+    source = Path('/a0/usr/plugins/a0_voqualizer/api/voqualizer_admin.py').read_text()
+    assert 'def _action_contexts' in source
+    assert 'Path("/a0/usr/chats")' in source
+    assert '"contexts"' in source

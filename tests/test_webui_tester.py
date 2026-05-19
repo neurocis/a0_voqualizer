@@ -154,3 +154,14 @@ def test_tester_user_text_does_not_force_tts_sample_rate():
     assert "sessionPayload({ text: clean })" in source
     assert "codec: OUTPUT_CODEC, sample_rate: PCM_SAMPLE_RATE" not in source
     assert "makes 24 kHz PCM play back slow" in source
+
+
+def test_tester_context_picklist_and_connect_binding():
+    html = TESTER_HTML.read_text()
+    store = TESTER_STORE.read_text()
+    assert 'id="context-select"' in html
+    assert 'id="refresh-contexts"' in html
+    assert 'store.loadContexts()' in html
+    assert "action: 'contexts'" in store
+    assert 'selectedContextId' in store
+    assert "context_id: init.context_id || init.contextId || state.selectedContextId || ''" in store

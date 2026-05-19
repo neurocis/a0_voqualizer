@@ -13,6 +13,7 @@ Supported actions:
 | `config` | Full merged config (defaults ∪ overlay), schema-valid |
 | `capabilities` | Codec lists, sample rates, languages — the same shape the WS handler emits in `voqualizer_ready` |
 | `status` | Plugin health: dependency status + active session count (stub for A1.3 wiring) |
+| `contexts` | Read-only picklist of A0 chat contexts with ids and display names for tester binding |
 | `save` | Persist a runtime overlay; payload `overlay: {...}` validated against schema before write |
 | `test_provider` | Run a minimal ASR/TTS provider smoke test with latency/result metadata |
 
@@ -27,9 +28,11 @@ defaults from a fresh plugin install.
 from __future__ import annotations
 
 import base64
+import json
 import os
 import sys
 import time
+from pathlib import Path
 from typing import Any, Mapping
 
 from helpers.api import ApiHandler
@@ -65,6 +68,8 @@ class VoqualizerAdmin(ApiHandler):
                 return self._action_capabilities()
             if action == "status":
                 return self._action_status()
+            if action == "contexts":
+                return self._action_contexts()
             if action == "save":
                 return self._action_save(input.get("overlay") or {})
             if action == "test_provider":
@@ -78,7 +83,7 @@ class VoqualizerAdmin(ApiHandler):
                 "message": f"Unknown action: {action!r}",
                 "actions": [
                     "providers", "config", "capabilities", "status",
-                    "save", "test_provider",
+                    "contexts", "save", "test_provider",
                 ],
             }
         except Exception as e:
@@ -161,6 +166,41 @@ class VoqualizerAdmin(ApiHandler):
             "dependencies": dep_status,
             "active_sessions": active_sessions,
         }
+
+    def _action_contexts(self) -> dict[str, Any]:
+        """Return a safe picklist of A0 chat contexts for tester binding.
+
+        The tester only needs ids + human names.  Reading chat.json directly
+        keeps this admin action dependency-light and avoids importing full A0
+        AgentContext runtime inside deterministic plugin tests.
+        """
+        chats_dir = Path("/a0/usr/chats")
+        contexts: list[dict[str, Any]] = []
+        if chats_dir.exists():
+            for chat_json in sorted(chats_dir.glob("*/chat.json")):
+                try:
+                    data = json.loads(chat_json.read_text())
+                except Exception:
+                    continue
+                ctxid = str(data.get("id") or chat_json.parent.name or "").strip()
+                if not ctxid:
+                    continue
+                name = str(data.get("name") or ctxid).strip() or ctxid
+                parent = ""
+                try:
+                    parent = str((data.get("data") or {}).get("sup_parent") or "")
+                except Exception:
+                    parent = ""
+                contexts.append({
+                    "id": ctxid,
+                    "name": name,
+                    "type": data.get("type") or "",
+                    "parent_id": parent,
+                    "last_message": data.get("last_message") or "",
+                    "created_at": data.get("created_at") or "",
+                })
+        contexts.sort(key=lambda item: (str(item.get("name") or "").lower(), str(item.get("id") or "")))
+        return {"ok": True, "contexts": contexts}
 
     def _action_save(self, overlay: dict) -> dict[str, Any]:
         from usr.plugins.a0_voqualizer.helpers import registry

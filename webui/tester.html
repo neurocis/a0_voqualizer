@@ -43,6 +43,12 @@
     <section>
       <h2>Connection</h2>
       <div class="row">
+        <label>Context
+          <select id="context-select">
+            <option value="">New Voqualizer context</option>
+          </select>
+        </label>
+        <button id="refresh-contexts" type="button" class="secondary">Refresh contexts</button>
         <button id="connect">Connect</button>
         <button id="start" disabled>Start microphone</button>
         <button id="stop" class="secondary" disabled>Stop microphone</button>
@@ -55,6 +61,7 @@
         <div class="card">Connected: <strong id="connected">false</strong></div>
         <div class="card">Capturing: <strong id="capturing">false</strong></div>
         <div class="card">Session: <strong id="session">—</strong></div>
+        <div class="card">Context: <strong id="context-id">—</strong></div>
         <div class="card">Bearer token: <strong id="token">not issued</strong></div>
       </div>
       <p id="error" class="error"></p>
@@ -149,7 +156,19 @@
         $('connected').textContent = String(state.connected);
         $('capturing').textContent = String(state.capturing);
         $('session').textContent = state.sessionId || '\u2014';
+        $('context-id').textContent = state.selectedContextId || (state.negotiated && state.negotiated.context_id) || '\u2014';
         $('token').textContent = state.bearerToken ? 'issued' : 'not issued';
+        const contextSelect = $('context-select');
+        if (contextSelect) {
+          const selected = state.selectedContextId || contextSelect.value || '';
+          contextSelect.innerHTML = '<option value="">New Voqualizer context</option>' + (state.contexts || []).map((ctx) => {
+            const id = String(ctx.id || '');
+            const name = String(ctx.name || id);
+            const label = `${name} (${id})`;
+            return `<option value="${id.replaceAll('&', '&amp;').replaceAll('\"', '&quot;')}">${label.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</option>`;
+          }).join('');
+          contextSelect.value = selected;
+        }
         $('error').textContent = state.error || '';
         $('vu-bar').style.width = `${Math.round((state.vu.level || 0) * 100)}%`;
         $('vu-level').textContent = (state.vu.level || 0).toFixed(2);
@@ -166,6 +185,7 @@
         $('frame-inspector').textContent = state.frameInspector.map((frame) => `seq=${frame.seq} tsMs=${frame.tsMs} bytes=${frame.bytes} payload=${frame.payloadBytes} codec=${frame.codec}`).join('\n');
         $('events').textContent = state.events.map((item) => `${new Date(item.ts).toLocaleTimeString()} ${item.event} ${JSON.stringify(item.payload)}`).join('\n');
 
+        $('refresh-contexts').disabled = !!state.contextsLoading;
         $('connect').disabled = state.connecting || !!state.bearerToken;
         $('start').disabled = !state.bearerToken || state.capturing;
         $('stop').disabled = !state.capturing;
@@ -178,7 +198,10 @@
 
       store.subscribe(render);
       $('clear-diagnostics').addEventListener('click', () => store.clearDiagnostics());
+      $('refresh-contexts').addEventListener('click', () => store.loadContexts().catch(console.error));
+      $('context-select').addEventListener('change', (event) => store.setContextId(event.target.value));
       $('connect').addEventListener('click', () => store.connect().catch(console.error));
+      store.loadContexts().catch(console.error);
       $('start').addEventListener('click', () => store.startCapture().catch(console.error));
       $('stop').addEventListener('click', () => store.stopCapture().catch(console.error));
       $('mute').addEventListener('click', () => store.control('mute').catch(console.error));

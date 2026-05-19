@@ -624,6 +624,39 @@ class WsVoqualizer(WsHandler):
         if session.sender is not None:
             await session.sender(event, payload)
 
+        # A5 context pipeline: final ASR transcripts enter the selected A0
+        # AgentContext via ContextBridge.  The tester can now bind a live
+        # session to an existing context_id; if omitted, the bridge creates a
+        # Voqualizer context as before.  Keep failures non-fatal so transcript
+        # display/audio ingress remain healthy even if the A0 context runtime is
+        # temporarily unavailable.
+        if event == "voqualizer_asr_final":
+            text = str(payload.get("text") or "").strip()
+            if text:
+                try:
+                    from usr.plugins.a0_voqualizer.helpers.context_bridge import get_default_context_bridge
+
+                    bridge = get_default_context_bridge()
+                    bridge.inject_transcript(
+                        session.session_id,
+                        text,
+                        context_id=session.context_id or None,
+                        metadata={
+                            "source": "voqualizer_asr_final",
+                            "provider": session.asr_provider,
+                        },
+                    )
+                    session.metadata["context_injections"] = int(session.metadata.get("context_injections", 0)) + 1
+                except Exception as exc:
+                    session.metadata["context_injection_errors"] = int(session.metadata.get("context_injection_errors", 0)) + 1
+                    log_voqualizer_error(
+                        HANDLER_ERROR,
+                        f"context transcript injection failed: {type(exc).__name__}: {exc!r}",
+                        session_id=session.session_id,
+                        operation="voqualizer_asr_final",
+                        severity="warning",
+                    )
+
     @staticmethod
     def _chunk_duration_ms(chunk: AudioChunk) -> float:
         """Return PCM16 chunk duration in milliseconds."""
