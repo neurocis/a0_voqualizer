@@ -48,7 +48,7 @@ sys.modules["agent"] = agent_mod
 from usr.plugins.a0_voqualizer.extensions.python.process_chain_end._50_voqualizer import (  # noqa: E402
     VoqualizerProcessChainEnd,
 )
-from usr.plugins.a0_voqualizer.helpers.agent_finalizer import finalize_agent_response_for_context, _tts_speakable_text  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.agent_finalizer import finalize_agent_response_for_context, _looks_like_structured_response_stream, _tts_speakable_text  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.context_bridge import ContextBridge  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.registry import BridgeRegistry  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.tts import AudioChunk as TTSAudioChunk  # noqa: E402
@@ -333,3 +333,20 @@ def test_agent_finalizer_uses_provider_pcm_and_base64_markers():
     assert 'audio_b64' in source
     assert 'base64.b64encode' in source
     assert 'pcm16/24k' in source
+
+
+def test_tts_speakable_text_extracts_python_literal_tool_text():
+    raw = "{'thoughts': ['hidden'], 'tool_name': 'response', 'tool_args': {'text': '## Real answer\n\n- **Speak** this'}}"
+
+    spoken = _tts_speakable_text(raw)
+
+    assert spoken == "Real answer\nSpeak this"
+    assert "thoughts" not in spoken
+    assert "tool_args" not in spoken
+
+
+def test_structured_response_stream_detection_defers_partial_json():
+    partial = '{"thoughts":["hidden"],"tool_name":"response","tool_args":{"text":"## Answer'
+
+    assert _looks_like_structured_response_stream(partial) is True
+    assert _looks_like_structured_response_stream("Plain **markdown** answer.") is False

@@ -138,6 +138,13 @@ class SentenceTTSChunker:
         if not state.buffer:
             state.started_at = self.clock()
         state.buffer += text
+        try:
+            from usr.plugins.a0_voqualizer.helpers.agent_finalizer import _looks_like_structured_response_stream
+
+            if _looks_like_structured_response_stream(state.buffer):
+                return {"status": "buffered", "buffer_chars": len(state.buffer), "deferred_structured_response": True}
+        except Exception:
+            pass
         ready = self.extract_ready_text(state)
         if not ready:
             return {"status": "buffered", "buffer_chars": len(state.buffer)}
@@ -182,6 +189,12 @@ class SentenceTTSChunker:
         """
 
         state = self._state(session, context_id)
+        final_text = _clean_text(final_text)
+        if final_text and not state.spoken_text:
+            # If streaming was deferred for a structured JSON/tool response, use
+            # the finalizer-supplied clean speech text instead of the raw stream
+            # buffer so TTS does not read response-envelope keys or Markdown.
+            state.buffer = final_text
         if not state.buffer:
             return {"status": "ok", "chunks": 0, "final_flush": False, "spoken_text": state.spoken_text}
         ready = self.extract_ready_text(state, final=True)

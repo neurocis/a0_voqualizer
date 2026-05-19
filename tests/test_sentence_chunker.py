@@ -1,3 +1,4 @@
+from pathlib import Path
 from __future__ import annotations
 
 import asyncio
@@ -184,3 +185,10 @@ def test_sentence_chunker_respects_barge_in_cancellation():
         assert emitted[-1][1]["reason"] == "barge_in"
 
     run(scenario())
+
+
+def test_sentence_chunker_defers_structured_response_stream_source_marker():
+    src = Path('/a0/usr/plugins/a0_voqualizer/helpers/sentence_chunker.py').read_text()
+    assert '_looks_like_structured_response_stream' in src
+    assert 'deferred_structured_response' in src
+    assert 'state.buffer = final_text' in src

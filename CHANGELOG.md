@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Deferred streaming TTS for structured JSON/tool responses so final TTS speaks only normalized `tool_args.text` instead of envelope keys or Markdown.
 - Final-response TTS now extracts only the response text section and normalizes Markdown into speech-friendly plain text.
 - Added visible `{ASR: provider}` prefix for final ASR prompts injected into target A0 chat contexts.
 - Added tester PCM16 carry-byte alignment so streamed raw PCM chunks split mid-sample do not desynchronize playback into static.

@@ -8,6 +8,7 @@ machinery to synthesize the final response for the voice client.
 
 from __future__ import annotations
 
+import ast
 import base64
 import json
 import re
@@ -33,11 +34,10 @@ def _clean_text(value: Any) -> str:
 def _extract_text_section(value: Any) -> str:
     """Extract the user-facing text section from A0/JSON-style responses.
 
-    Some Agent Zero responses are JSON envelopes or Markdown code-fenced JSON
-    with fields such as ``thoughts``, ``headline``, ``tool_name`` and
-    ``tool_args``.  Voice playback should speak only the actual response text,
-    not internal routing/metadata.  For plain Markdown strings this returns the
-    original text unchanged.
+    Handles real dicts, strict JSON strings, fenced JSON, Python-literal dict
+    strings, and envelopes embedded in surrounding text.  This is deliberately
+    defensive because A0 final response text can be captured at different points
+    in the response pipeline.
     """
 
     if isinstance(value, Mapping):
@@ -58,21 +58,48 @@ def _extract_text_section(value: Any) -> str:
     if not text:
         return ""
 
-    candidate = text
-    fence = re.fullmatch(r"\s*```(?:json)?\s*(.*?)\s*```\s*", candidate, flags=re.IGNORECASE | re.DOTALL)
+    candidates = [text]
+    fence = re.fullmatch(r"\s*```(?:json|python)?\s*(.*?)\s*```\s*", text, flags=re.IGNORECASE | re.DOTALL)
     if fence:
-        candidate = fence.group(1).strip()
+        candidates.insert(0, fence.group(1).strip())
+    first = text.find("{")
+    last = text.rfind("}")
+    if 0 <= first < last:
+        candidates.append(text[first:last + 1].strip())
 
-    if candidate.startswith("{") and candidate.endswith("}"):
-        try:
-            extracted = _extract_text_section(json.loads(candidate))
+    for candidate in candidates:
+        c = candidate.strip()
+        if not (c.startswith("{") and c.endswith("}")):
+            continue
+        for parser in (json.loads, ast.literal_eval):
+            try:
+                parsed = parser(c)
+            except Exception:
+                continue
+            extracted = _extract_text_section(parsed)
             if extracted:
                 return extracted
-        except Exception:
-            pass
 
     return text
 
+
+def _looks_like_structured_response_stream(text: Any) -> bool:
+    """Return true while a streamed response appears to be a JSON/tool envelope.
+
+    Partial streamed JSON cannot be safely reduced to ``tool_args.text`` yet. If
+    we synthesize it sentence-by-sentence before the finalizer sees the complete
+    object, TTS reads keys like thoughts/tool_args and Markdown symbols.  The
+    sentence chunker uses this to defer TTS until process_chain_end, where the
+    complete response can be extracted and normalized.
+    """
+
+    if not isinstance(text, str):
+        return False
+    stripped = text.lstrip()
+    if not stripped.startswith(("{", "```json", "```python")):
+        return False
+    markers = ("tool_args", "thoughts", "tool_name", "headline", "user_message", "tool_args")
+    return any(marker in text for marker in markers)
 
 def _markdown_to_speech_text(value: Any) -> str:
     """Convert Markdown-ish assistant text into TTS-friendly plain speech.
@@ -441,4 +468,5 @@ __all__ = [
     "_extract_text_section",
     "_markdown_to_speech_text",
     "_tts_speakable_text",
+    "_looks_like_structured_response_stream",
 ]
