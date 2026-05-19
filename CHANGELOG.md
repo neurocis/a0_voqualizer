@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Reordered Providers settings ASR timing fields so ASR Pre-roll appears before Silence-to-Final.
 - Fixed Providers settings ASR timing field wiring markers so Silence-to-Final and ASR Pre-roll remain distinct and cannot appear/save as flipped fields.
 - Added per-ASR-provider `asr_preroll_ms` configuration with Providers UI editing and websocket negotiation, defaulting to the current 600 ms leading-ring window.
 - Switched ASR utterance starts to an always-on 600 ms leading audio ring so early speech frames are merged even when VAD detects speech late, improving preservation of unique first tokens like Alpha/Pineapple.

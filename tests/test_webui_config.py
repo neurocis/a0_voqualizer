@@ -304,11 +304,11 @@ def test_asr_provider_preroll_ui_and_normalization_markers():
 def test_provider_page_asr_timing_fields_are_not_flipped():
     from pathlib import Path
     html = Path('/a0/usr/plugins/a0_voqualizer/webui/providers.html').read_text()
-    silence_label = html.index('Silence to Final (ms)')
-    silence_class = html.index('provider-asr-final-silence-ms')
     preroll_label = html.index('ASR Pre-roll (ms)')
     preroll_class = html.index('provider-asr-preroll-ms')
-    assert silence_label < silence_class < preroll_label < preroll_class
+    silence_label = html.index('Silence to Final (ms)')
+    silence_class = html.index('provider-asr-final-silence-ms')
+    assert preroll_label < preroll_class < silence_label < silence_class
     assert 'data-field="asr_final_silence_ms"' in html
     assert 'data-field="asr_preroll_ms"' in html
     assert "provider.asr_final_silence_ms == null ? 1000 : provider.asr_final_silence_ms" in html
