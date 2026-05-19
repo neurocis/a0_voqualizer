@@ -267,3 +267,18 @@ def test_providers_page_has_per_asr_provider_silence_to_final_setting():
     assert 'setBehaviorValue' not in store
     assert 'asr_final_silence_ms' in store
     assert 'asr_providers[asr_provider].get("asr_final_silence_ms", 1000.0)' in ws
+
+
+def test_provider_page_hides_side_inapplicable_fields():
+    from pathlib import Path
+    html = Path('/a0/usr/plugins/a0_voqualizer/webui/providers.html').read_text()
+    store = Path('/a0/usr/plugins/a0_voqualizer/webui/config-store.js').read_text()
+    assert 'provider-asr-final-silence-ms' in html
+    assert 'provider-format' not in html
+    assert 'provider-sample-rate' not in html
+    assert 'class="tts-only"' in html
+    assert 'class="asr-only"' in html
+    assert "normalized.format = TTS_FIXED_FORMAT" in store
+    assert 'normalized.sample_rate = TTS_FIXED_SAMPLE_RATE' in store
+    assert 'delete normalized.voice' in store
+    assert 'delete normalized.speed' in store

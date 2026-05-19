@@ -12,6 +12,8 @@ export const PROVIDER_SIDES = ['asr', 'tts'];
 
 const ASR_PROVIDER_TYPES = ['mock', 'whisper', 'faster-whisper', 'openai', 'openai-compatible', 'localai'];
 const TTS_PROVIDER_TYPES = ['mock', 'piper', 'openai', 'openai-compatible', 'localai'];
+const TTS_FIXED_FORMAT = 'pcm';
+const TTS_FIXED_SAMPLE_RATE = 24000;
 
 function nowMs() {
   return Date.now();
@@ -85,9 +87,20 @@ function normalizeProvider(side, provider = {}) {
   if (side === 'asr') {
     const parsedFinalSilence = Number(normalized.asr_final_silence_ms == null || normalized.asr_final_silence_ms === '' ? 1000 : normalized.asr_final_silence_ms);
     normalized.asr_final_silence_ms = Number.isFinite(parsedFinalSilence) ? parsedFinalSilence : 1000;
+    delete normalized.voice;
+    delete normalized.format;
+    delete normalized.response_format;
+    delete normalized.sample_rate;
+    delete normalized.speed;
   }
   if (side === 'tts' && !normalized.voice) {
     normalized.voice = 'mock';
+  }
+  if (side === 'tts') {
+    normalized.format = TTS_FIXED_FORMAT;
+    normalized.response_format = TTS_FIXED_FORMAT;
+    normalized.sample_rate = TTS_FIXED_SAMPLE_RATE;
+    delete normalized.asr_final_silence_ms;
   }
   for (const key of ['endpoint', 'base_url', 'model', 'api_key_env', 'voice', 'format', 'response_format', 'sample_rate', 'speed']) {
     if (normalized[key] === '') {

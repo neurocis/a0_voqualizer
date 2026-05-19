@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Providers UI now hides side-inapplicable fields: ASR cards only show ASR timing, while TTS cards keep voice/speed and force PCM 24 kHz output without editable format/sample-rate fields.
 - Providers settings now expose `Silence to Final (ms)` as a per-ASR-provider tuning control, defaulting to 1000 ms.
 - Final ASR transcript handling now strips repeated leading Whisper silence hallucinations like `Thank you. Thank you.` when real prompt text follows.
 - Tester mic capture now uses a muted Web Audio monitor path instead of connecting the worklet directly to speakers, reducing echo-fed ASR hallucinations.
