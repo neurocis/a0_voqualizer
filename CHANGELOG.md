@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Fixed ASR utterance state reset to reuse the complete state factory after each final, preventing later utterances from losing pre-roll/diagnostic fields after the first successful ASR.
 - Hardened ASR utterance construction by copying the leading pre-roll ring exactly once at speech start and exposing pre-roll/segment metadata for first-word-loss diagnostics.
 - Added live TTS/ASR pipeline diagnostics and playback hardening: in-GUI TTS now decodes base64 audio fallback, records TTS/playback/agent-final state in `window.__voqualizer_conversation`, emits clearer TTS skip reasons, and tags batch-ASR utterances with generation metadata to suppress stale short leading finals that split first words into separate prompts.
 - Hardened the in-GUI Voqualizer conversation controller against connection flapping with a singleton Alpine store, desired-mode tracking, generation guards for stale async work, intentional-disconnect reconnect suppression, debounced context-switch detection, and DevTools diagnostics via `window.__voqualizer_conversation`.

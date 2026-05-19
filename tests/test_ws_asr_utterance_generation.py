@@ -59,3 +59,17 @@ def test_structural_preroll_merge_metadata_markers():
     assert 'segment_first_seq' in src
     assert 'segment_last_seq' in src
     assert 'asr_last_final_metadata' in src
+
+
+def test_asr_final_reset_reuses_complete_state_factory():
+    from pathlib import Path
+    src = Path('/a0/usr/plugins/a0_voqualizer/api/ws_voqualizer.py').read_text()
+    assert 'def _new_asr_utterance_state' in src
+    assert 'state = self._new_asr_utterance_state(session)' in src
+    assert 'state.update(self._new_asr_utterance_state(session))' in src
+    assert 'asr_utterance_state_reset_at_ms' in src
+    factory_start = src.index('def _new_asr_utterance_state')
+    factory_end = src.index('def _asr_utterance_state_for_session')
+    factory = src[factory_start:factory_end]
+    for marker in ('preroll_chunks', 'has_speech', 'first_seq', 'speech_start_seq', 'preroll_chunks_merged', 'segment_first_seq'):
+        assert marker in factory

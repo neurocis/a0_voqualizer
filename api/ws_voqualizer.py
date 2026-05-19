@@ -781,12 +781,15 @@ class WsVoqualizer(WsHandler):
             return 0.0
         return (total / count) ** 0.5
 
-    def _asr_utterance_state_for_session(self, session: BridgeSession) -> dict[str, Any]:
-        """Return per-session utterance buffer state for batch HTTP ASR."""
-        state = session.metadata.get("asr_utterance_state")
-        if isinstance(state, dict):
-            return state
-        state = {
+    @staticmethod
+    def _new_asr_utterance_state(session: BridgeSession) -> dict[str, Any]:
+        """Create a complete ASR utterance buffer state.
+
+        Keep this in one place so the initial state and the post-final reset
+        state cannot drift. A partial reset can make the first utterance work
+        but leave later utterances without the expected pre-roll/segment fields.
+        """
+        return {
             "chunks": [],
             "preroll_chunks": [],
             "duration_ms": 0.0,
@@ -810,6 +813,13 @@ class WsVoqualizer(WsHandler):
             "segment_first_seq": None,
             "segment_last_seq": None,
         }
+
+    def _asr_utterance_state_for_session(self, session: BridgeSession) -> dict[str, Any]:
+        """Return per-session utterance buffer state for batch HTTP ASR."""
+        state = session.metadata.get("asr_utterance_state")
+        if isinstance(state, dict):
+            return state
+        state = self._new_asr_utterance_state(session)
         session.metadata["asr_utterance_state"] = state
         return state
 
@@ -1145,18 +1155,8 @@ class WsVoqualizer(WsHandler):
             duplicate_key="asr_last_final_text",
         )
         state.clear()
-        state.update({
-            "chunks": [],
-            "duration_ms": 0.0,
-            "speech_ms": 0.0,
-            "trailing_silence_ms": 0.0,
-            "has_speech": False,
-            "last_partial_at_ms": 0.0,
-            "last_partial_text": "",
-            "last_final_text": str(session.metadata.get("asr_last_final_text", "")),
-            "utterance_generation": int(session.metadata.get("asr_utterance_generation", 0) or 0),
-            "utterance_id": "",
-        })
+        state.update(self._new_asr_utterance_state(session))
+        session.metadata["asr_utterance_state_reset_at_ms"] = now_ms()
         return 0
 
     async def _handle_audio_chunk(self, data: Any, sid: str) -> dict[str, Any] | WsResult:
