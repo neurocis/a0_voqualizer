@@ -316,3 +316,13 @@ def test_provider_page_asr_timing_fields_are_not_flipped():
     assert 'patch.asr_final_silence_ms = parsedFinalSilence' in html
     assert 'patch.asr_preroll_ms = parsedPreroll' in html
     assert html.index('patch.asr_final_silence_ms = parsedFinalSilence') < html.index('patch.asr_preroll_ms = parsedPreroll')
+
+def test_providers_page_commits_asr_preroll_field_before_save():
+    html = html_source()
+    assert "const asrPreroll = node.querySelector('.provider-asr-preroll-ms');" in html
+    assert "patch.asr_preroll_ms = parsedPreroll" in html
+    assert "asrPreroll.addEventListener('input', commit);" in html
+    assert "asrPreroll.addEventListener('change', commit);" in html
+    assert html.index("asrFinalSilence.addEventListener('change', commit);") < html.index("asrPreroll.addEventListener('change', commit);")
+    assert html.index("asrPreroll.addEventListener('change', commit);") < html.index("speed.addEventListener('change', commit);")
+

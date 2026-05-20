@@ -6,6 +6,10 @@ EXT = PLUGIN / 'extensions' / 'webui' / 'chat-input-box-end' / 'voqualizer-butto
 OLD_EXT = PLUGIN / 'extensions' / 'webui' / 'chat-input-box-end' / 'voqualizer-button-overrides.html'
 
 
+def source() -> str:
+    return EXT.read_text(encoding='utf-8')
+
+
 def test_old_override_extension_removed():
     assert not OLD_EXT.exists(), 'old override extension must be removed'
 
@@ -14,26 +18,27 @@ def test_new_extension_file_exists():
     assert EXT.exists(), 'voqualizer-buttons.html missing'
 
 
-def test_extension_renders_status_pill_and_two_dedicated_buttons():
-    s = EXT.read_text()
-    assert 'id="voqualizer-status-pill"' in s
+def test_extension_renders_two_dedicated_buttons_without_status_pill():
+    s = source()
     assert 'id="voqualizer-speaker-button"' in s
     assert 'id="voqualizer-mic-button"' in s
-    for marker in ('Voq: Off', 'Voq: Listening', 'Voq: Push-to-talk', 'TTS muted', 'Voq: Connecting', 'Voq: Stopping', 'Voq: Error'):
-        assert marker in s, f'missing status marker {marker!r}'
+    assert 'voqualizer-status-pill' not in s
+    assert 'aria-live="polite"' not in s
+    assert 'Voq: Off' not in s
+    assert 'Voq: Listening' not in s
+    assert 'Voq: Push-to-talk' not in s
 
 
-
-def test_extension_orders_controls_speaker_mic_status_pill():
-    s = EXT.read_text()
+def test_extension_orders_controls_speaker_then_mic_only():
+    s = source()
     speaker = s.index('id="voqualizer-speaker-button"')
     mic = s.index('id="voqualizer-mic-button"')
-    pill = s.index('id="voqualizer-status-pill"')
-    assert speaker < mic < pill, 'expected [Voq Speaker] [Voq Mic] [Voq Status Pill] order'
+    assert speaker < mic, 'expected [Voq Speaker] [Voq Mic] order'
+    assert 'voqualizer-status-pill' not in s
+
 
 def test_extension_does_not_intercept_a0_native_buttons():
-    s = EXT.read_text()
-    # Must not capture-phase override A0's own buttons.
+    s = source()
     assert 'microphone-button' not in s
     assert 'stop-speech' not in s
     assert "getElementById('microphone-button')" not in s
@@ -43,7 +48,7 @@ def test_extension_does_not_intercept_a0_native_buttons():
 
 
 def test_extension_uses_tap_hold_threshold_and_state_classes():
-    s = EXT.read_text()
+    s = source()
     assert 'TAP_HOLD_THRESHOLD_MS' in s
     assert '250' in s
     for marker in (
@@ -58,12 +63,12 @@ def test_extension_uses_tap_hold_threshold_and_state_classes():
 
 
 def test_extension_uses_dynamic_labels_and_tooltips():
-    s = EXT.read_text()
+    s = source()
     for marker in (
         'speakerLabel(ttsOff)',
         'micLabel(s)',
-        'setAttribute(\'aria-label\'',
-        'setAttribute(\'title\'',
+        "setAttribute('aria-label'",
+        "setAttribute('title'",
         'Voqualizer TTS is on. Click to mute TTS for this chat.',
         'Voqualizer TTS is muted. Click to enable TTS for this chat.',
         'Voqualizer mic off. Tap for conversation. Hold for push-to-talk.',
@@ -76,21 +81,8 @@ def test_extension_uses_dynamic_labels_and_tooltips():
         assert marker in s, f'missing dynamic label marker {marker!r}'
 
 
-def test_extension_uses_transition_notices():
-    s = EXT.read_text()
-    for marker in (
-        'flashNotice(text)',
-        'Conversation mode on',
-        'Conversation mode off',
-        'Push-to-talk: release to send',
-        'TTS muted for this chat',
-        'TTS enabled for this chat',
-    ):
-        assert marker in s, f'missing notice marker {marker!r}'
-
-
 def test_extension_uses_pointer_and_keyboard_handlers():
-    s = EXT.read_text()
+    s = source()
     for marker in (
         '@pointerdown="onPointerDown',
         '@pointerup="onPointerUp',
@@ -104,8 +96,7 @@ def test_extension_uses_pointer_and_keyboard_handlers():
 
 
 def test_extension_aria_markers_present():
-    s = EXT.read_text()
-    assert 'aria-live="polite"' in s
+    s = source()
     assert 'aria-pressed' in s
-    assert 'aria-label="Voqualizer microphone' in s
-    assert 'aria-label="Voqualizer speaker' in s
+    assert 'aria-label="Voqualizer mic off.' in s
+    assert 'aria-label="Voqualizer TTS is on.' in s

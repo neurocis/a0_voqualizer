@@ -1,8 +1,8 @@
 <!--
   A0 Voqualizer dedicated chat-input buttons.
 
-  Renders two NEW circular buttons and a compact status pill at the far right
-  of the chat-input action row. Does NOT touch A0's existing native
+  Renders two NEW circular buttons at the far right of the chat-input
+  action row. Does NOT touch A0's existing native
   microphone/speaker controls.
 
   Buttons:
@@ -53,7 +53,6 @@
     <span class="material-symbols-outlined" aria-hidden="true">mic</span>
     <span class="voqualizer-button-ring" aria-hidden="true"></span>
   </button>
-  <span id="voqualizer-status-pill" class="voqualizer-status-pill voqualizer-idle" aria-live="polite">Voq: Off</span>
 </div>
 
 <style>
@@ -64,40 +63,6 @@
     margin-left: auto;
     padding-left: var(--spacing-xs, 6px);
     min-width: 0;
-  }
-  .voqualizer-status-pill {
-    max-width: 150px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 3px 7px;
-    border-radius: 999px;
-    font-size: 11px;
-    line-height: 1.2;
-    border: 1px solid var(--color-border, rgba(255,255,255,0.15));
-    background: rgba(127,127,127,0.10);
-    color: var(--color-text-muted, var(--color-text));
-    opacity: 0.9;
-  }
-  .voqualizer-status-pill.voqualizer-active {
-    color: #0f5132;
-    background: rgba(46, 204, 113, 0.18);
-    border-color: rgba(46, 204, 113, 0.55);
-  }
-  .voqualizer-status-pill.voqualizer-ptt {
-    color: #7a2800;
-    background: rgba(255, 149, 0, 0.20);
-    border-color: rgba(255, 149, 0, 0.65);
-  }
-  .voqualizer-status-pill.voqualizer-connecting {
-    background: rgba(90, 160, 255, 0.16);
-    border-color: rgba(90, 160, 255, 0.55);
-    animation: voqualizerPulse 1s infinite ease-in-out;
-  }
-  .voqualizer-status-pill.voqualizer-error {
-    color: #7a0000;
-    background: rgba(255, 59, 48, 0.16);
-    border-color: rgba(255, 59, 48, 0.65);
   }
   .voqualizer-button {
     position: relative;
@@ -183,32 +148,19 @@
       _pointerDownTs: 0,
       _keyDownActive: false,
       _syncTimer: 0,
-      _notice: '',
-      _noticeUntil: 0,
       _vqStore() {
         return (window.Alpine && window.Alpine.store && window.Alpine.store('voqualizer')) || null;
       },
       init() {
         const speaker = document.getElementById('voqualizer-speaker-button');
         const mic = document.getElementById('voqualizer-mic-button');
-        const pill = document.getElementById('voqualizer-status-pill');
         const sync = () => {
           const s = this._vqStore();
           if (!s) return;
           const ttsOff = !s.isTtsEnabled();
-          const status = this.statusText(s, ttsOff);
           const micLabel = this.micLabel(s);
           const speakerLabel = this.speakerLabel(ttsOff);
           const visualClass = this.visualClass(s);
-          if (pill) {
-            pill.textContent = this._notice && Date.now() < this._noticeUntil ? this._notice : status;
-            pill.classList.toggle('voqualizer-idle', visualClass === 'voqualizer-idle');
-            pill.classList.toggle('voqualizer-active', visualClass === 'voqualizer-active');
-            pill.classList.toggle('voqualizer-ptt', visualClass === 'voqualizer-ptt');
-            pill.classList.toggle('voqualizer-connecting', visualClass === 'voqualizer-connecting');
-            pill.classList.toggle('voqualizer-error', visualClass === 'voqualizer-error');
-            pill.setAttribute('title', `Voqualizer state=${s.state || 'unknown'} desired=${s.desiredMode || 'unknown'} reason=${s.lastTransitionReason || 'n/a'} phase=${s.lastConnectPhase || 'n/a'} socket=${s.lastSocketEvent || 'n/a'}`);
-          }
           if (speaker) {
             speaker.classList.toggle('voqualizer-tts-off', ttsOff);
             speaker.setAttribute('aria-pressed', String(!ttsOff));
@@ -228,14 +180,6 @@
         };
         sync();
         this._syncTimer = setInterval(sync, 250);
-      },
-      statusText(s, ttsOff) {
-        if (s.state === STATE_CONNECTING) return 'Voq: Connecting…';
-        if (s.state === STATE_STOPPING) return 'Voq: Stopping…';
-        if (s.state === STATE_CONVERSATIONAL) return 'Voq: Listening';
-        if (s.state === STATE_PTT_ACTIVE) return 'Voq: Push-to-talk';
-        if (s.state === STATE_ERROR) return 'Voq: Error';
-        return ttsOff ? 'Voq: Off · TTS muted' : 'Voq: Off';
       },
       speakerLabel(ttsOff) {
         return ttsOff
@@ -257,17 +201,12 @@
         if (s.state === STATE_ERROR) return 'voqualizer-error';
         return 'voqualizer-idle';
       },
-      flashNotice(text) {
-        this._notice = text;
-        this._noticeUntil = Date.now() + 1400;
-      },
       onSpeakerClick(event) {
         event.preventDefault();
         const s = this._vqStore();
         if (!s) return;
         const wasOn = s.isTtsEnabled();
         s.toggleTts();
-        this.flashNotice(wasOn ? 'TTS muted for this chat' : 'TTS enabled for this chat');
       },
       onPointerDown(event) {
         if (event.button !== undefined && event.button !== 0) return;
@@ -276,7 +215,6 @@
         this._holdActive = false;
         this._holdTimer = setTimeout(async () => {
           this._holdActive = true;
-          this.flashNotice('Push-to-talk: release to send');
           try { await this._vqStore()?.onHoldStart(); } catch (e) { console.error('[voqualizer] onHoldStart', e); }
         }, TAP_HOLD_THRESHOLD_MS);
       },
@@ -291,7 +229,6 @@
         } else {
           const wasConversational = s && s.state === STATE_CONVERSATIONAL;
           try { await s?.onTap(); } catch (e) { console.error('[voqualizer] onTap', e); }
-          this.flashNotice(wasConversational ? 'Conversation mode off' : 'Conversation mode on');
         }
         this._holdActive = false;
       },

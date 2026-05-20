@@ -1,4 +1,6 @@
 ## [Unreleased]
+- Removed the compact Voqualizer status pill from the dedicated chat-input controls; the two Voq buttons now stand alone while preserving dynamic labels/tooltips.
+- Fixed the Providers page ASR pre-roll field so edits commit into the provider overlay before Save instead of snapping back to the default 600 ms.
 - Shared the tester-proven TTS playback primitives with in-GUI conversation mode, including codec/sample-rate normalization, playback-tail scheduling, PCM carry cleanup, and debug counters for TTS/agent/ASR events.
 - Added durable TTS route diagnostics and fallback final-response routing from active session context ids when bridge binding lookup misses.
 - Reordered Providers settings ASR timing fields so ASR Pre-roll appears before Silence-to-Final.

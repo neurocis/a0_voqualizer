@@ -333,6 +333,11 @@
         voice.addEventListener('change', commit);
         apiKeyEnv.addEventListener('change', commit);
         asrFinalSilence.addEventListener('change', commit);
+        // ASR pre-roll is a first-audio capture tuning field. It must commit
+        // into the provider overlay before Save, otherwise the page redraws from
+        // stale state and appears to snap back to the default 600 ms.
+        asrPreroll.addEventListener('input', commit);
+        asrPreroll.addEventListener('change', commit);
         speed.addEventListener('change', commit);
         options.addEventListener('change', commit);
         isDefault.addEventListener('change', () => store.setDefault(side, provider.name));
