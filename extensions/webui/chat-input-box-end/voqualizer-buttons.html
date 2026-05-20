@@ -109,6 +109,13 @@
   .voqualizer-mic .voqualizer-button-ring {
     z-index: 2;
   }
+  .voqualizer-mic .material-symbols-outlined {
+    transition: color 100ms ease, text-shadow 100ms ease;
+  }
+  .voqualizer-mic.voqualizer-speech-detected .material-symbols-outlined {
+    color: #ff3b30;
+    text-shadow: 0 0 7px rgba(255, 59, 48, 0.90), 0 0 14px rgba(255, 59, 48, 0.45);
+  }
   .voqualizer-mic-vu {
     position: absolute;
     inset: 4px;
@@ -233,7 +240,9 @@
             mic.style.setProperty('--voqualizer-vu-level', String(vuLevel));
             mic.style.setProperty('--voqualizer-vu-opacity', vuActive ? '1' : '0');
             mic.classList.toggle('voqualizer-vu-clipped', !!s.micVuClipped);
+            mic.classList.toggle('voqualizer-speech-detected', !!s.micSpeechActive);
             mic.setAttribute('data-voqualizer-vu-level', vuLevel.toFixed(2));
+            mic.setAttribute('data-voqualizer-speech-active', String(!!s.micSpeechActive));
             mic.setAttribute('aria-pressed', String(s.state === STATE_CONVERSATIONAL || s.state === STATE_PTT_ACTIVE));
             mic.setAttribute('aria-label', micLabel);
             mic.setAttribute('title', `${micLabel} Last: ${s.lastTransitionReason || 'n/a'} / ${s.lastConnectPhase || 'n/a'}`);

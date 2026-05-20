@@ -128,3 +128,15 @@ def test_extension_mic_vu_meter_is_prominent():
         '.voqualizer-mic.voqualizer-vu-clipped .voqualizer-mic-vu',
     ):
         assert marker in s, f'missing prominent VU marker {marker!r}'
+
+def test_extension_turns_mic_glyph_red_when_speech_detected():
+    s = source()
+    for marker in (
+        'voqualizer-speech-detected',
+        'data-voqualizer-speech-active',
+        'micSpeechActive',
+        'color: #ff3b30',
+        'text-shadow: 0 0 7px rgba(255, 59, 48',
+    ):
+        assert marker in s, f'missing speech-detected mic marker {marker!r}'
+

@@ -188,3 +188,18 @@ def test_conversation_mode_tracks_mic_vu_for_gui_meter():
     ):
         assert marker in s, f'missing mic VU store marker {marker!r}'
 
+def test_conversation_mode_tracks_speech_detected_until_utterance_end():
+    s = CM.read_text()
+    for marker in (
+        'MIC_SPEECH_ACTIVE_THRESHOLD',
+        'micSpeechActive',
+        'micSpeechStartedAt',
+        'mic_speech_detected',
+        'level >= MIC_SPEECH_ACTIVE_THRESHOLD',
+        'peak >= MIC_SPEECH_ACTIVE_THRESHOLD',
+        'this.micSpeechActive = false;',
+        '_handleAsrFinal(payload)',
+        '_sendFinalFrame(generation',
+    ):
+        assert marker in s, f'missing speech-active lifecycle marker {marker!r}'
+
