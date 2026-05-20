@@ -14,9 +14,11 @@ import {
   initMicWorklet,
   createPlaybackTracker,
   alignPcm16Bytes,
+  clearPcm16Carry,
   pcm16ToFloat32,
   bytesFromUnknownAudio,
   bytesFromTtsPayload,
+  normalizeTtsCodec, ttsSampleRate, rememberPlaybackSource,
   maybeLocalBargeInFromMic,
   PCM_SAMPLE_RATE,
   INPUT_CODEC,
@@ -140,6 +142,10 @@ export function createVoqualizerStore(options = {}) {
     lastTtsUtteranceId: '',
     lastTtsSkipReason: '',
     lastPlaybackStartAt: 0,
+    ttsChunkCount: 0,
+    ttsDoneCount: 0,
+    agentFinalCount: 0,
+    asrFinalCount: 0,
     lastPlaybackStopReason: '',
     lastAgentFinalAt: 0,
     lastAgentFinalText: '',
@@ -207,6 +213,10 @@ export function createVoqualizerStore(options = {}) {
         lastTtsUtteranceId: this.lastTtsUtteranceId,
         lastTtsSkipReason: this.lastTtsSkipReason,
         lastPlaybackStartAt: this.lastPlaybackStartAt,
+        ttsChunkCount: this.ttsChunkCount,
+        ttsDoneCount: this.ttsDoneCount,
+        agentFinalCount: this.agentFinalCount,
+        asrFinalCount: this.asrFinalCount,
         lastPlaybackStopReason: this.lastPlaybackStopReason,
         lastAgentFinalAt: this.lastAgentFinalAt,
         lastAgentFinalText: this.lastAgentFinalText,
@@ -561,53 +571,68 @@ export function createVoqualizerStore(options = {}) {
     _handleAgentFinal(payload) {
       const data = this._unwrapPayload(payload);
       this.lastAgentFinalAt = Date.now();
+      this.agentFinalCount += 1;
       this.lastAgentFinalText = String(data.speech_text || data.text || '').slice(0, 160);
       this._publishDebug();
     },
     _handleAsrFinal(payload) {
       const data = this._unwrapPayload(payload);
+      this.asrFinalCount += 1;
       this.lastAsrFinalText = String(data.text || '').slice(0, 160);
       this.lastAsrFinalUtteranceId = String((data.metadata && data.metadata.utterance_id) || data.utterance_id || '');
       this._publishDebug();
     },
-    _handleTtsChunk(payload) {
+    async _handleTtsChunk(payload) {
       const data = this._unwrapPayload(payload);
       const utteranceId = data.utterance_id || 'default';
       this.lastTtsChunkAt = Date.now();
       this.lastTtsUtteranceId = utteranceId;
+      this.ttsChunkCount += 1;
       if (!this.isTtsEnabled()) { this.lastTtsSkipReason = 'tts_disabled_ui'; this._publishDebug(); return; }
       const audio = bytesFromTtsPayload(payload);
       this.lastTtsChunkBytes = audio.byteLength || 0;
       if (tracker.cancelledTtsUtterances.has(utteranceId)) { this.lastTtsSkipReason = 'cancelled_utterance'; this._publishDebug(); return; }
+      const codec = normalizeTtsCodec(data, payload);
+      if (codec === 'wav' || codec === 'mp3' || codec === 'opus') {
+        this.lastTtsSkipReason = `encoded_${codec}_not_streamed_in_gui`;
+        this._publishDebug();
+        return;
+      }
       const aligned = alignPcm16Bytes(audio, carryMap, utteranceId);
       const samples = pcm16ToFloat32(aligned);
       if (!samples.length) { this.lastTtsSkipReason = 'empty_audio'; this._publishDebug(); return; }
-      const sampleRate = data.sample_rate || PCM_SAMPLE_RATE;
+      const sampleRate = ttsSampleRate(data, payload, codec);
       const ctx = this._ensurePlaybackContext(sampleRate);
+      try { if (ctx.state === 'suspended' && ctx.resume) await ctx.resume(); } catch (_e) {}
       const buffer = ctx.createBuffer(1, samples.length, sampleRate);
       buffer.copyToChannel(samples, 0);
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
-      try { if (ctx.state === 'suspended' && ctx.resume) ctx.resume(); } catch (_e) {}
-      source.start();
+      const startAt = Math.max(ctx.currentTime + 0.01, this._playbackTail || 0);
+      source.start(startAt);
+      this._playbackTail = startAt + buffer.duration;
       this.lastPlaybackStartAt = Date.now();
       this.lastTtsSkipReason = '';
+      rememberPlaybackSource(tracker, utteranceId, source);
       this._publishDebug();
-      if (!tracker.activePlaybackSources.has(utteranceId)) tracker.activePlaybackSources.set(utteranceId, []);
-      tracker.activePlaybackSources.get(utteranceId).push(source);
     },
     _handleTtsDone(payload) {
       const data = this._unwrapPayload(payload);
       const utteranceId = data.utterance_id || 'default';
       this.lastTtsDoneAt = Date.now();
+      this.ttsDoneCount += 1;
       this.lastTtsUtteranceId = utteranceId;
       if (data.reason) this.lastTtsSkipReason = data.reason;
       if (data.cancelled || data.reason === 'barge_in') { this.lastPlaybackStopReason = data.reason || 'cancelled'; tracker.stopPlaybackForUtterance(utteranceId); }
+      clearPcm16Carry(carryMap, utteranceId);
       this._publishDebug();
     },
     _ensurePlaybackContext(sampleRate) {
-      if (!this._playbackCtx) this._playbackCtx = new (globalThis.AudioContext || globalThis.webkitAudioContext)({ sampleRate });
+      if (!this._playbackCtx) {
+        this._playbackCtx = new (globalThis.AudioContext || globalThis.webkitAudioContext)({ sampleRate });
+        this._playbackTail = 0;
+      }
       return this._playbackCtx;
     },
   };

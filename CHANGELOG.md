@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Shared the tester-proven TTS playback primitives with in-GUI conversation mode, including codec/sample-rate normalization, playback-tail scheduling, PCM carry cleanup, and debug counters for TTS/agent/ASR events.
 - Added durable TTS route diagnostics and fallback final-response routing from active session context ids when bridge binding lookup misses.
 - Reordered Providers settings ASR timing fields so ASR Pre-roll appears before Silence-to-Final.
 - Fixed Providers settings ASR timing field wiring markers so Silence-to-Final and ASR Pre-roll remain distinct and cannot appear/save as flipped fields.

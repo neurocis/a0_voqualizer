@@ -39,6 +39,61 @@ export function bytesFromTtsPayload(payload) {
   return bytesFromUnknownAudio(data.audio_bytes || data.audio || data.pcm16 || payload.audio || payload.pcm16);
 }
 
+
+
+export function concatAudioBytes(parts) {
+  const clean = (parts || []).map(bytesFromUnknownAudio).filter((part) => part.byteLength);
+  const total = clean.reduce((sum, part) => sum + part.byteLength, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const part of clean) {
+    output.set(part, offset);
+    offset += part.byteLength;
+  }
+  return output;
+}
+
+export function repairRiffWaveHeader(bytes) {
+  const data = bytesFromUnknownAudio(bytes);
+  if (data.byteLength < 12) return data;
+  const riffWave = data[0] === 0x52 && data[1] === 0x49 && data[2] === 0x46 && data[3] === 0x46
+    && data[4] === 0x57 && data[5] === 0x41 && data[6] === 0x56 && data[7] === 0x45;
+  if (!riffWave) return data;
+  const repaired = new Uint8Array(data.byteLength + 4);
+  repaired.set(data.slice(0, 4), 0);
+  const view = new DataView(repaired.buffer);
+  view.setUint32(4, repaired.byteLength - 8, true);
+  repaired.set(data.slice(4), 8);
+  return repaired;
+}
+
+export function normalizeTtsCodec(data = {}, payload = {}) {
+  let codec = String(data.codec || payload.codec || data.format || payload.format || '').toLowerCase();
+  const sampleRate = Number(data.sample_rate || data.sampleRate || payload.sample_rate || payload.sampleRate || 0);
+  if (codec === 'pcm') codec = sampleRate === 24000 ? 'pcm16/24k' : 'pcm16/16k';
+  if (!codec && (data.audio_encoding || payload.audio_encoding)) {
+    codec = String(data.audio_encoding || payload.audio_encoding).toLowerCase();
+  }
+  return codec || 'pcm16/16k';
+}
+
+export function ttsSampleRate(data = {}, payload = {}, codec = '') {
+  return Number(data.sample_rate || data.sampleRate || payload.sample_rate || payload.sampleRate || (codec === 'pcm16/24k' ? 24000 : PCM_SAMPLE_RATE));
+}
+
+export function rememberPlaybackSource(tracker, utteranceId, source) {
+  if (!tracker || !tracker.activePlaybackSources) return;
+  const key = utteranceId || 'default';
+  if (!tracker.activePlaybackSources.has(key)) tracker.activePlaybackSources.set(key, []);
+  tracker.activePlaybackSources.get(key).push(source);
+  source.addEventListener && source.addEventListener('ended', () => {
+    const list = tracker.activePlaybackSources.get(key) || [];
+    const idx = list.indexOf(source);
+    if (idx >= 0) list.splice(idx, 1);
+    if (!list.length) tracker.activePlaybackSources.delete(key);
+  }, { once: true });
+}
+
 export function bytesToBase64(bytes) {
   const data = bytesFromUnknownAudio(bytes);
   let binary = '';

@@ -132,3 +132,43 @@ def test_tts_init_and_control_send_enabled_truth_to_backend():
     assert 'this.lastTtsEnabledSent = enabled' in s
     assert "action: 'set_tts_enabled'" in s
     assert 'this.lastTtsControlAck = this._unwrapPayload(ack)' in s
+
+
+
+def test_gui_tts_playback_uses_shared_parity_helpers():
+    src = CONVERSATION_MODE.read_text()
+    audio_src = AUDIO_LIB.read_text()
+
+    # The in-GUI controller should share the same TTS payload/codecs/scheduling
+    # primitives as the tester path instead of having a divergent one-off PCM path.
+    for marker in (
+        'normalizeTtsCodec',
+        'ttsSampleRate',
+        'rememberPlaybackSource',
+        'bytesFromTtsPayload',
+        'alignPcm16Bytes',
+        'pcm16ToFloat32',
+        '_playbackTail',
+        'lastPlaybackStartAt',
+        'lastTtsChunkBytes',
+        'ttsChunkCount',
+        'ttsDoneCount',
+        'agentFinalCount',
+        'asrFinalCount',
+    ):
+        assert marker in src
+
+    for marker in (
+        'export function normalizeTtsCodec',
+        'export function ttsSampleRate',
+        'export function rememberPlaybackSource',
+        'export function repairRiffWaveHeader',
+        'export function concatAudioBytes',
+    ):
+        assert marker in audio_src
+
+    assert "codec === 'pcm'" in audio_src
+    assert "sampleRate === 24000 ? 'pcm16/24k'" in audio_src
+    assert 'source.start(startAt)' in src
+    assert 'this._playbackTail = startAt + buffer.duration' in src
+    assert 'clearPcm16Carry(carryMap, utteranceId)' in src
