@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Fixed OpenAI-compatible TTS numeric timeout handling by converting configured seconds to `aiohttp.ClientTimeout`.
 - Added durable TTS route diagnostics and fallback final-response routing from active session context ids when bridge binding lookup misses.
 - Reordered Providers settings ASR timing fields so ASR Pre-roll appears before Silence-to-Final.
 - Fixed Providers settings ASR timing field wiring markers so Silence-to-Final and ASR Pre-roll remain distinct and cannot appear/save as flipped fields.
