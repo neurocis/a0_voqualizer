@@ -152,6 +152,11 @@ export function createVoqualizerStore(options = {}) {
     lastPlaybackStopReason: '',
     lastAgentFinalAt: 0,
     lastAgentFinalText: '',
+    lastDirectTtsText: '',
+    lastDirectTtsAt: 0,
+    lastDirectTtsAck: null,
+    lastDirectTtsError: '',
+    directTtsCount: 0,
     lastFinalFrameSentAt: 0,
     lastFinalFrameReason: '',
     lastAudioSeqSent: 0,
@@ -241,6 +246,11 @@ export function createVoqualizerStore(options = {}) {
         lastPlaybackStopReason: this.lastPlaybackStopReason,
         lastAgentFinalAt: this.lastAgentFinalAt,
         lastAgentFinalText: this.lastAgentFinalText,
+        lastDirectTtsText: this.lastDirectTtsText,
+        lastDirectTtsAt: this.lastDirectTtsAt,
+        lastDirectTtsAck: this.lastDirectTtsAck,
+        lastDirectTtsError: this.lastDirectTtsError,
+        directTtsCount: this.directTtsCount,
         lastFinalFrameSentAt: this.lastFinalFrameSentAt,
         lastFinalFrameReason: this.lastFinalFrameReason,
         lastAudioSeqSent: this.lastAudioSeqSent,
@@ -619,6 +629,59 @@ export function createVoqualizerStore(options = {}) {
       this._resetMicVu(reason);
       this.lastDisconnectReason = reason;
       this._setReason('mic_stopped');
+    },
+    async speakText(text, options = {}) {
+      const speechText = String(text || '').trim();
+      if (!speechText) return { ok: false, reason: 'empty_text' };
+      if (!this.isTtsEnabled()) {
+        this.lastDirectTtsError = 'tts_disabled_ui';
+        this._publishDebug();
+        return { ok: false, reason: 'tts_disabled_ui' };
+      }
+      const generation = this.connectionGeneration || this._beginLifecycle(DESIRED_CONVERSATIONAL, 'direct_tts_requested');
+      if (!this._socket || !this.bearerToken) {
+        await this._ensureConnected(generation);
+      }
+      if (!this._socket || !this.bearerToken) {
+        this.lastDirectTtsError = 'no_voqualizer_session';
+        this._publishDebug();
+        return { ok: false, reason: 'no_voqualizer_session' };
+      }
+      const utteranceId = String(options.utterance_id || options.utteranceId || `gui-response-${Date.now().toString(36)}`);
+      const payload = {
+        text: speechText,
+        bearer_token: this.bearerToken,
+        utterance_id: utteranceId,
+        metadata: {
+          source: 'webui_rendered_response_fallback',
+          context_id: this.contextId || '',
+          response_id: String(options.response_id || options.responseId || ''),
+        },
+      };
+      this.lastDirectTtsText = speechText.slice(0, 160);
+      this.lastDirectTtsAt = Date.now();
+      this.lastDirectTtsError = '';
+      this.directTtsCount += 1;
+      this._publishDebug();
+      return await new Promise((resolve) => {
+        let settled = false;
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          this.lastDirectTtsAck = value;
+          if (value && value.code) this.lastDirectTtsError = value.code;
+          this._publishDebug();
+          resolve(value);
+        };
+        try {
+          this._socket.emit('voqualizer_user_text', payload, (ack) => {
+            finish(this._unwrapPayload(ack));
+          });
+        } catch (err) {
+          finish({ ok: false, reason: 'emit_failed', message: err && err.message ? err.message : String(err) });
+        }
+        setTimeout(() => finish({ ok: false, reason: 'ack_timeout' }), 15000);
+      });
     },
     _sendAudio(pcm16, seq, tsMs, generation = this.connectionGeneration) {
       if (!this._isGenerationCurrent(generation)) return;

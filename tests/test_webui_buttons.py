@@ -150,3 +150,23 @@ def test_extension_exposes_speech_last_active_debug_marker():
     assert 'data-voqualizer-speech-last-active-at' in s
     assert 'micSpeechLastActiveAt' in s
 
+
+
+def test_rendered_response_tts_fallback_extension_exists():
+    ext = PLUGIN / 'extensions' / 'webui' / 'set_messages_after_loop' / 'voqualizer-speak-response.js'
+    assert ext.exists(), 'rendered response TTS fallback extension missing'
+    s = ext.read_text(encoding='utf-8')
+    for marker in (
+        'speakVoqualizerRenderedResponses',
+        "Alpine?.store?.('voqualizer')",
+        'store.speakText',
+        "voqualizer_user_text",
+        'isPrimaryResponse',
+        "String(args?.type || '') !== 'response'",
+        "Number(args?.agentno || 0) > 0",
+        'message-agent-response',
+        'responseTextFromElement',
+        'a0_voqualizer.spoken_response.',
+        'sessionStorage',
+    ):
+        assert marker in s, f'missing rendered response TTS fallback marker {marker!r}'

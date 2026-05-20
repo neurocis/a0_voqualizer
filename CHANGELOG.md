@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Added a browser-side rendered-response TTS fallback that sends visible assistant responses through `voqualizer_user_text`, so in-GUI TTS can work independently of ASR and Python finalization-hook timing.
 - Fixed live in-GUI TTS finalization so assistant responses can route to TTS from the context response log/response_stream_end path, independent of ASR state, with duplicate suppression and streaming session fallback diagnostics.
 - Added a VU-silence fallback so the Voqualizer Mic red speech glyph returns to white after quiet even if final events are delayed or missed.
 - Fixed the Voqualizer Mic red speech glyph so it clears on final/agent-final and uses a short cooldown to avoid immediately re-latching from residual VU noise.

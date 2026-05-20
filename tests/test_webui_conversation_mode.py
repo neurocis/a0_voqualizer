@@ -227,3 +227,19 @@ def test_conversation_mode_clears_speech_detected_after_vu_silence():
     ):
         assert marker in s, f'missing speech silence clear marker {marker!r}'
 
+
+
+def test_conversation_mode_can_send_direct_tts_from_rendered_response_fallback():
+    s = CM.read_text()
+    for marker in (
+        'speakText(text, options = {})',
+        "voqualizer_user_text",
+        "source: 'webui_rendered_response_fallback'",
+        'lastDirectTtsText',
+        'lastDirectTtsAt',
+        'lastDirectTtsAck',
+        'lastDirectTtsError',
+        'directTtsCount',
+        'ack_timeout',
+    ):
+        assert marker in s, f'missing direct TTS fallback marker {marker!r}'
