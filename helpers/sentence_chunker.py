@@ -151,6 +151,7 @@ class SentenceTTSChunker:
             return {"status": "skipped", "reason": "empty_or_no_sender"}
         if not getattr(session, "tts_enabled", True):
             session.metadata["tts_last_skip_reason"] = "tts_disabled"
+            session.metadata["tts_route_skip_reason"] = "tts_disabled"
             return {"status": "skipped", "reason": "tts_disabled"}
         state = self._state(session, context_id)
         if not state.buffer:

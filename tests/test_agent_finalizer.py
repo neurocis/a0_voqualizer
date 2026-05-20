@@ -362,3 +362,17 @@ def test_agent_finalizer_tracks_tts_chunks_for_barge_in_source_marker():
     src = Path('/a0/usr/plugins/a0_voqualizer/helpers/agent_finalizer.py').read_text()
     assert 'tts_chunks_emitted' in src
     assert 'tts_barge_in_notified' in src
+
+
+def test_tts_finalizer_has_route_diagnostics_and_fallback_markers():
+    src = Path('/a0/usr/plugins/a0_voqualizer/helpers/agent_finalizer.py').read_text()
+    assert '_record_tts_route' in src
+    assert '_sessions_for_context_with_fallback' in src
+    assert '_all_context_candidate_ids' in src
+    assert 'tts_route_' in src
+    assert 'provider_error_type' in src
+    assert 'provider_error_repr' in src
+    assert 'chunks_emitted' in src
+    assert 'route_context_id' in src
+    assert 'sessions_considered' in src
+    assert 'registry.iter_active()' in src

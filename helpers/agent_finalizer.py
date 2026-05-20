@@ -263,6 +263,75 @@ def _codec_for_tts_spec(spec: Mapping[str, Any], fallback_codec: str) -> str:
     return fallback_codec or "pcm16/16k"
 
 
+
+
+def _record_tts_route(session: BridgeSession | None, **values: Any) -> None:
+    """Persist compact TTS route diagnostics on the session for live debugging."""
+    if session is None:
+        return
+    for key, value in values.items():
+        session.metadata[f"tts_route_{key}"] = value
+
+
+def _all_context_candidate_ids(context_id: str) -> set[str]:
+    """Return context id variants useful when A0 emits child/hero contexts."""
+    ids = {context_id} if context_id else set()
+    try:
+        from agent import AgentContext  # type: ignore
+        ctx = AgentContext.get(context_id) if context_id else None
+        seen = set()
+        while ctx is not None:
+            cid = str(getattr(ctx, "id", "") or "")
+            if cid:
+                ids.add(cid)
+            if cid in seen:
+                break
+            seen.add(cid)
+            parent_id = str(getattr(ctx, "parent_id", "") or getattr(ctx, "parent", "") or "")
+            if not parent_id:
+                data = getattr(ctx, "data", None)
+                if isinstance(data, dict):
+                    parent_id = str(data.get("parent_id") or data.get("hero_context_id") or "")
+            if not parent_id:
+                break
+            ctx = AgentContext.get(parent_id)
+    except Exception:
+        pass
+    return ids
+
+
+def _sessions_for_context_with_fallback(context_id: str):
+    """Find bound sessions for context_id, falling back to live session.context_id.
+
+    Live A0 response hooks may report a child/hero/current context id that does
+    not exactly match the bridge binding table.  For TTS, prefer bridge bindings
+    but fall back to active registry sessions whose session.context_id is one of
+    the candidate ids so final responses can still route to the GUI session.
+    """
+    bridge = get_default_context_bridge()
+    registry = BridgeRegistry.instance()
+    candidate_ids = _all_context_candidate_ids(context_id)
+    results: list[tuple[BridgeSession, str]] = []
+    seen: set[str] = set()
+    for cid in candidate_ids:
+        try:
+            bindings = bridge.bindings_for_context(cid)
+        except Exception:
+            bindings = []
+        for binding in bindings:
+            session = registry.get(binding.session_id)
+            if session is not None and session.session_id not in seen:
+                results.append((session, binding.context_id))
+                seen.add(session.session_id)
+    for session in registry.iter_active():
+        if session.session_id in seen:
+            continue
+        sid_context = str(getattr(session, "context_id", "") or "")
+        if sid_context and sid_context in candidate_ids:
+            results.append((session, sid_context))
+            seen.add(session.session_id)
+    return results, candidate_ids
+
 def _request_metadata_for_tts_spec(spec: Mapping[str, Any], *, source: str, context_id: str) -> dict[str, Any]:
     metadata = {
         "source": source,
@@ -343,17 +412,27 @@ async def synthesize_agent_response_tts(
 
     original_text = _clean_text(text)
     text = _tts_speakable_text(text)
+    _record_tts_route(
+        session,
+        context_id=context_id,
+        session_id=getattr(session, "session_id", ""),
+        skip_reason="",
+        chunks_emitted=0,
+    )
     if not text:
         if session.sender is not None:
             await _emit_tts_done(session, utterance_id=utterance_id, cancelled=True, chunks=0, reason="empty_speech_text")
         session.metadata["tts_last_skip_reason"] = "empty_speech_text"
+        _record_tts_route(session, skip_reason="empty_speech_text", chunks_emitted=0)
         return {"status": "skipped", "reason": "empty_speech_text", "chunks": 0}
     if session.sender is None:
         session.metadata["tts_last_skip_reason"] = "missing_sender"
+        _record_tts_route(session, skip_reason="missing_sender", chunks_emitted=0)
         return {"status": "skipped", "reason": "missing_sender", "chunks": 0}
     if not getattr(session, "tts_enabled", True):
         await _emit_tts_done(session, utterance_id=utterance_id, cancelled=True, chunks=0, reason="tts_disabled")
         session.metadata["tts_last_skip_reason"] = "tts_disabled"
+        _record_tts_route(session, skip_reason="tts_disabled", chunks_emitted=0)
         return {"status": "skipped", "reason": "tts_disabled", "chunks": 0}
 
     cfg_loader = config_loader or _default_config_loader
@@ -362,6 +441,7 @@ async def synthesize_agent_response_tts(
     try:
         cfg = cfg_loader()
         spec = _provider_config(cfg, session.tts_provider)
+        _record_tts_route(session, provider_key=session.tts_provider, provider_type=str((spec or {}).get("type") or ""))
         if spec is None:
             raise TTSError(
                 f"unknown TTS provider {session.tts_provider!r}",
@@ -423,6 +503,7 @@ async def synthesize_agent_response_tts(
             await _emit_tts_chunk(session, chunk, metadata_defaults=request_metadata)
             chunks += 1
             session.metadata["tts_chunks_emitted"] = chunks
+            _record_tts_route(session, chunks_emitted=chunks, skip_reason="")
             if session.cancel_tts.is_set():
                 await _emit_tts_done(
                     session,
@@ -434,13 +515,16 @@ async def synthesize_agent_response_tts(
                 return {"status": "cancelled", "reason": "barge_in", "chunks": chunks}
         await _emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
         session.metadata["tts_last_skip_reason"] = ""
+        _record_tts_route(session, skip_reason="", chunks_emitted=chunks)
         return {"status": "ok", "chunks": chunks, "utterance_id": utterance_id}
     except TTSError as exc:
         session.metadata["tts_last_skip_reason"] = "provider_error"
+        _record_tts_route(session, skip_reason="provider_error", provider_error_type=type(exc).__name__, provider_error_repr=repr(exc), chunks_emitted=chunks)
         await _emit_tts_error(session, exc)
         return {"status": "error", "error": exc.to_dict(), "chunks": chunks}
     except Exception as exc:
         session.metadata["tts_last_skip_reason"] = "provider_error"
+        _record_tts_route(session, skip_reason="provider_error", provider_error_type=type(exc).__name__, provider_error_repr=repr(exc), chunks_emitted=chunks)
         err = TTSError(str(exc), code="TTS_FINALIZATION_ERROR", recoverable=True)
         await _emit_tts_error(session, err)
         return {"status": "error", "error": err.to_dict(), "chunks": chunks}
@@ -468,18 +552,31 @@ async def finalize_agent_response_for_context(
     if not context_id or not text:
         return {"emitted": 0, "tts": [], "reason": "empty_context_or_text"}
 
-    bridge = get_default_context_bridge()
-    bindings = bridge.bindings_for_context(context_id)
-    if not bindings:
-        return {"emitted": 0, "tts": [], "reason": "no_bindings"}
+    session_routes, candidate_context_ids = _sessions_for_context_with_fallback(context_id)
+    if not session_routes:
+        return {
+            "emitted": 0,
+            "tts": [],
+            "reason": "no_bindings",
+            "tts_route_context_id": context_id,
+            "tts_route_context_candidates": sorted(candidate_context_ids),
+            "tts_route_sessions_considered": 0,
+        }
 
-    registry = BridgeRegistry.instance()
     utterance_ids = utterance_id_factory or (lambda: f"agent-{uuid.uuid4().hex}")
     emitted = 0
     tts_results: list[dict[str, Any]] = []
-    for binding in bindings:
-        session = registry.get(binding.session_id)
-        if session is None or session.sender is None:
+    for session, route_context_id in session_routes:
+        _record_tts_route(
+            session,
+            context_id=context_id,
+            route_context_id=route_context_id,
+            sessions_considered=len(session_routes),
+            context_candidates=sorted(candidate_context_ids),
+        )
+        if session.sender is None:
+            session.metadata["tts_last_skip_reason"] = "missing_sender"
+            _record_tts_route(session, skip_reason="missing_sender")
             continue
         utterance_id = utterance_ids()
         # Clear any stale cancellation before announcing the new final response.
@@ -490,7 +587,7 @@ async def finalize_agent_response_for_context(
             "voqualizer_agent_response_final",
             {
                 "session_id": session.session_id,
-                "context_id": binding.context_id,
+                "context_id": route_context_id,
                 "text": text,
                 "speech_text": speech_text,
                 "utterance_id": utterance_id,
@@ -509,7 +606,7 @@ async def finalize_agent_response_for_context(
         if has_streaming_state and chunker is not None:
             tts_result = await chunker.finalize_session(
                 session,
-                context_id=binding.context_id,
+                context_id=route_context_id,
                 final_text=speech_text,
                 config_loader=config_loader,
                 tts_provider_factory=tts_provider_factory,
@@ -518,7 +615,7 @@ async def finalize_agent_response_for_context(
             tts_result = await synthesize_agent_response_tts(
                 session,
                 speech_text,
-                context_id=binding.context_id,
+                context_id=route_context_id,
                 utterance_id=utterance_id,
                 config_loader=config_loader,
                 tts_provider_factory=tts_provider_factory,
