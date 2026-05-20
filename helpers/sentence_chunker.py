@@ -199,19 +199,34 @@ class SentenceTTSChunker:
         if not context_id or not text:
             return {"sessions": 0, "results": [], "reason": "empty_context_or_text"}
         bridge = get_default_context_bridge()
-        bindings = bridge.bindings_for_context(context_id)
-        if not bindings:
-            return {"sessions": 0, "results": [], "reason": "no_bindings"}
+        bindings = list(bridge.bindings_for_context(context_id))
         registry = BridgeRegistry.instance()
         results: list[dict[str, Any]] = []
         sessions = 0
+        seen: set[str] = set()
         for binding in bindings:
             session = registry.get(binding.session_id)
             if session is None or session.sender is None:
                 continue
             sessions += 1
+            seen.add(session.session_id)
             result = await self.process_session_delta(session, context_id=binding.context_id, text=text)
             results.append({"session_id": session.session_id, **result})
+        # Live GUI sessions can be bound by session.context_id before/without an
+        # exact bridge binding for the A0 hook context.  Mirror the finalizer's
+        # active-session fallback so streaming TTS works independently of ASR.
+        for session in registry.iter_active():
+            if session.session_id in seen or session.sender is None:
+                continue
+            if str(getattr(session, "context_id", "") or "") != context_id:
+                continue
+            sessions += 1
+            seen.add(session.session_id)
+            session.metadata["tts_route_streaming_fallback"] = "session.context_id"
+            result = await self.process_session_delta(session, context_id=context_id, text=text)
+            results.append({"session_id": session.session_id, **result})
+        if not results:
+            return {"sessions": 0, "results": [], "reason": "no_bindings"}
         return {"sessions": sessions, "results": results}
 
     async def finalize_session(

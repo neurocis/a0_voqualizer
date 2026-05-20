@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Fixed live in-GUI TTS finalization so assistant responses can route to TTS from the context response log/response_stream_end path, independent of ASR state, with duplicate suppression and streaming session fallback diagnostics.
 - Added a VU-silence fallback so the Voqualizer Mic red speech glyph returns to white after quiet even if final events are delayed or missed.
 - Fixed the Voqualizer Mic red speech glyph so it clears on final/agent-final and uses a short cooldown to avoid immediately re-latching from residual VU noise.
 - Turned the dedicated Voqualizer Mic glyph red after speech is detected and kept it red until utterance finalization/mic stop.

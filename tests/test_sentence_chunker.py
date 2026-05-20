@@ -1,5 +1,6 @@
-from pathlib import Path
 from __future__ import annotations
+
+from pathlib import Path
 
 import asyncio
 from types import SimpleNamespace
@@ -199,3 +200,10 @@ def test_sentence_chunker_streams_structured_text_section_source_marker():
     assert '_extract_streaming_text_section' in src
     assert 'structured_response_streaming' in src
     assert 'extract_ready_speech_text' in src
+
+
+def test_sentence_chunker_active_session_context_fallback_source_marker():
+    src = Path('/a0/usr/plugins/a0_voqualizer/helpers/sentence_chunker.py').read_text()
+    assert 'registry.iter_active()' in src
+    assert 'tts_route_streaming_fallback' in src
+    assert 'session.context_id' in src

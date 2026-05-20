@@ -376,3 +376,40 @@ def test_tts_finalizer_has_route_diagnostics_and_fallback_markers():
     assert 'route_context_id' in src
     assert 'sessions_considered' in src
     assert 'registry.iter_active()' in src
+
+
+def test_process_chain_end_reads_context_response_log_before_loop_data(monkeypatch):
+    async def scenario():
+        calls = []
+        async def fake_finalize(**kwargs):
+            calls.append(kwargs)
+            return {"emitted": 1, "tts": []}
+        monkeypatch.setattr(finalizer_mod, "finalize_agent_response_for_context", fake_finalize)
+
+        class FakeLogItem:
+            type = "response"
+            content = "visible response text"
+            id = "resp-1"
+        class FakeLock:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+        context = SimpleNamespace(id="ctx-1", data={}, log=SimpleNamespace(_lock=FakeLock(), logs=[FakeLogItem()]))
+        agent = SimpleNamespace(context=context, loop_data=SimpleNamespace(last_response="raw json envelope"))
+        ext = VoqualizerProcessChainEnd(agent=agent)
+        await ext.execute(loop_data=SimpleNamespace(last_response="raw json envelope"))
+        await ext.execute(loop_data=SimpleNamespace(last_response="raw json envelope"))
+        assert calls == [{"context_id": "ctx-1", "text": "visible response text"}]
+        assert context.data["a0_voqualizer_last_tts_finalize_source"] == "context_log_response"
+
+    run(scenario())
+
+
+def test_response_stream_end_extension_and_tts_route_source_markers_exist():
+    proc = Path('/a0/usr/plugins/a0_voqualizer/extensions/python/process_chain_end/_50_voqualizer.py').read_text()
+    end = Path('/a0/usr/plugins/a0_voqualizer/extensions/python/response_stream_end/_50_voqualizer.py').read_text()
+    assert 'finalize_voqualizer_response_once' in proc
+    assert '_response_from_context_log' in proc
+    assert 'VOQUALIZER_FINALIZED_RESPONSE_KEY' in proc
+    assert 'context_log_response' in proc
+    assert 'finalize_voqualizer_response_once' in end
+    assert 'VoqualizerResponseStreamEnd' in end
