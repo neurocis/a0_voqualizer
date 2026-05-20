@@ -99,18 +99,6 @@ class OpenAITTSProvider(TTSProvider):
         value = self.spec.options.get("timeout")
         return None if value is None else float(value)
 
-    def _client_timeout(self, aiohttp_module: Any) -> Any:
-        """Return an aiohttp-compatible timeout object for configured seconds.
-
-        aiohttp.ClientSession rejects a bare float for its ``timeout`` argument;
-        use ``ClientTimeout(total=...)`` so provider configs can safely set a
-        numeric timeout without breaking TTS startup.
-        """
-        timeout = self.timeout
-        if timeout is None:
-            return None
-        return aiohttp_module.ClientTimeout(total=float(timeout))
-
     @property
     def capabilities(self) -> TTSCapabilities:
         return TTSCapabilities(
@@ -151,9 +139,8 @@ class OpenAITTSProvider(TTSProvider):
                     details={"provider": self.spec.name, "dependency": "aiohttp"},
                 ) from exc
             kwargs: dict[str, Any] = {}
-            timeout = self._client_timeout(aiohttp)
-            if timeout is not None:
-                kwargs["timeout"] = timeout
+            if self.timeout is not None:
+                kwargs["timeout"] = self.timeout
             self._session = aiohttp.ClientSession(**kwargs)
             self._owns_session = True
             self.started = True
@@ -267,14 +254,7 @@ class OpenAITTSProvider(TTSProvider):
         self.last_request = {"url": self.endpoint, "headers": dict(headers), "json": dict(payload)}
         kwargs: dict[str, Any] = {"json": dict(payload), "headers": dict(headers)}
         if self.timeout is not None:
-            try:
-                import aiohttp  # type: ignore
-
-                kwargs["timeout"] = self._client_timeout(aiohttp)
-            except Exception:
-                # aiohttp accepts per-request numeric timeouts in some versions;
-                # keep this as a defensive fallback for injected fake sessions.
-                kwargs["timeout"] = float(self.timeout)
+            kwargs["timeout"] = self.timeout
         request = self._session.post(self.endpoint, **kwargs)
         if hasattr(request, "__aenter__"):
             async with request as response:
