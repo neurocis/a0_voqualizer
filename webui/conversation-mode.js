@@ -31,6 +31,7 @@ export const TTS_PREF_PREFIX = 'a0_voqualizer.tts_enabled.';
 export const CONTEXT_CHANGE_DEBOUNCE_MS = 850;
 export const MIC_SPEECH_ACTIVE_THRESHOLD = 0.035;
 export const MIC_SPEECH_FINAL_COOLDOWN_MS = 900;
+export const MIC_SPEECH_SILENCE_CLEAR_MS = 700;
 
 export const STATE_IDLE = 'idle';
 export const STATE_CONNECTING = 'connecting';
@@ -162,6 +163,7 @@ export function createVoqualizerStore(options = {}) {
     micVuClipped: false,
     micSpeechActive: false,
     micSpeechStartedAt: 0,
+    micSpeechLastActiveAt: 0,
     micSpeechCooldownUntil: 0,
     lastMicVuAt: 0,
     audioFramesSent: 0,
@@ -215,6 +217,7 @@ export function createVoqualizerStore(options = {}) {
         micVuClipped: this.micVuClipped,
         micSpeechActive: this.micSpeechActive,
         micSpeechStartedAt: this.micSpeechStartedAt,
+        micSpeechLastActiveAt: this.micSpeechLastActiveAt,
         micSpeechCooldownUntil: this.micSpeechCooldownUntil,
         lastMicVuAt: this.lastMicVuAt,
         lastError: this.lastError,
@@ -567,6 +570,7 @@ export function createVoqualizerStore(options = {}) {
     _clearMicSpeech(reason = 'utterance_finalized', cooldownMs = MIC_SPEECH_FINAL_COOLDOWN_MS) {
       this.micSpeechActive = false;
       this.micSpeechStartedAt = 0;
+      this.micSpeechLastActiveAt = 0;
       this.micSpeechCooldownUntil = cooldownMs > 0 ? Date.now() + cooldownMs : 0;
       if (reason) this._setReason(reason);
       this._publishDebug();
@@ -580,12 +584,17 @@ export function createVoqualizerStore(options = {}) {
       this.micVuRms = rms;
       this.micVuClipped = !!vu.clipped;
       this.lastMicVuAt = Date.now();
+      const isAboveSpeechThreshold = level >= MIC_SPEECH_ACTIVE_THRESHOLD || peak >= MIC_SPEECH_ACTIVE_THRESHOLD;
       const canStartSpeech = Date.now() >= (this.micSpeechCooldownUntil || 0);
-      if (canStartSpeech && !this.micSpeechActive && (level >= MIC_SPEECH_ACTIVE_THRESHOLD || peak >= MIC_SPEECH_ACTIVE_THRESHOLD)) {
+      if (isAboveSpeechThreshold) this.micSpeechLastActiveAt = this.lastMicVuAt;
+      if (canStartSpeech && !this.micSpeechActive && isAboveSpeechThreshold) {
         this.micSpeechActive = true;
         this.micSpeechStartedAt = this.lastMicVuAt;
         this.micSpeechCooldownUntil = 0;
         this._setReason('mic_speech_detected');
+      }
+      if (this.micSpeechActive && !isAboveSpeechThreshold && this.micSpeechLastActiveAt && (this.lastMicVuAt - this.micSpeechLastActiveAt) >= MIC_SPEECH_SILENCE_CLEAR_MS) {
+        this._clearMicSpeech('mic_silence_detected', 0);
       }
       maybeLocalBargeInFromMic(vu, tracker);
       this._publishDebug();
@@ -597,6 +606,7 @@ export function createVoqualizerStore(options = {}) {
       this.micVuClipped = false;
       this.micSpeechActive = false;
       this.micSpeechStartedAt = 0;
+      this.micSpeechLastActiveAt = 0;
       this.micSpeechCooldownUntil = 0;
       if (reason) this.lastPlaybackStopReason = this.lastPlaybackStopReason || '';
       this._publishDebug();

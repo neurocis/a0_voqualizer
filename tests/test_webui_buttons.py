@@ -145,3 +145,8 @@ def test_extension_exposes_speech_cooldown_debug_marker():
     assert 'data-voqualizer-speech-cooldown-until' in s
     assert 'micSpeechCooldownUntil' in s
 
+def test_extension_exposes_speech_last_active_debug_marker():
+    s = source()
+    assert 'data-voqualizer-speech-last-active-at' in s
+    assert 'micSpeechLastActiveAt' in s
+

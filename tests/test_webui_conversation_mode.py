@@ -216,3 +216,14 @@ def test_conversation_mode_cools_down_speech_detected_after_final():
     ):
         assert marker in s, f'missing speech final cooldown marker {marker!r}'
 
+def test_conversation_mode_clears_speech_detected_after_vu_silence():
+    s = CM.read_text()
+    for marker in (
+        'MIC_SPEECH_SILENCE_CLEAR_MS',
+        'micSpeechLastActiveAt',
+        'isAboveSpeechThreshold',
+        'MIC_SPEECH_SILENCE_CLEAR_MS',
+        "_clearMicSpeech('mic_silence_detected', 0)",
+    ):
+        assert marker in s, f'missing speech silence clear marker {marker!r}'
+
