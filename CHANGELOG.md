@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Fixed the Voqualizer Mic red speech glyph so it clears on final/agent-final and uses a short cooldown to avoid immediately re-latching from residual VU noise.
 - Turned the dedicated Voqualizer Mic glyph red after speech is detected and kept it red until utterance finalization/mic stop.
 - Made the in-button Voqualizer Mic VU meter more prominent with brighter fill, scaling, and stronger listening/PTT glow.
 - Added a live VU-style level fill inside the dedicated Voqualizer Mic button using the existing AudioWorklet VU events.

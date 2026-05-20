@@ -140,3 +140,8 @@ def test_extension_turns_mic_glyph_red_when_speech_detected():
     ):
         assert marker in s, f'missing speech-detected mic marker {marker!r}'
 
+def test_extension_exposes_speech_cooldown_debug_marker():
+    s = source()
+    assert 'data-voqualizer-speech-cooldown-until' in s
+    assert 'micSpeechCooldownUntil' in s
+

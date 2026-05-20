@@ -203,3 +203,16 @@ def test_conversation_mode_tracks_speech_detected_until_utterance_end():
     ):
         assert marker in s, f'missing speech-active lifecycle marker {marker!r}'
 
+def test_conversation_mode_cools_down_speech_detected_after_final():
+    s = CM.read_text()
+    for marker in (
+        'MIC_SPEECH_FINAL_COOLDOWN_MS',
+        'micSpeechCooldownUntil',
+        '_clearMicSpeech(reason',
+        'Date.now() >= (this.micSpeechCooldownUntil || 0)',
+        "_clearMicSpeech('asr_final_received')",
+        "_clearMicSpeech('final_frame_sent')",
+        "_clearMicSpeech('agent_final_received')",
+    ):
+        assert marker in s, f'missing speech final cooldown marker {marker!r}'
+

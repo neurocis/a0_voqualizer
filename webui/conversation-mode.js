@@ -30,6 +30,7 @@ export const VOQUALIZER_HANDLER = 'plugins/a0_voqualizer/ws_voqualizer';
 export const TTS_PREF_PREFIX = 'a0_voqualizer.tts_enabled.';
 export const CONTEXT_CHANGE_DEBOUNCE_MS = 850;
 export const MIC_SPEECH_ACTIVE_THRESHOLD = 0.035;
+export const MIC_SPEECH_FINAL_COOLDOWN_MS = 900;
 
 export const STATE_IDLE = 'idle';
 export const STATE_CONNECTING = 'connecting';
@@ -161,6 +162,7 @@ export function createVoqualizerStore(options = {}) {
     micVuClipped: false,
     micSpeechActive: false,
     micSpeechStartedAt: 0,
+    micSpeechCooldownUntil: 0,
     lastMicVuAt: 0,
     audioFramesSent: 0,
     seq: 0,
@@ -213,6 +215,7 @@ export function createVoqualizerStore(options = {}) {
         micVuClipped: this.micVuClipped,
         micSpeechActive: this.micSpeechActive,
         micSpeechStartedAt: this.micSpeechStartedAt,
+        micSpeechCooldownUntil: this.micSpeechCooldownUntil,
         lastMicVuAt: this.lastMicVuAt,
         lastError: this.lastError,
         lastTransitionReason: this.lastTransitionReason,
@@ -561,6 +564,13 @@ export function createVoqualizerStore(options = {}) {
       this.capturing = true;
       this._setReason('mic_started', 'mic_started');
     },
+    _clearMicSpeech(reason = 'utterance_finalized', cooldownMs = MIC_SPEECH_FINAL_COOLDOWN_MS) {
+      this.micSpeechActive = false;
+      this.micSpeechStartedAt = 0;
+      this.micSpeechCooldownUntil = cooldownMs > 0 ? Date.now() + cooldownMs : 0;
+      if (reason) this._setReason(reason);
+      this._publishDebug();
+    },
     _handleMicVu(vu = {}) {
       const level = Math.max(0, Math.min(1, Number(vu.level || vu.rms || 0) || 0));
       const peak = Math.max(0, Math.min(1, Number(vu.peak || 0) || 0));
@@ -570,9 +580,11 @@ export function createVoqualizerStore(options = {}) {
       this.micVuRms = rms;
       this.micVuClipped = !!vu.clipped;
       this.lastMicVuAt = Date.now();
-      if (!this.micSpeechActive && (level >= MIC_SPEECH_ACTIVE_THRESHOLD || peak >= MIC_SPEECH_ACTIVE_THRESHOLD)) {
+      const canStartSpeech = Date.now() >= (this.micSpeechCooldownUntil || 0);
+      if (canStartSpeech && !this.micSpeechActive && (level >= MIC_SPEECH_ACTIVE_THRESHOLD || peak >= MIC_SPEECH_ACTIVE_THRESHOLD)) {
         this.micSpeechActive = true;
         this.micSpeechStartedAt = this.lastMicVuAt;
+        this.micSpeechCooldownUntil = 0;
         this._setReason('mic_speech_detected');
       }
       maybeLocalBargeInFromMic(vu, tracker);
@@ -585,6 +597,7 @@ export function createVoqualizerStore(options = {}) {
       this.micVuClipped = false;
       this.micSpeechActive = false;
       this.micSpeechStartedAt = 0;
+      this.micSpeechCooldownUntil = 0;
       if (reason) this.lastPlaybackStopReason = this.lastPlaybackStopReason || '';
       this._publishDebug();
     },
@@ -609,13 +622,14 @@ export function createVoqualizerStore(options = {}) {
       if (!this._isGenerationCurrent(generation)) return;
       if (!this._socket || !this.bearerToken) return;
       const payload = audioChunkPayload((this.seq + 1) & 0xffff, ((Date.now() - this.startTs) & 0xffff), new Uint8Array(0), { bearer_token: this.bearerToken, is_final: true });
-      try { this._socket.emit('voqualizer_audio_chunk', payload); this.lastFinalFrameSentAt = Date.now(); this.lastFinalFrameReason = this._pttOverlay ? 'ptt_overlay_release' : 'ptt_release'; this.micSpeechActive = false; this.micSpeechStartedAt = 0; this._setReason('final_frame_sent'); } catch (_e) {}
+      try { this._socket.emit('voqualizer_audio_chunk', payload); this.lastFinalFrameSentAt = Date.now(); this.lastFinalFrameReason = this._pttOverlay ? 'ptt_overlay_release' : 'ptt_release'; this._clearMicSpeech('final_frame_sent'); } catch (_e) {}
     },
     _handleAgentFinal(payload) {
       const data = this._unwrapPayload(payload);
       this.lastAgentFinalAt = Date.now();
       this.agentFinalCount += 1;
       this.lastAgentFinalText = String(data.speech_text || data.text || '').slice(0, 160);
+      this._clearMicSpeech('agent_final_received');
       this._publishDebug();
     },
     _handleAsrFinal(payload) {
@@ -623,8 +637,7 @@ export function createVoqualizerStore(options = {}) {
       this.asrFinalCount += 1;
       this.lastAsrFinalText = String(data.text || '').slice(0, 160);
       this.lastAsrFinalUtteranceId = String((data.metadata && data.metadata.utterance_id) || data.utterance_id || '');
-      this.micSpeechActive = false;
-      this.micSpeechStartedAt = 0;
+      this._clearMicSpeech('asr_final_received');
       this._publishDebug();
     },
     async _handleTtsChunk(payload) {

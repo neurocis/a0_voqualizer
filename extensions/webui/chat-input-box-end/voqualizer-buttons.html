@@ -243,6 +243,7 @@
             mic.classList.toggle('voqualizer-speech-detected', !!s.micSpeechActive);
             mic.setAttribute('data-voqualizer-vu-level', vuLevel.toFixed(2));
             mic.setAttribute('data-voqualizer-speech-active', String(!!s.micSpeechActive));
+            mic.setAttribute('data-voqualizer-speech-cooldown-until', String(s.micSpeechCooldownUntil || 0));
             mic.setAttribute('aria-pressed', String(s.state === STATE_CONVERSATIONAL || s.state === STATE_PTT_ACTIVE));
             mic.setAttribute('aria-label', micLabel);
             mic.setAttribute('title', `${micLabel} Last: ${s.lastTransitionReason || 'n/a'} / ${s.lastConnectPhase || 'n/a'}`);
