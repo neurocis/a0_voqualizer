@@ -160,8 +160,15 @@ export function createVoqualizerStore(options = {}) {
     lastFinalFrameSentAt: 0,
     lastFinalFrameReason: '',
     lastAudioSeqSent: 0,
+    lastAsrPartialText: '',
     lastAsrFinalText: '',
     lastAsrFinalUtteranceId: '',
+    asrPromptDraftOwned: false,
+    lastAsrPartialPromptAt: 0,
+    lastAsrFinalPromptAt: 0,
+    lastPromptSubmitAt: 0,
+    lastPromptSubmitText: '',
+    lastPromptSubmitSkipReason: '',
     micVuLevel: 0,
     micVuPeak: 0,
     micVuRms: 0,
@@ -254,8 +261,15 @@ export function createVoqualizerStore(options = {}) {
         lastFinalFrameSentAt: this.lastFinalFrameSentAt,
         lastFinalFrameReason: this.lastFinalFrameReason,
         lastAudioSeqSent: this.lastAudioSeqSent,
+        lastAsrPartialText: this.lastAsrPartialText,
         lastAsrFinalText: this.lastAsrFinalText,
         lastAsrFinalUtteranceId: this.lastAsrFinalUtteranceId,
+        asrPromptDraftOwned: this.asrPromptDraftOwned,
+        lastAsrPartialPromptAt: this.lastAsrPartialPromptAt,
+        lastAsrFinalPromptAt: this.lastAsrFinalPromptAt,
+        lastPromptSubmitAt: this.lastPromptSubmitAt,
+        lastPromptSubmitText: this.lastPromptSubmitText,
+        lastPromptSubmitSkipReason: this.lastPromptSubmitSkipReason,
         audioFramesSent: this.audioFramesSent,
       };
     },
@@ -455,6 +469,7 @@ export function createVoqualizerStore(options = {}) {
               input_codec: INPUT_CODEC,
               output_codec: OUTPUT_CODEC,
               tts: { enabled: this.isTtsEnabled() },
+              asr_submit_mode: 'frontend_prompt',
             }, (response) => {
               if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) { finish(); return; }
               const data = this._unwrapPayload(response);
@@ -528,6 +543,7 @@ export function createVoqualizerStore(options = {}) {
         this._setReason('ready', 'ready_event');
       }));
       socket.on('voqualizer_agent_response_final', guard((payload) => this._handleAgentFinal(payload)));
+      socket.on('voqualizer_asr_partial', guard((payload) => this._handleAsrPartial(payload)));
       socket.on('voqualizer_asr_final', guard((payload) => this._handleAsrFinal(payload)));
       socket.on('voqualizer_tts_chunk', guard((payload) => this._handleTtsChunk(payload)));
       socket.on('voqualizer_tts_done', guard((payload) => this._handleTtsDone(payload)));
@@ -683,6 +699,102 @@ export function createVoqualizerStore(options = {}) {
         setTimeout(() => finish({ ok: false, reason: 'ack_timeout' }), 15000);
       });
     },
+    _promptElement() {
+      const selectors = [
+        'textarea[name="message"]',
+        'textarea#message',
+        'textarea#prompt',
+        '#chat-input textarea',
+        'textarea[x-model*="message"]',
+        'textarea[x-model*="prompt"]',
+        'textarea',
+        '[contenteditable="true"]',
+      ];
+      for (const selector of selectors) {
+        try {
+          const el = globalThis.document && globalThis.document.querySelector(selector);
+          if (el) return el;
+        } catch (_e) {}
+      }
+      return null;
+    },
+    _promptValue(el) {
+      if (!el) return '';
+      if (el.isContentEditable) return el.textContent || '';
+      return el.value || '';
+    },
+    _setPromptValue(el, text) {
+      if (!el) return false;
+      if (el.isContentEditable) {
+        el.textContent = text;
+      } else {
+        el.value = text;
+      }
+      try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e) {}
+      try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
+      return true;
+    },
+    _canOwnPrompt(el) {
+      const current = this._promptValue(el).trim();
+      return !current || this.asrPromptDraftOwned || current === this.lastAsrPartialText || current === this.lastAsrFinalText;
+    },
+    _writeAsrPromptDraft(text, kind = 'partial') {
+      const draft = String(text || '').trim();
+      if (!draft) return false;
+      const el = this._promptElement();
+      if (!el) { this.lastPromptSubmitSkipReason = 'prompt_missing'; this._publishDebug(); return false; }
+      if (!this._canOwnPrompt(el)) { this.lastPromptSubmitSkipReason = 'prompt_not_owned'; this._publishDebug(); return false; }
+      this._setPromptValue(el, draft);
+      this.asrPromptDraftOwned = true;
+      if (kind === 'partial') this.lastAsrPartialPromptAt = Date.now();
+      if (kind === 'final') this.lastAsrFinalPromptAt = Date.now();
+      this.lastPromptSubmitSkipReason = '';
+      this._publishDebug();
+      return true;
+    },
+    _submitPromptFromAsr(text) {
+      const finalText = String(text || '').trim();
+      if (!finalText) { this.lastPromptSubmitSkipReason = 'empty_final'; this._publishDebug(); return false; }
+      const el = this._promptElement();
+      if (!el) { this.lastPromptSubmitSkipReason = 'prompt_missing'; this._publishDebug(); return false; }
+      if (!this._writeAsrPromptDraft(finalText, 'final')) return false;
+      const selectors = [
+        '#send-button',
+        'button[type="submit"]',
+        'button[aria-label="Send"]',
+        'button[title="Send"]',
+        '[data-testid="send-button"]',
+      ];
+      for (const selector of selectors) {
+        try {
+          const btn = globalThis.document && globalThis.document.querySelector(selector);
+          if (btn && !btn.disabled) {
+            btn.click();
+            this.lastPromptSubmitAt = Date.now();
+            this.lastPromptSubmitText = finalText.slice(0, 160);
+            this.asrPromptDraftOwned = false;
+            this.lastPromptSubmitSkipReason = '';
+            this._publishDebug();
+            return true;
+          }
+        } catch (_e) {}
+      }
+      try {
+        const form = el.closest && el.closest('form');
+        if (form && form.requestSubmit) {
+          form.requestSubmit();
+          this.lastPromptSubmitAt = Date.now();
+          this.lastPromptSubmitText = finalText.slice(0, 160);
+          this.asrPromptDraftOwned = false;
+          this.lastPromptSubmitSkipReason = '';
+          this._publishDebug();
+          return true;
+        }
+      } catch (_e) {}
+      this.lastPromptSubmitSkipReason = 'send_control_missing';
+      this._publishDebug();
+      return false;
+    },
     _sendAudio(pcm16, seq, tsMs, generation = this.connectionGeneration) {
       if (!this._isGenerationCurrent(generation)) return;
       if (!this._socket || !this.bearerToken || this.desiredMode === DESIRED_IDLE) return;
@@ -705,12 +817,21 @@ export function createVoqualizerStore(options = {}) {
       this._clearMicSpeech('agent_final_received');
       this._publishDebug();
     },
+    _handleAsrPartial(payload) {
+      const data = this._unwrapPayload(payload);
+      const text = String(data.text || '').trim();
+      this.lastAsrPartialText = text.slice(0, 160);
+      if (text) this._writeAsrPromptDraft(text, 'partial');
+      this._publishDebug();
+    },
     _handleAsrFinal(payload) {
       const data = this._unwrapPayload(payload);
+      const text = String(data.text || '').trim();
       this.asrFinalCount += 1;
-      this.lastAsrFinalText = String(data.text || '').slice(0, 160);
+      this.lastAsrFinalText = text.slice(0, 160);
       this.lastAsrFinalUtteranceId = String((data.metadata && data.metadata.utterance_id) || data.utterance_id || '');
       this._clearMicSpeech('asr_final_received');
+      if (text) this._submitPromptFromAsr(text);
       this._publishDebug();
     },
     async _handleTtsChunk(payload) {

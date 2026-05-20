@@ -3,6 +3,8 @@ from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parents[1]
 CM = PLUGIN / 'webui' / 'conversation-mode.js'
+CONVERSATION_MODE = CM
+AUDIO_LIB = PLUGIN / 'webui' / 'lib' / 'voqualizer-audio.js'
 
 
 def test_conversation_mode_file_exists():
@@ -243,3 +245,27 @@ def test_conversation_mode_can_send_direct_tts_from_rendered_response_fallback()
         'ack_timeout',
     ):
         assert marker in s, f'missing direct TTS fallback marker {marker!r}'
+
+
+
+def test_gui_asr_partials_populate_prompt_and_final_submits():
+    s = CM.read_text()
+    for marker in (
+        "asr_submit_mode: 'frontend_prompt'",
+        "socket.on('voqualizer_asr_partial'",
+        '_handleAsrPartial(payload)',
+        '_writeAsrPromptDraft(text, \'partial\')',
+        '_submitPromptFromAsr(text)',
+        '_promptElement()',
+        '_setPromptValue(el, draft)',
+        "new Event('input', { bubbles: true })",
+        'asrPromptDraftOwned',
+        'lastAsrPartialPromptAt',
+        'lastAsrFinalPromptAt',
+        'lastPromptSubmitAt',
+        'lastPromptSubmitText',
+        'lastPromptSubmitSkipReason',
+        "prompt_not_owned",
+        "send_control_missing",
+    ):
+        assert marker in s, f'missing GUI ASR prompt marker {marker!r}'

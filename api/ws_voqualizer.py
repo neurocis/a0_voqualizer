@@ -611,6 +611,10 @@ class WsVoqualizer(WsHandler):
 
         session.metadata["asr_final_silence_ms"] = asr_final_silence_ms
         session.metadata["asr_preroll_ms"] = asr_preroll_ms
+        asr_submit_mode = str(data.get("asr_submit_mode") or asr_block.get("submit_mode") or "context_bridge").strip()
+        if asr_submit_mode not in {"context_bridge", "frontend_prompt"}:
+            asr_submit_mode = "context_bridge"
+        session.metadata["asr_submit_mode"] = asr_submit_mode
         # A8.4+/v0.1.1: honor optional `tts.enabled=false` from init so the Speaker
         # toggle in the in-GUI buttons can hard-mute TTS for this session.
         tts_enabled_init = tts_block.get("enabled")
@@ -652,6 +656,7 @@ class WsVoqualizer(WsHandler):
                 "barge_in": barge_in,
                 "asr_final_silence_ms": asr_final_silence_ms,
                 "asr_preroll_ms": asr_preroll_ms,
+                "asr_submit_mode": session.metadata.get("asr_submit_mode", "context_bridge"),
             },
         }
 
@@ -751,6 +756,9 @@ class WsVoqualizer(WsHandler):
         # temporarily unavailable.
         if event == "voqualizer_asr_final":
             text = str(payload.get("text") or "").strip()
+            if session.metadata.get("asr_submit_mode") == "frontend_prompt":
+                session.metadata["context_injection_skipped"] = "frontend_prompt"
+                return
             if text:
                 try:
                     from usr.plugins.a0_voqualizer.helpers.context_bridge import get_default_context_bridge

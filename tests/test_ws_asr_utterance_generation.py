@@ -100,3 +100,16 @@ def test_ws_init_reads_provider_asr_preroll():
     assert 'session.metadata["asr_preroll_ms"] = asr_preroll_ms' in src
     assert 'asr_preroll_ms must be between 0 and 3000 ms' in src
     assert '"asr_preroll_ms": asr_preroll_ms' in src
+
+
+
+def test_frontend_prompt_mode_skips_context_bridge_injection():
+    s = WS.read_text()
+    assert 'asr_submit_mode' in s
+    assert 'frontend_prompt' in s
+    assert 'context_injection_skipped' in s
+    assert 'session.metadata["asr_submit_mode"]' in s
+    assert 'bridge.inject_transcript' in s
+    skip_idx = s.find('context_injection_skipped')
+    inject_idx = s.find('bridge.inject_transcript')
+    assert skip_idx != -1 and inject_idx != -1 and skip_idx < inject_idx
