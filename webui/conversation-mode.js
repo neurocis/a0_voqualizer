@@ -154,6 +154,11 @@ export function createVoqualizerStore(options = {}) {
     lastAudioSeqSent: 0,
     lastAsrFinalText: '',
     lastAsrFinalUtteranceId: '',
+    micVuLevel: 0,
+    micVuPeak: 0,
+    micVuRms: 0,
+    micVuClipped: false,
+    lastMicVuAt: 0,
     audioFramesSent: 0,
     seq: 0,
     startTs: 0,
@@ -199,6 +204,11 @@ export function createVoqualizerStore(options = {}) {
         conversational: this.conversational,
         pttActive: this.pttActive,
         ttsEnabled: this.isTtsEnabled(),
+        micVuLevel: this.micVuLevel,
+        micVuPeak: this.micVuPeak,
+        micVuRms: this.micVuRms,
+        micVuClipped: this.micVuClipped,
+        lastMicVuAt: this.lastMicVuAt,
         lastError: this.lastError,
         lastTransitionReason: this.lastTransitionReason,
         lastConnectPhase: this.lastConnectPhase,
@@ -535,7 +545,7 @@ export function createVoqualizerStore(options = {}) {
       this.seq = 0;
       const mic = await initMicWorklet({
         onAudio: ({ pcm16, seq, tsMs }) => this._sendAudio(pcm16, seq, tsMs, generation),
-        onVu: (vu) => maybeLocalBargeInFromMic(vu, tracker),
+        onVu: (vu) => this._handleMicVu(vu),
         sampleRate: PCM_SAMPLE_RATE,
       });
       if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) {
@@ -546,11 +556,32 @@ export function createVoqualizerStore(options = {}) {
       this.capturing = true;
       this._setReason('mic_started', 'mic_started');
     },
+    _handleMicVu(vu = {}) {
+      const level = Math.max(0, Math.min(1, Number(vu.level || vu.rms || 0) || 0));
+      const peak = Math.max(0, Math.min(1, Number(vu.peak || 0) || 0));
+      const rms = Math.max(0, Math.min(1, Number(vu.rms || 0) || 0));
+      this.micVuLevel = level;
+      this.micVuPeak = peak;
+      this.micVuRms = rms;
+      this.micVuClipped = !!vu.clipped;
+      this.lastMicVuAt = Date.now();
+      maybeLocalBargeInFromMic(vu, tracker);
+      this._publishDebug();
+    },
+    _resetMicVu(reason = 'mic_stopped') {
+      this.micVuLevel = 0;
+      this.micVuPeak = 0;
+      this.micVuRms = 0;
+      this.micVuClipped = false;
+      if (reason) this.lastPlaybackStopReason = this.lastPlaybackStopReason || '';
+      this._publishDebug();
+    },
     async _stopMic(reason = 'manual_stop') {
       if (!this.capturing && !this._mic) return;
       try { this._mic && this._mic.stop(); } catch (_e) {}
       this._mic = null;
       this.capturing = false;
+      this._resetMicVu(reason);
       this.lastDisconnectReason = reason;
       this._setReason('mic_stopped');
     },

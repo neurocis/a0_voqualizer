@@ -50,6 +50,7 @@
     @keydown="onKey($event)"
     @keyup="onKey($event)"
   >
+    <span class="voqualizer-mic-vu" aria-hidden="true"></span>
     <span class="material-symbols-outlined" aria-hidden="true">mic</span>
     <span class="voqualizer-button-ring" aria-hidden="true"></span>
   </button>
@@ -103,6 +104,31 @@
     border: 1.5px dashed var(--color-accent, #6cf);
     opacity: 0.55;
     pointer-events: none;
+  }
+  .voqualizer-mic .material-symbols-outlined,
+  .voqualizer-mic .voqualizer-button-ring {
+    z-index: 2;
+  }
+  .voqualizer-mic-vu {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    height: calc((100% - 12px) * var(--voqualizer-vu-level, 0));
+    min-height: 0;
+    border-radius: 0 0 999px 999px;
+    background: linear-gradient(0deg, rgba(46, 204, 113, 0.70), rgba(46, 204, 113, 0.28));
+    opacity: var(--voqualizer-vu-opacity, 0);
+    transform-origin: bottom center;
+    transition: height 70ms linear, opacity 120ms ease;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .voqualizer-mic.voqualizer-ptt .voqualizer-mic-vu {
+    background: linear-gradient(0deg, rgba(255, 149, 0, 0.75), rgba(255, 149, 0, 0.30));
+  }
+  .voqualizer-mic.voqualizer-error .voqualizer-mic-vu {
+    background: linear-gradient(0deg, rgba(255, 59, 48, 0.65), rgba(255, 59, 48, 0.20));
   }
   .voqualizer-idle {
     border-color: var(--color-border, rgba(255,255,255,0.15));
@@ -173,6 +199,12 @@
             mic.classList.toggle('voqualizer-ptt', visualClass === 'voqualizer-ptt');
             mic.classList.toggle('voqualizer-connecting', visualClass === 'voqualizer-connecting');
             mic.classList.toggle('voqualizer-error', visualClass === 'voqualizer-error');
+            const vuLevel = Math.max(0, Math.min(1, Number(s.micVuLevel || 0) || 0));
+            const vuActive = (s.state === STATE_CONVERSATIONAL || s.state === STATE_PTT_ACTIVE) && vuLevel > 0.01;
+            mic.style.setProperty('--voqualizer-vu-level', String(vuLevel));
+            mic.style.setProperty('--voqualizer-vu-opacity', vuActive ? '1' : '0');
+            mic.classList.toggle('voqualizer-vu-clipped', !!s.micVuClipped);
+            mic.setAttribute('data-voqualizer-vu-level', vuLevel.toFixed(2));
             mic.setAttribute('aria-pressed', String(s.state === STATE_CONVERSATIONAL || s.state === STATE_PTT_ACTIVE));
             mic.setAttribute('aria-label', micLabel);
             mic.setAttribute('title', `${micLabel} Last: ${s.lastTransitionReason || 'n/a'} / ${s.lastConnectPhase || 'n/a'}`);

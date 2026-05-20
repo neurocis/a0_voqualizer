@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Added a live VU-style level fill inside the dedicated Voqualizer Mic button using the existing AudioWorklet VU events.
 - Removed the compact Voqualizer status pill from the dedicated chat-input controls; the two Voq buttons now stand alone while preserving dynamic labels/tooltips.
 - Fixed the Providers page ASR pre-roll field so edits commit into the provider overlay before Save instead of snapping back to the default 600 ms.
 - Shared the tester-proven TTS playback primitives with in-GUI conversation mode, including codec/sample-rate normalization, playback-tail scheduling, PCM carry cleanup, and debug counters for TTS/agent/ASR events.

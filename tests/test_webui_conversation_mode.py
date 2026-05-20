@@ -172,3 +172,19 @@ def test_gui_tts_playback_uses_shared_parity_helpers():
     assert 'source.start(startAt)' in src
     assert 'this._playbackTail = startAt + buffer.duration' in src
     assert 'clearPcm16Carry(carryMap, utteranceId)' in src
+
+def test_conversation_mode_tracks_mic_vu_for_gui_meter():
+    s = CM.read_text()
+    for marker in (
+        'micVuLevel',
+        'micVuPeak',
+        'micVuRms',
+        'micVuClipped',
+        'lastMicVuAt',
+        '_handleMicVu(vu',
+        'onVu: (vu) => this._handleMicVu(vu)',
+        '_resetMicVu(reason',
+        'maybeLocalBargeInFromMic(vu, tracker)',
+    ):
+        assert marker in s, f'missing mic VU store marker {marker!r}'
+

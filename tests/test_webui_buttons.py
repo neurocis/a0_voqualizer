@@ -100,3 +100,17 @@ def test_extension_aria_markers_present():
     assert 'aria-pressed' in s
     assert 'aria-label="Voqualizer mic off.' in s
     assert 'aria-label="Voqualizer TTS is on.' in s
+
+def test_extension_renders_mic_vu_meter_inside_mic_button():
+    s = source()
+    for marker in (
+        'voqualizer-mic-vu',
+        '--voqualizer-vu-level',
+        '--voqualizer-vu-opacity',
+        'data-voqualizer-vu-level',
+        'micVuLevel',
+        'micVuClipped',
+        'voqualizer-vu-clipped',
+    ):
+        assert marker in s, f'missing mic VU marker {marker!r}'
+
