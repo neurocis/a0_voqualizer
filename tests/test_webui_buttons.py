@@ -114,3 +114,17 @@ def test_extension_renders_mic_vu_meter_inside_mic_button():
     ):
         assert marker in s, f'missing mic VU marker {marker!r}'
 
+
+
+def test_extension_mic_vu_meter_is_prominent():
+    s = source()
+    for marker in (
+        'radial-gradient(circle',
+        'drop-shadow(0 0 calc',
+        'transform: scale(calc',
+        '0.35 + (0.55 * var(--voqualizer-vu-level, 0))',
+        '.voqualizer-mic.voqualizer-active',
+        '.voqualizer-mic.voqualizer-ptt',
+        '.voqualizer-mic.voqualizer-vu-clipped .voqualizer-mic-vu',
+    ):
+        assert marker in s, f'missing prominent VU marker {marker!r}'

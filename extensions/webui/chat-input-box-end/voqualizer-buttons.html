@@ -111,24 +111,53 @@
   }
   .voqualizer-mic-vu {
     position: absolute;
-    left: 6px;
-    right: 6px;
-    bottom: 6px;
-    height: calc((100% - 12px) * var(--voqualizer-vu-level, 0));
-    min-height: 0;
-    border-radius: 0 0 999px 999px;
-    background: linear-gradient(0deg, rgba(46, 204, 113, 0.70), rgba(46, 204, 113, 0.28));
+    inset: 4px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% calc(100% - 8px),
+        rgba(46, 204, 113, calc(0.35 + (0.55 * var(--voqualizer-vu-level, 0)))) 0%,
+        rgba(46, 204, 113, calc(0.24 + (0.42 * var(--voqualizer-vu-level, 0)))) calc(32% + (42% * var(--voqualizer-vu-level, 0))),
+        transparent calc(34% + (42% * var(--voqualizer-vu-level, 0)))),
+      linear-gradient(0deg,
+        rgba(46, 204, 113, 0.92) 0%,
+        rgba(46, 204, 113, 0.58) calc(100% * var(--voqualizer-vu-level, 0)),
+        transparent calc(100% * var(--voqualizer-vu-level, 0)));
     opacity: var(--voqualizer-vu-opacity, 0);
-    transform-origin: bottom center;
-    transition: height 70ms linear, opacity 120ms ease;
+    transform: scale(calc(0.84 + (0.18 * var(--voqualizer-vu-level, 0))));
+    transform-origin: center;
+    transition: transform 65ms linear, opacity 100ms ease, filter 65ms linear;
+    filter: drop-shadow(0 0 calc(3px + (8px * var(--voqualizer-vu-level, 0))) rgba(46, 204, 113, 0.95));
     pointer-events: none;
     z-index: 1;
   }
+  .voqualizer-mic.voqualizer-active {
+    box-shadow:
+      0 0 0 2px rgba(46, 204, 113, 1) inset,
+      0 0 calc(7px + (12px * var(--voqualizer-vu-level, 0))) rgba(46, 204, 113, 0.62);
+  }
   .voqualizer-mic.voqualizer-ptt .voqualizer-mic-vu {
-    background: linear-gradient(0deg, rgba(255, 149, 0, 0.75), rgba(255, 149, 0, 0.30));
+    background:
+      radial-gradient(circle at 50% calc(100% - 8px),
+        rgba(255, 149, 0, calc(0.40 + (0.52 * var(--voqualizer-vu-level, 0)))) 0%,
+        rgba(255, 149, 0, calc(0.28 + (0.42 * var(--voqualizer-vu-level, 0)))) calc(32% + (42% * var(--voqualizer-vu-level, 0))),
+        transparent calc(34% + (42% * var(--voqualizer-vu-level, 0)))),
+      linear-gradient(0deg,
+        rgba(255, 149, 0, 0.95) 0%,
+        rgba(255, 149, 0, 0.62) calc(100% * var(--voqualizer-vu-level, 0)),
+        transparent calc(100% * var(--voqualizer-vu-level, 0)));
+    filter: drop-shadow(0 0 calc(4px + (9px * var(--voqualizer-vu-level, 0))) rgba(255, 149, 0, 0.95));
+  }
+  .voqualizer-mic.voqualizer-ptt {
+    box-shadow:
+      0 0 0 2px #ff9500 inset,
+      0 0 calc(8px + (13px * var(--voqualizer-vu-level, 0))) rgba(255, 149, 0, 0.68);
+  }
+  .voqualizer-mic.voqualizer-vu-clipped .voqualizer-mic-vu {
+    background: radial-gradient(circle, rgba(255, 59, 48, 0.96), rgba(255, 59, 48, 0.44), transparent 76%);
+    filter: drop-shadow(0 0 12px rgba(255, 59, 48, 0.95));
   }
   .voqualizer-mic.voqualizer-error .voqualizer-mic-vu {
-    background: linear-gradient(0deg, rgba(255, 59, 48, 0.65), rgba(255, 59, 48, 0.20));
+    background: radial-gradient(circle, rgba(255, 59, 48, 0.70), rgba(255, 59, 48, 0.28), transparent 76%);
   }
   .voqualizer-idle {
     border-color: var(--color-border, rgba(255,255,255,0.15));
@@ -138,11 +167,11 @@
     opacity: 0.45 !important;
     filter: grayscale(0.6);
   }
-  .voqualizer-active {
+  .voqualizer-button.voqualizer-active:not(.voqualizer-mic) {
     box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.95) inset, 0 0 8px rgba(46, 204, 113, 0.35);
     background: rgba(46, 204, 113, 0.12);
   }
-  .voqualizer-ptt {
+  .voqualizer-button.voqualizer-ptt:not(.voqualizer-mic) {
     box-shadow: 0 0 0 2px #ff9500 inset, 0 0 10px rgba(255, 149, 0, 0.40);
     background: rgba(255, 149, 0, 0.14);
   }
