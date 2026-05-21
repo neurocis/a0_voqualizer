@@ -57,9 +57,13 @@
 </div>
 
 <style>
-  /* Hide A0's native speech/mic button — Voqualizer replaces it */
+  /* Hide A0's native speech/mic buttons and the superordinates speech toggle
+     — Voqualizer replaces all speech controls */
   #microphone-button,
-  #stop-speech {
+  #stop-speech,
+  #progress-bar-stop-speech,
+  .a0-sup-prompt-speech-anchor,
+  .a0-sup-prompt-speech-button {
     display: none !important;
   }
 

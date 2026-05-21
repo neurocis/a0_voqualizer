@@ -1,6 +1,6 @@
 ## [Unreleased]
 - Move Voqualizer buttons inline with chat input row, next to send button
-- Hide A0 native speech/mic button when Voqualizer is active
+- Hide A0 native speech/mic button and superordinates speech toggle when Voqualizer is active
 - Changed GUI ASR final ACK handling to immediately blank-populate the informational prompt mirror after displaying final text, avoiding unreliable delayed timer clearing.
 - Added deadline/ACK-tick fallback clearing for GUI ASR prompt mirrors so final captions blank even if the browser timer is cancelled by later audio ACK activity.
 - Relaxed GUI ASR prompt mirror clear scheduling to use Voqualizer prompt ownership instead of an exact submission-mode string, so final ACK mirrors reliably blank-populate after display.

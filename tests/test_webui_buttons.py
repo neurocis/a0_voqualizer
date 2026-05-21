@@ -175,6 +175,7 @@ def test_rendered_response_tts_fallback_extension_exists():
 def test_native_mic_hidden():
     src = BUTTONS_HTML.read_text()
     assert '#microphone-button' in src, 'must reference native mic button'
+    assert '.a0-sup-prompt-speech' in src, 'must hide superordinates speech toggle'
     assert 'display: none' in src, 'must hide native mic button'
 
 def test_voqualizer_buttons_inline_positioning():
