@@ -57,14 +57,57 @@
 </div>
 
 <style>
+  /* Hide A0's native speech/mic button — Voqualizer replaces it */
+  #microphone-button,
+  #stop-speech {
+    display: none !important;
+  }
+
+  /* Position Voqualizer buttons inline with the chat input row,
+     immediately after the send button. The extension breakpoint
+     (chat-input-box-end) is outside .input-row, so we use CSS to
+     visually merge into the same line. */
   .voqualizer-buttons-row {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs, 6px);
-    margin-left: auto;
-    padding-left: var(--spacing-xs, 6px);
+    /* Pull up into the input row */
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    padding-right: var(--spacing-xs, 6px);
+    z-index: 10;
     min-width: 0;
   }
+
+  /* Make the parent x-extension container position-aware */
+  x-extension[id="chat-input-box-end"],
+  [id="chat-input-box-end"] {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .voqualizer-buttons-row,
+  .voqualizer-buttons-row * {
+    pointer-events: auto;
+  }
+
+  /* Ensure the parent container that holds input-row + extension is relative */
+  .input-row {
+    position: relative !important;
+  }
+
+  /* Add right padding to chat-buttons-wrapper so voqualizer buttons don't overlap send */
+  #chat-buttons-wrapper {
+    padding-right: calc(36px * 2 + var(--spacing-xs, 6px) * 3 + 4px) !important;
+  }
+
   .voqualizer-button {
     position: relative;
     width: 36px;

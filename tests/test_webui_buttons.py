@@ -170,3 +170,14 @@ def test_rendered_response_tts_fallback_extension_exists():
         'sessionStorage',
     ):
         assert marker in s, f'missing rendered response TTS fallback marker {marker!r}'
+
+
+def test_native_mic_hidden():
+    src = BUTTONS_HTML.read_text()
+    assert '#microphone-button' in src, 'must reference native mic button'
+    assert 'display: none' in src, 'must hide native mic button'
+
+def test_voqualizer_buttons_inline_positioning():
+    src = BUTTONS_HTML.read_text()
+    assert 'position: absolute' in src, 'must use absolute positioning for inline placement'
+    assert '#chat-buttons-wrapper' in src, 'must add padding to chat-buttons-wrapper'
