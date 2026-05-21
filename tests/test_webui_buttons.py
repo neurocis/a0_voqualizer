@@ -1,5 +1,6 @@
 """Source-level tests for the dedicated Voqualizer chat-input buttons."""
 from pathlib import Path
+import re
 
 PLUGIN = Path(__file__).resolve().parents[1]
 EXT = PLUGIN / 'extensions' / 'webui' / 'chat-input-box-end' / 'voqualizer-buttons.html'
@@ -180,5 +181,15 @@ def test_native_mic_hidden():
 
 def test_voqualizer_buttons_inline_positioning():
     src = BUTTONS_HTML.read_text()
-    assert 'position: absolute' in src, 'must use absolute positioning for inline placement'
-    assert '#chat-buttons-wrapper' in src, 'must add padding to chat-buttons-wrapper'
+    assert 'x-move-after="#send-button"' in src, 'must move Voqualizer buttons directly after send button'
+    assert 'display: inline-flex' in src, 'must render Voqualizer controls as inline flex buttons'
+    assert 'padding-right: calc(36px * 2' not in src, 'must not pad chat button row for overlay placement'
+
+    row_block = re.search(r'\.voqualizer-buttons-row\s*\{(?P<body>.*?)\n\s*\}', src, re.S)
+    assert row_block, 'must define voqualizer button row CSS'
+    assert 'position: absolute' not in row_block.group('body'), 'row must not use fragile absolute overlay positioning'
+
+    host_block = re.search(r'\[id="chat-input-box-end"\]\s*\{(?P<body>.*?)\n\s*\}', src, re.S)
+    assert host_block, 'must define chat-input-box-end host CSS'
+    assert 'display: contents' in host_block.group('body'), 'extension host should disappear after x-move-after relocation'
+    assert 'position: absolute' not in host_block.group('body'), 'extension host must not use overlay positioning'

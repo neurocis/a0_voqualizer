@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Align Voqualizer speaker/mic icons by moving them directly after the send button in the native chat button row.
 - Move Voqualizer buttons inline with chat input row, next to send button
 - Hide A0 native speech/mic button and superordinates speech toggle when Voqualizer is active
 - Changed GUI ASR final ACK handling to immediately blank-populate the informational prompt mirror after displaying final text, avoiding unreliable delayed timer clearing.

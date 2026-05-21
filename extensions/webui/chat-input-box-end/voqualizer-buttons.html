@@ -21,6 +21,7 @@
 <div
   x-data="a0VoqualizerButtons()"
   x-init="init()"
+  x-move-after="#send-button"
   data-a0-voqualizer-buttons="1"
   class="voqualizer-buttons-row"
 >
@@ -67,49 +68,24 @@
     display: none !important;
   }
 
-  /* Position Voqualizer buttons inline with the chat input row,
-     immediately after the send button. The extension breakpoint
-     (chat-input-box-end) is outside .input-row, so we use CSS to
-     visually merge into the same line. */
+  /* Move this extension into #chat-buttons-wrapper after #send-button via
+     x-move-after, then let the native chat button flex row align it naturally. */
   .voqualizer-buttons-row {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--spacing-xs, 6px);
-    /* Pull up into the input row */
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    padding-right: var(--spacing-xs, 6px);
-    z-index: 10;
-    min-width: 0;
+    margin: 0;
+    padding: 0;
+    line-height: 0.5rem;
+    flex: 0 0 auto;
+    vertical-align: middle;
   }
 
-  /* Make the parent x-extension container position-aware */
+  /* The extension host should disappear after x-move-after relocates the row. */
   x-extension[id="chat-input-box-end"],
   [id="chat-input-box-end"] {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    z-index: 10;
-    pointer-events: none;
-  }
-  .voqualizer-buttons-row,
-  .voqualizer-buttons-row * {
-    pointer-events: auto;
-  }
-
-  /* Ensure the parent container that holds input-row + extension is relative */
-  .input-row {
-    position: relative !important;
-  }
-
-  /* Add right padding to chat-buttons-wrapper so voqualizer buttons don't overlap send */
-  #chat-buttons-wrapper {
-    padding-right: calc(36px * 2 + var(--spacing-xs, 6px) * 3 + 4px) !important;
+    display: contents;
   }
 
   .voqualizer-button {
