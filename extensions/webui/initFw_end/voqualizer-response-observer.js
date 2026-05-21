@@ -12,6 +12,7 @@ const PENDING_ATTR = 'data-voqualizer-tts-pending';
 const SPOKEN_ATTR = 'data-voqualizer-tts-spoken';
 const FALLBACK_TIMEOUT_MS = 3500;   // safety net if no completion marker appears
 const MIN_STABILITY_MS = 600;       // require this much DOM-quiet before speaking
+const INSTALL_GRACE_MS = 3000;      // ignore responses observed during initial history render
 
 const pending = new Map(); // responseId -> { node, lastText, lastSeenAt, stabilityTimer, fallbackTimer, scheduledAt }
 
@@ -23,6 +24,7 @@ export default async function installVoqualizerResponseObserver() {
   state.installedAt = Date.now();
 
   const observer = new MutationObserver(() => {
+    if (!state.armedAt) return; // ignore mutations during grace period
     queueMicrotask(() => scanRenderedResponses('mutation'));
   });
 
@@ -42,8 +44,15 @@ export default async function installVoqualizerResponseObserver() {
     scan: () => scanRenderedResponses('manual'),
     pending,
   };
-  preMarkHistoricalResponses();
-  scanRenderedResponses('install');
+
+  // Defer pre-mark and arming until after A0 has had time to render the
+  // initial chat history. Before this fires, mutations are ignored so we do
+  // not try to speak historical responses that stream in during page load.
+  setTimeout(() => {
+    preMarkHistoricalResponses();
+    state.armedAt = Date.now();
+    scanRenderedResponses('armed');
+  }, INSTALL_GRACE_MS);
 }
 
 function preMarkHistoricalResponses() {
@@ -276,6 +285,9 @@ function ensureObserverDebugState() {
     lastCompleteSeen: false,
     lastConversationalSeen: false,
     speakAttemptCount: 0,
+    armedAt: 0,
+    installGraceMs: INSTALL_GRACE_MS,
+    preMarkedHistoricalCount: 0,
   };
   globalThis.__voqualizer_response_observer = state;
   return state;
