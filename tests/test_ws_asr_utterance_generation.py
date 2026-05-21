@@ -113,3 +113,13 @@ def test_frontend_prompt_mode_skips_context_bridge_injection():
     skip_idx = s.find('context_injection_skipped')
     inject_idx = s.find('bridge.inject_transcript')
     assert skip_idx != -1 and inject_idx != -1 and skip_idx < inject_idx
+
+
+def test_audio_ack_mirrors_latest_asr_transcript_metadata_for_gui_fallback():
+    source = WS_VOQUALIZER.read_text()
+    assert 'asr_last_partial_text' in source
+    assert 'asr_last_partial_metadata' in source
+    assert 'asr_last_final_text' in source
+    assert 'asr_last_final_metadata' in source
+    assert 'GUI conversation-mode fallback visibility' in source
+    assert 'server-pushed plugin events' in source

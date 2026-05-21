@@ -1284,7 +1284,7 @@ class WsVoqualizer(WsHandler):
                     await self._emit_transcript(session, result)
                     emitted += 1
 
-            return {
+            ack = {
                 "event": "voqualizer_audio_ack",
                 "session_id": session.session_id,
                 "seq": parsed.seq,
@@ -1293,6 +1293,24 @@ class WsVoqualizer(WsHandler):
                 "emitted": emitted,
                 "backpressure": session.backpressure_metrics(),
             }
+            # GUI conversation-mode fallback visibility.  In the full A0 GUI
+            # extension path, request ACKs are reliable even in cases where
+            # server-pushed plugin events (voqualizer_asr_partial/final) do not
+            # reach conversation-mode.js.  Mirror the latest transcript markers
+            # into ACKs so the GUI can populate the visible prompt as a robust
+            # fallback while keeping the normal context bridge path active.
+            for key in (
+                "asr_last_partial_text",
+                "asr_last_partial_metadata",
+                "asr_last_final_text",
+                "asr_last_final_metadata",
+                "context_injection_skipped",
+                "context_injections",
+                "context_injection_errors",
+            ):
+                if key in session.metadata:
+                    ack[key] = session.metadata.get(key)
+            return ack
         except (FrameError, CodecError, ASRError, ValueError, TypeError) as exc:
             if isinstance(exc, ASRError):
                 err = exc.to_dict()

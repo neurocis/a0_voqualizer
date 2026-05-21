@@ -137,6 +137,9 @@ export function createVoqualizerStore(options = {}) {
     lastConnectPhase: '',
     lastDisconnectReason: '',
     lastSocketEvent: '',
+    lastAnySocketEvent: '',
+    lastAnySocketPayloadKeys: '',
+    lastAnySocketEventAt: 0,
     lastTtsEnabledSent: null,
     lastTtsControlAck: null,
     lastTtsChunkAt: 0,
@@ -160,8 +163,13 @@ export function createVoqualizerStore(options = {}) {
     lastFinalFrameSentAt: 0,
     lastFinalFrameReason: '',
     lastAudioSeqSent: 0,
+    lastAudioAckAt: 0,
+    lastAudioAck: null,
+    lastAudioAckError: '',
+    lastAsrPartialAt: 0,
     lastAsrPartialText: '',
     lastAsrFinalText: '',
+    lastAckAsrFinalText: '',
     lastAsrFinalUtteranceId: '',
     asrPromptDraftOwned: false,
     lastAsrPartialPromptAt: 0,
@@ -169,6 +177,13 @@ export function createVoqualizerStore(options = {}) {
     lastPromptSubmitAt: 0,
     lastPromptSubmitText: '',
     lastPromptSubmitSkipReason: '',
+    lastPromptElementSelector: '',
+    lastAsrPromptSource: '',
+    lastAsrPromptMirrorAt: 0,
+    lastAsrPromptClearAt: 0,
+    lastAsrPromptClearScheduledAt: 0,
+    lastAsrPromptClearDueAt: 0,
+    lastAsrPromptClearReason: '',
     micVuLevel: 0,
     micVuPeak: 0,
     micVuRms: 0,
@@ -211,6 +226,7 @@ export function createVoqualizerStore(options = {}) {
     isTtsEnabled() { return !!this.ttsEnabledByContext[this.contextId]; },
     debugSnapshot() {
       return {
+    _asrPromptClearTimer: null,
         state: this.state,
         desiredMode: this.desiredMode,
         contextId: this.contextId,
@@ -237,6 +253,9 @@ export function createVoqualizerStore(options = {}) {
         lastConnectPhase: this.lastConnectPhase,
         lastDisconnectReason: this.lastDisconnectReason,
         lastSocketEvent: this.lastSocketEvent,
+        lastAnySocketEvent: this.lastAnySocketEvent,
+        lastAnySocketPayloadKeys: this.lastAnySocketPayloadKeys,
+        lastAnySocketEventAt: this.lastAnySocketEventAt,
         ttsEnabled: this.isTtsEnabled(),
         lastTtsEnabledSent: this.lastTtsEnabledSent,
         lastTtsControlAck: this.lastTtsControlAck,
@@ -261,8 +280,13 @@ export function createVoqualizerStore(options = {}) {
         lastFinalFrameSentAt: this.lastFinalFrameSentAt,
         lastFinalFrameReason: this.lastFinalFrameReason,
         lastAudioSeqSent: this.lastAudioSeqSent,
+        lastAudioAckAt: this.lastAudioAckAt,
+        lastAudioAck: this.lastAudioAck,
+        lastAudioAckError: this.lastAudioAckError,
+        lastAsrPartialAt: this.lastAsrPartialAt,
         lastAsrPartialText: this.lastAsrPartialText,
         lastAsrFinalText: this.lastAsrFinalText,
+        lastAckAsrFinalText: this.lastAckAsrFinalText,
         lastAsrFinalUtteranceId: this.lastAsrFinalUtteranceId,
         asrPromptDraftOwned: this.asrPromptDraftOwned,
         lastAsrPartialPromptAt: this.lastAsrPartialPromptAt,
@@ -270,6 +294,14 @@ export function createVoqualizerStore(options = {}) {
         lastPromptSubmitAt: this.lastPromptSubmitAt,
         lastPromptSubmitText: this.lastPromptSubmitText,
         lastPromptSubmitSkipReason: this.lastPromptSubmitSkipReason,
+        lastPromptElementSelector: this.lastPromptElementSelector,
+        lastAsrPromptSource: this.lastAsrPromptSource,
+        lastAsrPromptMirrorAt: this.lastAsrPromptMirrorAt,
+        lastAsrPromptClearAt: this.lastAsrPromptClearAt,
+        lastAsrPromptClearScheduledAt: this.lastAsrPromptClearScheduledAt,
+        lastAsrPromptClearDueAt: this.lastAsrPromptClearDueAt,
+        lastAsrPromptClearReason: this.lastAsrPromptClearReason,
+        lastAsrPromptGraceClearDelayMs: this.lastAsrPromptGraceClearDelayMs,
         audioFramesSent: this.audioFramesSent,
       };
     },
@@ -469,7 +501,7 @@ export function createVoqualizerStore(options = {}) {
               input_codec: INPUT_CODEC,
               output_codec: OUTPUT_CODEC,
               tts: { enabled: this.isTtsEnabled() },
-              asr_submit_mode: 'frontend_prompt',
+              asr_submit_mode: 'context_bridge',
             }, (response) => {
               if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) { finish(); return; }
               const data = this._unwrapPayload(response);
@@ -493,11 +525,28 @@ export function createVoqualizerStore(options = {}) {
         if (socket !== this._socket || !this._isGenerationCurrent(generation)) return;
         fn(payload);
       };
+      try {
+        if (socket.onAny) {
+          socket.onAny((eventName, payload) => {
+            if (socket !== this._socket || !this._isGenerationCurrent(generation)) return;
+            this.lastAnySocketEvent = String(eventName || '');
+            this.lastAnySocketEventAt = Date.now();
+            try {
+              const data = this._unwrapPayload(payload);
+              this.lastAnySocketPayloadKeys = data && typeof data === 'object' ? Object.keys(data).slice(0, 20).join(',') : '';
+            } catch (_e) {
+              this.lastAnySocketPayloadKeys = '';
+            }
+            this._publishDebug();
+          });
+        }
+      } catch (_e) {}
       socket.on('connect', guard(() => {
         this.lastSocketEvent = 'connect';
         if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) {
           this._setReason('socket_reconnect_ignored');
-          try { socket.disconnect(); } catch (_e) {}
+          try { socket.disconnect(); } catch (_e) {
+      this._cancelAsrPromptMirrorClear?.();}
           return;
         }
         this._setReason('connecting_socket', 'socket_connect');
@@ -701,10 +750,12 @@ export function createVoqualizerStore(options = {}) {
     },
     _promptElement() {
       const selectors = [
+        'textarea#chat-input',
+        '#chat-input',
+        'textarea[x-model="$store.chatInput.message"]',
         'textarea[name="message"]',
         'textarea#message',
         'textarea#prompt',
-        '#chat-input textarea',
         'textarea[x-model*="message"]',
         'textarea[x-model*="prompt"]',
         'textarea',
@@ -713,7 +764,7 @@ export function createVoqualizerStore(options = {}) {
       for (const selector of selectors) {
         try {
           const el = globalThis.document && globalThis.document.querySelector(selector);
-          if (el) return el;
+          if (el) { this.lastPromptElementSelector = selector; return el; }
         } catch (_e) {}
       }
       return null;
@@ -725,12 +776,21 @@ export function createVoqualizerStore(options = {}) {
     },
     _setPromptValue(el, text) {
       if (!el) return false;
+      const value = String(text || '');
+      try {
+        const chatInput = globalThis.Alpine && globalThis.Alpine.store && globalThis.Alpine.store('chatInput');
+        if (chatInput) {
+          chatInput.message = value;
+        }
+      } catch (_e) {}
       if (el.isContentEditable) {
-        el.textContent = text;
+        el.textContent = value;
       } else {
-        el.value = text;
+        el.value = value;
       }
-      try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e) {}
+      try { el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value })); } catch (_e) {
+        try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e2) {}
+      }
       try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
       return true;
     },
@@ -739,8 +799,9 @@ export function createVoqualizerStore(options = {}) {
       return !current || this.asrPromptDraftOwned || current === this.lastAsrPartialText || current === this.lastAsrFinalText;
     },
     _writeAsrPromptDraft(text, kind = 'partial') {
-      const draft = String(text || '').trim();
-      if (!draft) return false;
+      const isClearDraft = String(kind || '').toLowerCase().includes('clear');
+      const draft = isClearDraft ? '' : String(text || '').trim();
+      if (!draft && !isClearDraft) return false;
       const el = this._promptElement();
       if (!el) { this.lastPromptSubmitSkipReason = 'prompt_missing'; this._publishDebug(); return false; }
       if (!this._canOwnPrompt(el)) { this.lastPromptSubmitSkipReason = 'prompt_not_owned'; this._publishDebug(); return false; }
@@ -758,8 +819,32 @@ export function createVoqualizerStore(options = {}) {
       const el = this._promptElement();
       if (!el) { this.lastPromptSubmitSkipReason = 'prompt_missing'; this._publishDebug(); return false; }
       if (!this._writeAsrPromptDraft(finalText, 'final')) return false;
+      try {
+        const chatInput = globalThis.Alpine && globalThis.Alpine.store && globalThis.Alpine.store('chatInput');
+        if (chatInput && typeof chatInput.sendMessage === 'function') {
+          chatInput.sendMessage();
+          this.lastPromptSubmitAt = Date.now();
+          this.lastPromptSubmitText = finalText.slice(0, 160);
+          this.asrPromptDraftOwned = false;
+          this.lastPromptSubmitSkipReason = '';
+          this._publishDebug();
+          return true;
+        }
+      } catch (_e) {}
+      try {
+        if (typeof globalThis.sendMessage === 'function') {
+          globalThis.sendMessage();
+          this.lastPromptSubmitAt = Date.now();
+          this.lastPromptSubmitText = finalText.slice(0, 160);
+          this.asrPromptDraftOwned = false;
+          this.lastPromptSubmitSkipReason = '';
+          this._publishDebug();
+          return true;
+        }
+      } catch (_e) {}
       const selectors = [
         '#send-button',
+        'button[aria-label="Send message"]',
         'button[type="submit"]',
         'button[aria-label="Send"]',
         'button[title="Send"]',
@@ -795,19 +880,171 @@ export function createVoqualizerStore(options = {}) {
       this._publishDebug();
       return false;
     },
+    _mirrorAsrTextToPrompt(text, kind = 'partial', source = 'event') {
+      const value = String(text || '').trim();
+      if (!value) return false;
+      const ok = this._writeAsrPromptDraft(value, kind);
+      if (ok) {
+        this.lastAsrPromptSource = source;
+        this.lastAsrPromptMirrorAt = Date.now();
+      const mirrorKind = String(kind || '').toLowerCase();
+      const mirrorSource = String(source || '').toLowerCase();
+      const isFinalMirror = mirrorKind.includes('final') || mirrorSource.includes('final');
+      const isPartialMirror = mirrorKind.includes('partial') || mirrorSource.includes('partial');
+      if (isFinalMirror && this.asrPromptDraftOwned) {
+        this._scheduleAsrPromptMirrorClear('context_bridge_final_blank_populate');
+      } else if (isPartialMirror && !Number(this.lastAsrPromptClearDueAt || 0)) {
+        this._cancelAsrPromptMirrorClear();
+      }
+        this._publishDebug();
+      }
+      return ok;
+    },
+    _cancelAsrPromptMirrorClear() {
+      if (this._asrPromptClearTimer) {
+        clearTimeout(this._asrPromptClearTimer);
+        this._asrPromptClearTimer = null;
+      }
+    },
+
+    _clearAsrPromptMirror(reason = 'context_bridge_final_blank_populate') {
+      if (this._asrPromptClearTimer) {
+        clearTimeout(this._asrPromptClearTimer);
+        this._asrPromptClearTimer = null;
+      }
+      if (!this.asrPromptDraftOwned) {
+        this.lastAsrPromptClearReason = 'prompt_not_owned';
+        this._publishDebug();
+        return false;
+      }
+
+      // Clearing reuses the same path that successfully mirrors ASR text into
+      // A0's prompt, but with a blank value.  Ownership is the safety gate;
+      // do not compare transcript text because ASR punctuation/casing can drift.
+      const ok = this._writeAsrPromptDraft('', 'clear');
+      if (!ok) {
+        this.lastAsrPromptClearReason = 'blank_populate_failed';
+        this._publishDebug();
+        return false;
+      }
+
+      this.asrPromptDraftOwned = false;
+      this.lastAsrPromptClearDueAt = 0;
+      this.lastAsrPromptClearAt = Date.now();
+      this.lastAsrPromptClearReason = reason;
+      this._publishDebug();
+      return true;
+    },
+
+
+    _maybeClearAsrPromptMirror(reason = 'ack_tick_due') {
+      if (!this.asrPromptDraftOwned) return false;
+      const dueAt = Number(this.lastAsrPromptClearDueAt || 0);
+      if (!dueAt || Date.now() < dueAt) return false;
+      return this._clearAsrPromptMirror(reason);
+    },
+
+    _scheduleFinalAsrPromptMirrorClear(reason = 'context_bridge_final_blank_populate') {
+      if (!this.asrPromptDraftOwned) return false;
+      this._scheduleAsrPromptMirrorClear(reason);
+      this._publishDebug();
+      return true;
+    },
+
+    _scheduleAsrPromptMirrorClear(reason = 'context_bridge_final_blank_populate') {
+      this._cancelAsrPromptMirrorClear();
+      this.lastAsrPromptClearScheduledAt = Date.now();
+      const delay = Math.max(100, Number(this.lastAsrPromptGraceClearDelayMs || 900));
+      this.lastAsrPromptClearDueAt = this.lastAsrPromptClearScheduledAt + delay;
+      this._publishDebug?.();
+      this._asrPromptClearTimer = setTimeout(() => {
+        this._asrPromptClearTimer = null;
+        this._maybeClearAsrPromptMirror(reason);
+      }, delay);
+    },
+
+
+    _handleAudioAckForAsr(data) {
+      if (!data || typeof data !== 'object') return;
+      this._maybeClearAsrPromptMirror('ack_tick_due');
+      const injectionCount = Number(data?.context_injections || 0);
+      if (injectionCount > Number(this.lastContextInjectionCount || 0)) {
+        this.lastContextInjectionCount = injectionCount;
+        this.lastContextInjectionAckAt = Date.now();
+        this._clearAsrPromptMirror('context_bridge_submitted');
+      }
+
+      const finalText = String(data.asr_last_final_text || '').trim();
+      if (finalText && finalText === this.lastAckAsrFinalText && this.asrPromptDraftOwned) {
+        this._clearAsrPromptMirror('ack_final_duplicate_blank_populate');
+      }
+      if (finalText && finalText !== this.lastAckAsrFinalText && finalText !== this.lastAsrFinalText) {
+        this.lastAckAsrFinalText = finalText;
+        this.asrFinalCount += 1;
+        this.lastAsrFinalText = finalText.slice(0, 160);
+        this._clearMicSpeech('asr_final_ack_received');
+        // ACK fallback mirrors text into the visible prompt, but intentionally
+        // does not click Send. The GUI remains in context_bridge mode so the
+        // backend context injection is the canonical prompt submission path;
+        // auto-submitting here would risk duplicate prompts.
+        const mirrored = this._mirrorAsrTextToPrompt(finalText, 'final', 'audio_ack_final');
+        if (mirrored) {
+          this._clearAsrPromptMirror('audio_ack_final_blank_populate');
+        }
+        this._publishDebug();
+        return;
+      }
+      const partialText = String(data.asr_last_partial_text || '').trim();
+      if (partialText && partialText !== this.lastAsrPartialText) {
+        this.lastAsrPartialAt = Date.now();
+        this.lastAsrPartialText = partialText.slice(0, 160);
+        this._mirrorAsrTextToPrompt(partialText, 'partial', 'audio_ack_partial');
+        this._publishDebug();
+      }
+    },
     _sendAudio(pcm16, seq, tsMs, generation = this.connectionGeneration) {
       if (!this._isGenerationCurrent(generation)) return;
       if (!this._socket || !this.bearerToken || this.desiredMode === DESIRED_IDLE) return;
       this.seq = ((seq | 0) || (this.seq + 1)) & 0xffff;
       const tsRel = ((tsMs | 0) || (Date.now() - this.startTs)) & 0xffff;
       const payload = audioChunkPayload(this.seq, tsRel, pcm16, { bearer_token: this.bearerToken });
-      try { this._socket.emit('voqualizer_audio_chunk', payload); this.audioFramesSent += 1; this.lastAudioSeqSent = this.seq; this._publishDebug(); } catch (_e) {}
+      try {
+        this._socket.emit('voqualizer_audio_chunk', payload, (ack) => {
+          const data = this._unwrapPayload(ack);
+          this.lastAudioAckAt = Date.now();
+          this.lastAudioAck = data;
+          this.lastAudioAckError = data && (data.code || data.error || data.message) ? String(data.code || data.error || data.message) : '';
+          this._handleAudioAckForAsr(data);
+          this._publishDebug();
+        });
+        this.audioFramesSent += 1;
+        this.lastAudioSeqSent = this.seq;
+        this._publishDebug();
+      } catch (err) {
+        this.lastAudioAckError = err && err.message ? err.message : String(err || 'audio_emit_failed');
+        this._publishDebug();
+      }
     },
     async _sendFinalFrame(generation = this.connectionGeneration) {
       if (!this._isGenerationCurrent(generation)) return;
       if (!this._socket || !this.bearerToken) return;
       const payload = audioChunkPayload((this.seq + 1) & 0xffff, ((Date.now() - this.startTs) & 0xffff), new Uint8Array(0), { bearer_token: this.bearerToken, is_final: true });
-      try { this._socket.emit('voqualizer_audio_chunk', payload); this.lastFinalFrameSentAt = Date.now(); this.lastFinalFrameReason = this._pttOverlay ? 'ptt_overlay_release' : 'ptt_release'; this._clearMicSpeech('final_frame_sent'); } catch (_e) {}
+      try {
+        this._socket.emit('voqualizer_audio_chunk', payload, (ack) => {
+          const data = this._unwrapPayload(ack);
+          this.lastAudioAckAt = Date.now();
+          this.lastAudioAck = data;
+          this.lastAudioAckError = data && (data.code || data.error || data.message) ? String(data.code || data.error || data.message) : '';
+          this._handleAudioAckForAsr(data);
+          this._publishDebug();
+        });
+        this.lastFinalFrameSentAt = Date.now();
+        this.lastFinalFrameReason = this._pttOverlay ? 'ptt_overlay_release' : 'ptt_release';
+        this._clearMicSpeech('final_frame_sent');
+      } catch (err) {
+        this.lastAudioAckError = err && err.message ? err.message : String(err || 'final_audio_emit_failed');
+        this._publishDebug();
+      }
     },
     _handleAgentFinal(payload) {
       const data = this._unwrapPayload(payload);
@@ -820,8 +1057,9 @@ export function createVoqualizerStore(options = {}) {
     _handleAsrPartial(payload) {
       const data = this._unwrapPayload(payload);
       const text = String(data.text || '').trim();
+      this.lastAsrPartialAt = Date.now();
       this.lastAsrPartialText = text.slice(0, 160);
-      if (text) this._writeAsrPromptDraft(text, 'partial');
+      if (text) this._mirrorAsrTextToPrompt(text, 'partial', 'asr_partial_event');
       this._publishDebug();
     },
     _handleAsrFinal(payload) {
@@ -831,7 +1069,12 @@ export function createVoqualizerStore(options = {}) {
       this.lastAsrFinalText = text.slice(0, 160);
       this.lastAsrFinalUtteranceId = String((data.metadata && data.metadata.utterance_id) || data.utterance_id || '');
       this._clearMicSpeech('asr_final_received');
-      if (text) this._submitPromptFromAsr(text);
+      if (text) {
+        const mirrored = this._mirrorAsrTextToPrompt(text, 'final', 'asr_final_event');
+        if (mirrored) {
+          this._clearAsrPromptMirror('asr_final_event_blank_populate');
+        }
+      }
       this._publishDebug();
     },
     async _handleTtsChunk(payload) {

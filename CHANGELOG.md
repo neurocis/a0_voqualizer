@@ -1,4 +1,10 @@
 ## [Unreleased]
+- Changed GUI ASR final ACK handling to immediately blank-populate the informational prompt mirror after displaying final text, avoiding unreliable delayed timer clearing.
+- Added deadline/ACK-tick fallback clearing for GUI ASR prompt mirrors so final captions blank even if the browser timer is cancelled by later audio ACK activity.
+- Relaxed GUI ASR prompt mirror clear scheduling to use Voqualizer prompt ownership instead of an exact submission-mode string, so final ACK mirrors reliably blank-populate after display.
+- Updated GUI ASR prompt mirror clearing to reuse the proven prompt-populate path with blank text after final ACKs, avoiding brittle transcript equality checks.
+- Added a grace-clear for GUI ASR prompt mirroring so display-only transcripts are removed after backend context_bridge submission/finalization without auto-submitting from the textbox.
+- Added a GUI ASR prompt mirroring fallback that carries latest ASR transcript markers on audio ACKs when pushed ASR events do not reach conversation mode.
 - Added GUI ASR dictation mode: partial transcripts populate the A0 prompt box live, final transcripts submit through the normal A0 send path, and backend context injection is skipped for that GUI mode to avoid duplicate prompts.
 - Added a browser-side rendered-response TTS fallback that sends visible assistant responses through `voqualizer_user_text`, so in-GUI TTS can work independently of ASR and Python finalization-hook timing.
 - Fixed live in-GUI TTS finalization so assistant responses can route to TTS from the context response log/response_stream_end path, independent of ASR state, with duplicate suppression and streaming session fallback diagnostics.

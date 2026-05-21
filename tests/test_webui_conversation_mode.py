@@ -269,3 +269,104 @@ def test_gui_asr_partials_populate_prompt_and_final_submits():
         "send_control_missing",
     ):
         assert marker in s, f'missing GUI ASR prompt marker {marker!r}'
+
+
+def test_gui_asr_ack_fallback_mirrors_prompt_without_autosubmit():
+    source = CONVERSATION_MODE.read_text()
+    assert "asr_submit_mode: 'context_bridge'" in source
+    assert '_handleAudioAckForAsr(data)' in source
+    assert 'data.asr_last_final_text' in source
+    assert "audio_ack_final" in source
+    assert "audio_ack_partial" in source
+    assert "does not click Send" in source
+    assert "auto-submitting here would risk duplicate prompts" in source
+    assert 'lastAsrPromptSource' in source
+    assert 'lastAsrPromptMirrorAt' in source
+
+
+def test_gui_asr_prompt_targets_a0_chat_input_store():
+    source = CONVERSATION_MODE.read_text()
+    assert "textarea#chat-input" in source
+    assert "Alpine.store('chatInput')" in source
+    assert 'chatInput.message = value' in source
+    assert 'lastPromptElementSelector' in source
+
+
+def test_gui_asr_display_mirror_clears_after_context_bridge_final():
+    s = CONVERSATION_MODE.read_text()
+    for marker in (
+        '_scheduleAsrPromptMirrorClear',
+        '_clearAsrPromptMirror',
+        'context_bridge_final_blank_populate',
+        'context_bridge_submitted',
+        'lastAsrPromptClearAt',
+        'lastAsrPromptClearScheduledAt',
+        'lastAsrPromptClearReason',
+        'lastAsrPromptGraceClearDelayMs',
+    ):
+        assert marker in s, f'missing ASR prompt clear marker {marker!r}'
+
+
+def test_gui_asr_grace_clear_detects_final_ack_sources():
+    s = CONVERSATION_MODE.read_text()
+    assert "mirrorSource.includes('final')" in s
+    assert "mirrorKind.includes('final')" in s
+    assert 'audio_ack_final' in s
+    assert 'lastAsrPromptClearScheduledAt' in s
+
+
+def test_gui_asr_ack_final_directly_schedules_grace_clear():
+    s = CONVERSATION_MODE.read_text()
+    assert "const mirrored = this._mirrorAsrTextToPrompt(finalText, 'final', 'audio_ack_final');" in s
+    assert "if (mirrored && this.asrPromptSubmissionMode === 'context_bridge_display_only')" in s
+    assert "this._scheduleAsrPromptMirrorClear('context_bridge_final_blank_populate');" in s
+
+
+def test_gui_asr_final_ack_uses_simple_clear_scheduler():
+    s = CONVERSATION_MODE.read_text()
+    assert '_scheduleFinalAsrPromptMirrorClear' in s
+    assert "this._scheduleFinalAsrPromptMirrorClear('context_bridge_final_blank_populate');" in s
+    assert "this._scheduleFinalAsrPromptMirrorClear('ack_final_duplicate_blank_populate');" in s
+    assert 'this._publishDebug?.();' in s
+
+
+def test_gui_asr_clear_uses_blank_populate_path():
+    s = CONVERSATION_MODE.read_text()
+    assert "const isClearDraft = String(kind || '').toLowerCase().includes('clear');" in s
+    assert "const ok = this._writeAsrPromptDraft('', 'clear');" in s
+    assert 'context_bridge_final_blank_populate' in s
+    assert 'blank_populate_failed' in s
+    clear_block = s[s.find('_clearAsrPromptMirror'):s.find('_scheduleFinalAsrPromptMirrorClear')]
+    assert 'current.trim()' not in clear_block
+    assert 'draft.trim()' not in clear_block
+
+
+def test_gui_asr_clear_scheduling_uses_ownership_not_mode_string():
+    s = CONVERSATION_MODE.read_text()
+    schedule_block = s[s.find('_scheduleFinalAsrPromptMirrorClear'):s.find('_scheduleAsrPromptMirrorClear')]
+    assert "asrPromptSubmissionMode !== 'context_bridge_display_only'" not in schedule_block
+    assert 'if (!this.asrPromptDraftOwned) return false;' in schedule_block
+    assert 'this._scheduleAsrPromptMirrorClear' in schedule_block
+    assert "if (isFinalMirror && this.asrPromptDraftOwned)" in s
+    assert "if (mirrored && this.asrPromptDraftOwned)" in s
+
+
+def test_gui_asr_clear_has_due_at_and_ack_tick_fallback():
+    s = CONVERSATION_MODE.read_text()
+    assert 'lastAsrPromptClearDueAt' in s
+    assert '_maybeClearAsrPromptMirror' in s
+    assert "this._maybeClearAsrPromptMirror('ack_tick_due');" in s
+    assert 'Date.now() < dueAt' in s
+    assert 'this.lastAsrPromptClearDueAt = this.lastAsrPromptClearScheduledAt + delay;' in s
+    assert "isPartialMirror && !Number(this.lastAsrPromptClearDueAt || 0)" in s
+
+
+def test_gui_asr_final_ack_immediately_blank_populates_after_mirror():
+    s = CONVERSATION_MODE.read_text()
+    assert "const mirrored = this._mirrorAsrTextToPrompt(finalText, 'final', 'audio_ack_final');" in s
+    assert "this._clearAsrPromptMirror('audio_ack_final_blank_populate');" in s
+    assert "this._clearAsrPromptMirror('ack_final_duplicate_blank_populate');" in s
+    ack_block = s[s.find('const finalText = String(data.asr_last_final_text'):s.find('const partialText = String(data.asr_last_partial_text')]
+    assert "this._scheduleFinalAsrPromptMirrorClear('context_bridge_final_blank_populate');" not in ack_block
+    assert "this._scheduleAsrPromptMirrorClear('context_bridge_final_blank_populate');" not in ack_block
+    assert "const ok = this._writeAsrPromptDraft('', 'clear');" in s
