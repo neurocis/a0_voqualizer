@@ -1,4 +1,9 @@
 ## [Unreleased]
+- Debounced GUI response observer so partially streamed assistant responses no longer trigger early or duplicate TTS playback.
+- Added direct GUI TTS ack-chunk playback fallback so synthesized audio can still play when Socket.IO pushed chunk events are not observed by the browser.
+- Added GUI/backend diagnostics for direct TTS push delivery when synthesis succeeds but browser chunk events are not observed.
+- Hardened GUI direct TTS so it repairs missing passive sessions before speaking and retries failed observer speech attempts instead of marking them spoken.
+- Added a GUI rendered-response observer fallback so Voqualizer TTS can speak visible assistant responses when backend final events are not delivered.
 - Align Voqualizer speaker/mic icons by moving them directly after the send button in the native chat button row.
 - Move Voqualizer buttons inline with chat input row, next to send button
 - Hide A0 native speech/mic button and superordinates speech toggle when Voqualizer is active

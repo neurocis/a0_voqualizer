@@ -1348,7 +1348,7 @@ class WsVoqualizer(WsHandler):
         session.metadata["tts_provider_instance"] = provider
         return provider
 
-    async def _emit_tts_chunk(self, session: BridgeSession, chunk: TTSAudioChunk) -> None:
+    async def _emit_tts_chunk(self, session: BridgeSession, chunk: TTSAudioChunk) -> dict[str, Any]:
         payload = chunk.event_payload()
         event = payload.pop("event")
         payload["session_id"] = session.session_id
@@ -1363,6 +1363,14 @@ class WsVoqualizer(WsHandler):
         if session.sender is not None:
             await session.sender(event, payload)
 
+        # Also return a JSON-safe copy for direct-TTS acknowledgement fallback.
+        # The GUI uses this when synthesized chunks are counted by the backend
+        # but pushed Socket.IO chunk events are not observed by the browser.
+        ack_payload = dict(payload)
+        ack_payload["event"] = event
+        ack_payload.pop("audio", None)
+        return ack_payload
+
     async def _emit_tts_done(
         self,
         session: BridgeSession,
@@ -1371,17 +1379,21 @@ class WsVoqualizer(WsHandler):
         cancelled: bool = False,
         chunks: int = 0,
         reason: str | None = None,
-    ) -> None:
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "event": "voqualizer_tts_done",
+            "session_id": session.session_id,
+            "utterance_id": utterance_id,
+            "cancelled": cancelled,
+            "chunks": chunks,
+        }
+        if reason:
+            payload["reason"] = reason
         if session.sender is not None:
-            payload: dict[str, Any] = {
-                "session_id": session.session_id,
-                "utterance_id": utterance_id,
-                "cancelled": cancelled,
-                "chunks": chunks,
-            }
-            if reason:
-                payload["reason"] = reason
-            await session.sender("voqualizer_tts_done", payload)
+            emit_payload = dict(payload)
+            emit_payload.pop("event", None)
+            await session.sender("voqualizer_tts_done", emit_payload)
+        return payload
 
     async def _emit_tts_error(self, session: BridgeSession, err: TTSError) -> None:
         if session.sender is not None:
@@ -1470,6 +1482,7 @@ class WsVoqualizer(WsHandler):
         )
 
         chunks = 0
+        ack_tts_chunks: list[dict[str, Any]] = []
         try:
             provider = await self._tts_provider_for_session(session, cfg)
             session.metadata["tts_active_utterance_id"] = utterance_id
@@ -1492,7 +1505,8 @@ class WsVoqualizer(WsHandler):
                         "utterance_id": utterance_id,
                         "chunks": chunks,
                     }
-                await self._emit_tts_chunk(session, chunk)
+                ack_chunk = await self._emit_tts_chunk(session, chunk)
+                ack_tts_chunks.append(ack_chunk)
                 chunks += 1
                 session.metadata["tts_chunks_emitted"] = chunks
                 if session.cancel_tts.is_set():
@@ -1509,12 +1523,15 @@ class WsVoqualizer(WsHandler):
                         "utterance_id": utterance_id,
                         "chunks": chunks,
                     }
-            await self._emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
+            ack_tts_done = await self._emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
             return {
                 "event": "voqualizer_tts_ack",
                 "session_id": session.session_id,
                 "utterance_id": utterance_id,
                 "chunks": chunks,
+                "tts_chunks": ack_tts_chunks,
+                "tts_done": ack_tts_done,
+                "delivery_fallback": "ack_chunks",
             }
         except TTSError as exc:
             await self._emit_tts_error(session, exc)

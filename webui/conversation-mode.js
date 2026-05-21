@@ -37,12 +37,14 @@ export const STATE_IDLE = 'idle';
 export const STATE_CONNECTING = 'connecting';
 export const STATE_CONVERSATIONAL = 'conversational';
 export const STATE_PTT_ACTIVE = 'ptt-active';
+export const STATE_TTS_READY = 'tts-ready';
 export const STATE_STOPPING = 'stopping';
 export const STATE_ERROR = 'error';
 
 export const DESIRED_IDLE = 'idle';
 export const DESIRED_CONVERSATIONAL = 'conversational';
 export const DESIRED_PTT = 'ptt';
+export const DESIRED_TTS = 'tts';
 
 function normalizeContextCandidate(value) {
   if (value == null) return '';
@@ -148,6 +150,13 @@ export function createVoqualizerStore(options = {}) {
     lastTtsUtteranceId: '',
     lastTtsSkipReason: '',
     lastPlaybackStartAt: 0,
+    lastRawTtsPushEvent: '',
+    lastRawTtsPushAt: 0,
+    lastRawTtsPushKeys: '',
+    lastRawTtsPushDataKeys: '',
+    lastAckTtsFallbackAt: 0,
+    lastAckTtsFallbackChunks: 0,
+    lastAckTtsFallbackReason: '',
     ttsChunkCount: 0,
     ttsDoneCount: 0,
     agentFinalCount: 0,
@@ -213,6 +222,7 @@ export function createVoqualizerStore(options = {}) {
       try { globalThis.addEventListener && globalThis.addEventListener('a0:context-changed', this._contextHandler); } catch (_e) {}
       this._ctxPoll = setInterval(() => this._observeContextChange(currentContextId(), 'poll'), 500);
       this._publishDebug();
+      if (this.isTtsEnabled()) this._ensurePassiveTtsSession('init_tts_passive_connect');
       return this;
     },
     destroy() {
@@ -265,6 +275,13 @@ export function createVoqualizerStore(options = {}) {
         lastTtsUtteranceId: this.lastTtsUtteranceId,
         lastTtsSkipReason: this.lastTtsSkipReason,
         lastPlaybackStartAt: this.lastPlaybackStartAt,
+        lastRawTtsPushEvent: this.lastRawTtsPushEvent,
+        lastRawTtsPushAt: this.lastRawTtsPushAt,
+        lastRawTtsPushKeys: this.lastRawTtsPushKeys,
+        lastRawTtsPushDataKeys: this.lastRawTtsPushDataKeys,
+        lastAckTtsFallbackAt: this.lastAckTtsFallbackAt,
+        lastAckTtsFallbackChunks: this.lastAckTtsFallbackChunks,
+        lastAckTtsFallbackReason: this.lastAckTtsFallbackReason,
         ttsChunkCount: this.ttsChunkCount,
         ttsDoneCount: this.ttsDoneCount,
         agentFinalCount: this.agentFinalCount,
@@ -318,6 +335,25 @@ export function createVoqualizerStore(options = {}) {
       if (!current) this._setReason('stale_generation_ignored');
       return current;
     },
+    _wantsPassiveTtsSession() {
+      return this.isTtsEnabled() && !this.conversational && !this.pttActive && !this.capturing;
+    },
+    async _ensurePassiveTtsSession(reason = 'tts_passive_connect') {
+      if (!this.isTtsEnabled()) return;
+      if (this._socket && this.bearerToken) {
+        if (this.desiredMode === DESIRED_IDLE) this.desiredMode = DESIRED_TTS;
+        if (this.state === STATE_IDLE || this.state === STATE_CONNECTING) this.state = STATE_TTS_READY;
+        this._setReason(reason);
+        return;
+      }
+      const generation = this._beginLifecycle(DESIRED_TTS, reason);
+      await this._ensureConnected(generation);
+      if (!this._isGenerationCurrent(generation) || this.desiredMode !== DESIRED_TTS) return;
+      this.conversational = false;
+      this.pttActive = false;
+      this.state = STATE_TTS_READY;
+      this._setReason('tts_passive_ready');
+    },
     _observeContextChange(rawId, source = 'poll') {
       const cur = normalizeContextCandidate(rawId);
       if (!cur) {
@@ -362,8 +398,9 @@ export function createVoqualizerStore(options = {}) {
       this.pttActive = false;
       this.state = STATE_IDLE;
       this._publishDebug();
+      if (this.isTtsEnabled()) await this._ensurePassiveTtsSession('context_changed_tts_passive_connect');
     },
-    toggleTts() {
+    async toggleTts() {
       const enabled = !this.isTtsEnabled();
       this.ttsEnabledByContext[this.contextId] = enabled;
       writeTtsEnabled(this.contextId, enabled);
@@ -382,20 +419,36 @@ export function createVoqualizerStore(options = {}) {
           });
         } catch (_e) {}
       }
+      if (enabled) {
+        await this._ensurePassiveTtsSession('tts_enabled_passive_connect');
+      } else if (!this.conversational && !this.pttActive && !this.capturing) {
+        this.desiredMode = DESIRED_IDLE;
+        this.connectionGeneration += 1;
+        await this._disconnect('tts_disabled_passive_disconnect');
+        this.state = STATE_IDLE;
+        this._publishDebug();
+      }
     },
     async onTap() {
       if (this.state === STATE_CONNECTING || this.state === STATE_STOPPING) return;
       if (this.state === STATE_CONVERSATIONAL || this.desiredMode === DESIRED_CONVERSATIONAL) {
         this._setReason('manual_stop');
-        this.desiredMode = DESIRED_IDLE;
-        this.intentionalDisconnect = true;
-        this.connectionGeneration += 1;
         this.state = STATE_STOPPING;
         await this._stopMic('manual_stop');
-        await this._disconnect('manual_stop');
         this.conversational = false;
         this.pttActive = false;
-        this.state = STATE_IDLE;
+        if (this.isTtsEnabled()) {
+          this.desiredMode = DESIRED_TTS;
+          this.intentionalDisconnect = false;
+          this.state = STATE_TTS_READY;
+          this._setReason('manual_stop_tts_passive');
+        } else {
+          this.desiredMode = DESIRED_IDLE;
+          this.intentionalDisconnect = true;
+          this.connectionGeneration += 1;
+          await this._disconnect('manual_stop');
+          this.state = STATE_IDLE;
+        }
         this._publishDebug();
         return;
       }
@@ -434,15 +487,22 @@ export function createVoqualizerStore(options = {}) {
         this.state = STATE_CONVERSATIONAL;
         this._setReason('ptt_final_overlay');
       } else {
-        this.desiredMode = DESIRED_IDLE;
-        this.intentionalDisconnect = true;
-        this.connectionGeneration += 1;
         this.state = STATE_STOPPING;
         await this._stopMic('ptt_release');
-        await this._disconnect('ptt_release');
         this.conversational = false;
-        this.state = STATE_IDLE;
-        this._setReason('ptt_final_disconnect');
+        if (this.isTtsEnabled()) {
+          this.desiredMode = DESIRED_TTS;
+          this.intentionalDisconnect = false;
+          this.state = STATE_TTS_READY;
+          this._setReason('ptt_final_tts_passive');
+        } else {
+          this.desiredMode = DESIRED_IDLE;
+          this.intentionalDisconnect = true;
+          this.connectionGeneration += 1;
+          await this._disconnect('ptt_release');
+          this.state = STATE_IDLE;
+          this._setReason('ptt_final_disconnect');
+        }
       }
       this._pttOverlay = false;
       this._publishDebug();
@@ -507,6 +567,7 @@ export function createVoqualizerStore(options = {}) {
               const data = this._unwrapPayload(response);
               this.sessionId = data.session_id || this.sessionId;
               this.bearerToken = data.bearer_token || this.bearerToken;
+              if (this.desiredMode === DESIRED_TTS) this.state = STATE_TTS_READY;
               this._setReason('ready', 'init_ack');
               finish();
             });
@@ -589,13 +650,20 @@ export function createVoqualizerStore(options = {}) {
         const data = this._unwrapPayload(payload);
         this.sessionId = data.session_id || this.sessionId;
         this.bearerToken = data.bearer_token || this.bearerToken;
+        if (this.desiredMode === DESIRED_TTS) this.state = STATE_TTS_READY;
         this._setReason('ready', 'ready_event');
       }));
       socket.on('voqualizer_agent_response_final', guard((payload) => this._handleAgentFinal(payload)));
       socket.on('voqualizer_asr_partial', guard((payload) => this._handleAsrPartial(payload)));
       socket.on('voqualizer_asr_final', guard((payload) => this._handleAsrFinal(payload)));
-      socket.on('voqualizer_tts_chunk', guard((payload) => this._handleTtsChunk(payload)));
-      socket.on('voqualizer_tts_done', guard((payload) => this._handleTtsDone(payload)));
+      socket.on('voqualizer_tts_chunk', guard((payload) => {
+        this._recordRawTtsPush('voqualizer_tts_chunk', payload);
+        this._handleTtsChunk(payload);
+      }));
+      socket.on('voqualizer_tts_done', guard((payload) => {
+        this._recordRawTtsPush('voqualizer_tts_done', payload);
+        this._handleTtsDone(payload);
+      }));
       socket.on('voqualizer_error', guard((payload) => {
         if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) return;
         const data = this._unwrapPayload(payload);
@@ -703,11 +771,14 @@ export function createVoqualizerStore(options = {}) {
         this._publishDebug();
         return { ok: false, reason: 'tts_disabled_ui' };
       }
-      const generation = this.connectionGeneration || this._beginLifecycle(DESIRED_CONVERSATIONAL, 'direct_tts_requested');
-      if (!this._socket || !this.bearerToken) {
+      if (!this._socket || !this.bearerToken || !this.sessionId) {
+        await this._ensurePassiveTtsSession('direct_tts_repair_passive_session');
+      }
+      if (!this._socket || !this.bearerToken || !this.sessionId) {
+        const generation = this.connectionGeneration || this._beginLifecycle(DESIRED_TTS, 'direct_tts_requested');
         await this._ensureConnected(generation);
       }
-      if (!this._socket || !this.bearerToken) {
+      if (!this._socket || !this.bearerToken || !this.sessionId) {
         this.lastDirectTtsError = 'no_voqualizer_session';
         this._publishDebug();
         return { ok: false, reason: 'no_voqualizer_session' };
@@ -735,6 +806,9 @@ export function createVoqualizerStore(options = {}) {
           settled = true;
           this.lastDirectTtsAck = value;
           if (value && value.code) this.lastDirectTtsError = value.code;
+          if (value && Array.isArray(value.tts_chunks) && value.tts_chunks.length) {
+            this._handleAckTtsFallback(value);
+          }
           this._publishDebug();
           resolve(value);
         };
@@ -1074,6 +1148,34 @@ export function createVoqualizerStore(options = {}) {
         if (mirrored) {
           this._clearAsrPromptMirror('asr_final_event_blank_populate');
         }
+      }
+      this._publishDebug();
+    },
+    _handleAckTtsFallback(ack) {
+      const data = this._unwrapPayload(ack);
+      const chunks = Array.isArray(data.tts_chunks) ? data.tts_chunks : [];
+      if (!chunks.length) return;
+      // If server-pushed chunks already arrived, avoid duplicate playback.
+      if (this.ttsChunkCount > 0 && this.lastTtsUtteranceId === String(data.utterance_id || '')) {
+        this.lastAckTtsFallbackReason = 'push_already_received';
+        this._publishDebug();
+        return;
+      }
+      this.lastAckTtsFallbackAt = Date.now();
+      this.lastAckTtsFallbackChunks = chunks.length;
+      this.lastAckTtsFallbackReason = 'ack_chunks';
+      for (const chunk of chunks) {
+        this._handleTtsChunk(chunk);
+      }
+      if (data.tts_done) {
+        this._handleTtsDone(data.tts_done);
+      } else {
+        this._handleTtsDone({
+          session_id: data.session_id || this.sessionId || '',
+          utterance_id: data.utterance_id || '',
+          chunks: chunks.length,
+          cancelled: false,
+        });
       }
       this._publishDebug();
     },

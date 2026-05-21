@@ -263,3 +263,17 @@ def test_user_text_prefers_provider_tts_speed_default():
     assert 'provider_spec.get("speed")' in source
     assert 'provider_speed = float' in source
     assert 'speed = float(data.get("speed") or provider_speed)' in source
+
+
+def test_direct_tts_ack_includes_chunk_fallback_payload_markers():
+    source = (PLUGIN / 'api' / 'ws_voqualizer.py').read_text(encoding='utf-8')
+    for marker in (
+        'ack_tts_chunks',
+        'tts_chunks',
+        'tts_done',
+        'delivery_fallback',
+        'ack_chunks',
+        'async def _emit_tts_chunk(self, session: BridgeSession, chunk: TTSAudioChunk) -> dict[str, Any]',
+        'return payload',
+    ):
+        assert marker in source, f'missing direct TTS ack fallback backend marker {marker!r}'

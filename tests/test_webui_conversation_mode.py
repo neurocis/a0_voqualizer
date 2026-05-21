@@ -370,3 +370,67 @@ def test_gui_asr_final_ack_immediately_blank_populates_after_mirror():
     assert "this._scheduleFinalAsrPromptMirrorClear('context_bridge_final_blank_populate');" not in ack_block
     assert "this._scheduleAsrPromptMirrorClear('context_bridge_final_blank_populate');" not in ack_block
     assert "const ok = this._writeAsrPromptDraft('', 'clear');" in s
+
+
+def test_rendered_response_observer_tts_fallback_extension_exists():
+    ext = PLUGIN / 'extensions' / 'webui' / 'initFw_end' / 'voqualizer-response-observer.js'
+    assert ext.exists(), 'rendered response observer TTS fallback extension missing'
+    source = ext.read_text(encoding='utf-8')
+    for marker in (
+        'installVoqualizerResponseObserver',
+        'MutationObserver',
+        "document.querySelectorAll('.message-agent-response')",
+        "Alpine?.store?.('voqualizer')",
+        'store.speakText',
+        'gui-observed-response-',
+        '__voqualizer_response_observer',
+        'data-voqualizer-tts-spoken',
+        'a0_voqualizer.observed_response.',
+    ):
+        assert marker in source, f'missing rendered response observer marker {marker!r}'
+
+
+def test_direct_tts_repairs_missing_passive_session_before_emit():
+    source = CM.read_text(encoding='utf-8')
+    for marker in (
+        "direct_tts_repair_passive_session",
+        "!this._socket || !this.bearerToken || !this.sessionId",
+        "await this._ensurePassiveTtsSession('direct_tts_repair_passive_session')",
+        "this._beginLifecycle(DESIRED_TTS, 'direct_tts_requested')",
+    ):
+        assert marker in source, f'missing direct TTS passive repair marker {marker!r}'
+
+
+def test_rendered_response_observer_only_marks_successful_speech_as_spoken():
+    ext = PLUGIN / 'extensions' / 'webui' / 'initFw_end' / 'voqualizer-response-observer.js'
+    source = ext.read_text(encoding='utf-8')
+    assert 'if (ack && ack.ok === false)' in source
+    assert "state.lastError = String(ack.code || ack.reason || 'speak_failed')" in source
+    assert source.index('if (ack && ack.ok === false)') < source.index('markSpoken(responseId)')
+
+
+def test_tts_push_delivery_debug_markers_exist():
+    source = CM.read_text(encoding='utf-8')
+    for marker in (
+        'lastRawTtsPushEvent',
+        'lastRawTtsPushAt',
+        'lastRawTtsPushKeys',
+        'lastRawTtsPushDataKeys',
+        "_recordRawTtsPush('voqualizer_tts_chunk', payload)",
+        "_recordRawTtsPush('voqualizer_tts_done', payload)",
+    ):
+        assert marker in source, f'missing TTS push diagnostic marker {marker!r}'
+
+
+def test_direct_tts_ack_chunk_fallback_markers_exist():
+    source = CM.read_text(encoding='utf-8')
+    for marker in (
+        'lastAckTtsFallbackAt',
+        'lastAckTtsFallbackChunks',
+        'lastAckTtsFallbackReason',
+        '_handleAckTtsFallback(value)',
+        'Array.isArray(value.tts_chunks)',
+        "this._handleTtsChunk(chunk)",
+        "this._handleTtsDone(data.tts_done)",
+    ):
+        assert marker in source, f'missing direct TTS ack fallback marker {marker!r}'
