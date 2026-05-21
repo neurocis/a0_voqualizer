@@ -1,18 +1,19 @@
 /**
  * Observe rendered A0 assistant responses and speak them through Voqualizer.
  *
- * Uses a per-node debounce so we only speak the response after streaming has
- * settled, and uses the stable message DOM id (when available) for dedup so
- * partial streaming text variants do not produce multiple speak attempts.
+ * Waits for response completion (presence of `.step-action-buttons` inside
+ * `.message-agent-response`) before speaking, with a long debounce timeout as
+ * a safety net. Uses stable message DOM ids for dedup.
  */
 const SPOKEN_KEY_PREFIX = 'a0_voqualizer.observed_response.';
 const MAX_SPEAK_CHARS = 12000;
 const OBSERVER_FLAG = '__a0VoqualizerResponseObserverInstalled';
 const PENDING_ATTR = 'data-voqualizer-tts-pending';
 const SPOKEN_ATTR = 'data-voqualizer-tts-spoken';
-const STABILITY_DELAY_MS = 900;
+const FALLBACK_TIMEOUT_MS = 3500;   // safety net if no completion marker appears
+const MIN_STABILITY_MS = 600;       // require this much DOM-quiet before speaking
 
-const pending = new Map(); // responseId -> { node, timer, lastText, lastSeenAt, scheduledAt }
+const pending = new Map(); // responseId -> { node, lastText, lastSeenAt, stabilityTimer, fallbackTimer, scheduledAt }
 
 export default async function installVoqualizerResponseObserver() {
   if (globalThis[OBSERVER_FLAG]) return;
@@ -58,6 +59,7 @@ function scanRenderedResponses(reason = 'scan') {
     state.lastSkipReason = 'tts_disabled';
     return;
   }
+  state.lastConversationalSeen = !!store.conversational;
 
   const nodes = Array.from(document.querySelectorAll('.message-agent-response'));
   state.lastNodeCount = nodes.length;
@@ -69,10 +71,7 @@ function scanRenderedResponses(reason = 'scan') {
 function considerNode(node, store) {
   const state = ensureObserverDebugState();
   if (!node) return;
-  if (node.getAttribute?.(SPOKEN_ATTR) === '1') {
-    state.lastSkipReason = 'already_spoken_attr';
-    return;
-  }
+  if (node.getAttribute?.(SPOKEN_ATTR) === '1') return;
 
   const responseId = responseIdentity(node);
   if (alreadySpoken(responseId)) {
@@ -89,27 +88,75 @@ function considerNode(node, store) {
 
   let entry = pending.get(responseId);
   if (!entry) {
-    entry = { node, timer: null, lastText: '', lastSeenAt: 0, scheduledAt: 0 };
+    entry = {
+      node,
+      lastText: '',
+      lastSeenAt: 0,
+      firstSeenAt: Date.now(),
+      stabilityTimer: null,
+      fallbackTimer: null,
+    };
     pending.set(responseId, entry);
+    // Schedule a fallback in case completion marker never appears.
+    entry.fallbackTimer = setTimeout(() => {
+      const e = pending.get(responseId);
+      if (!e) return;
+      pending.delete(responseId);
+      if (e.stabilityTimer) clearTimeout(e.stabilityTimer);
+      const finalText = responseTextFromNode(e.node) || e.lastText;
+      speakStableResponse(responseId, e.node, finalText, store, 'fallback_timeout');
+    }, FALLBACK_TIMEOUT_MS);
   }
 
-  // If text changed, reset the stability timer.
+  const complete = isResponseComplete(node);
+  state.lastCompleteSeen = complete;
+
   if (text !== entry.lastText) {
     entry.lastText = text;
     entry.lastSeenAt = Date.now();
-    entry.scheduledAt = Date.now() + STABILITY_DELAY_MS;
-    state.lastSkipReason = 'debouncing';
     state.lastResponseId = responseId;
     state.lastText = text.slice(0, 160);
-    if (entry.timer) clearTimeout(entry.timer);
-    entry.timer = setTimeout(() => {
+    state.lastSkipReason = complete ? 'complete_pending_debounce' : 'streaming_debounce';
+    if (entry.stabilityTimer) clearTimeout(entry.stabilityTimer);
+    // If the response is already "complete" by DOM marker, use a short stability
+    // pause. If still streaming, keep waiting for either completion or fallback.
+    if (complete) {
+      entry.stabilityTimer = setTimeout(() => {
+        const e = pending.get(responseId);
+        if (!e) return;
+        pending.delete(responseId);
+        if (e.fallbackTimer) clearTimeout(e.fallbackTimer);
+        const finalText = responseTextFromNode(e.node) || e.lastText;
+        speakStableResponse(responseId, e.node, finalText, store, 'completion_marker');
+      }, MIN_STABILITY_MS);
+    }
+    return;
+  }
+
+  // Same text observed again — if completion marker is now present and we have
+  // not yet scheduled a stability timer, schedule one now.
+  if (complete && !entry.stabilityTimer) {
+    entry.stabilityTimer = setTimeout(() => {
+      const e = pending.get(responseId);
+      if (!e) return;
       pending.delete(responseId);
-      speakStableResponse(responseId, node, entry.lastText, store);
-    }, STABILITY_DELAY_MS);
+      if (e.fallbackTimer) clearTimeout(e.fallbackTimer);
+      const finalText = responseTextFromNode(e.node) || e.lastText;
+      speakStableResponse(responseId, e.node, finalText, store, 'completion_marker_late');
+    }, MIN_STABILITY_MS);
   }
 }
 
-function speakStableResponse(responseId, node, text, store) {
+function isResponseComplete(node) {
+  // A0 adds `.step-action-buttons` inside the message-agent-response (or its
+  // surrounding message-container) only after the response is complete.
+  if (node.querySelector?.('.step-action-buttons')) return true;
+  const container = node.closest?.('.message-container');
+  if (container && container.querySelector('.step-action-buttons')) return true;
+  return false;
+}
+
+function speakStableResponse(responseId, node, text, store, reason) {
   const state = ensureObserverDebugState();
   if (!text) return;
   if (alreadySpoken(responseId)) {
@@ -126,6 +173,7 @@ function speakStableResponse(responseId, node, text, store) {
   state.lastResponseId = responseId;
   state.lastText = text.slice(0, 160);
   state.lastSpeakAttemptAt = Date.now();
+  state.lastSpeakReason = reason;
   state.speakAttemptCount += 1;
 
   Promise.resolve(store.speakText(text.slice(0, MAX_SPEAK_CHARS), {
@@ -149,7 +197,6 @@ function speakStableResponse(responseId, node, text, store) {
 }
 
 function responseIdentity(node) {
-  // Prefer stable message-level identifiers that do not change during streaming.
   const message = node.closest?.('[data-message-id], [data-id], .message-container, .message, .msg');
   const raw = message?.dataset?.messageId
     || message?.dataset?.id
@@ -157,7 +204,6 @@ function responseIdentity(node) {
     || node?.id
     || '';
   if (raw) return String(raw);
-  // Fall back to DOM-position-based id so streaming text changes do not mint new ids.
   const container = node.closest?.('.message-container') || node.parentElement || node;
   const index = container ? Array.prototype.indexOf.call(container.parentNode?.children || [], container) : -1;
   return `dom-${index}-${node.tagName}`;
@@ -212,8 +258,11 @@ function ensureObserverDebugState() {
     lastText: '',
     lastSpeakAttemptAt: 0,
     lastSpeakAckAt: 0,
+    lastSpeakReason: '',
     lastAck: null,
     lastError: '',
+    lastCompleteSeen: false,
+    lastConversationalSeen: false,
     speakAttemptCount: 0,
   };
   globalThis.__voqualizer_response_observer = state;

@@ -1,4 +1,5 @@
 ## [Unreleased]
+- GUI response observer now waits for the A0 completion marker (.step-action-buttons) before speaking, with a fallback timeout, eliminating mid-stream TTS cutoff.
 - Debounced GUI response observer so partially streamed assistant responses no longer trigger early or duplicate TTS playback.
 - Added direct GUI TTS ack-chunk playback fallback so synthesized audio can still play when Socket.IO pushed chunk events are not observed by the browser.
 - Added GUI/backend diagnostics for direct TTS push delivery when synthesis succeeds but browser chunk events are not observed.
