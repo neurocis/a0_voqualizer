@@ -42,7 +42,22 @@ export default async function installVoqualizerResponseObserver() {
     scan: () => scanRenderedResponses('manual'),
     pending,
   };
+  preMarkHistoricalResponses();
   scanRenderedResponses('install');
+}
+
+function preMarkHistoricalResponses() {
+  // On install, mark every already-rendered .message-agent-response as spoken
+  // so we do not retroactively speak the conversation history. Only responses
+  // that appear AFTER install will be considered for speech.
+  const nodes = Array.from(document.querySelectorAll('.message-agent-response'));
+  for (const node of nodes) {
+    const responseId = responseIdentity(node);
+    markSpoken(responseId);
+    node.setAttribute?.(SPOKEN_ATTR, '1');
+  }
+  const state = ensureObserverDebugState();
+  state.preMarkedHistoricalCount = nodes.length;
 }
 
 function scanRenderedResponses(reason = 'scan') {
@@ -229,18 +244,15 @@ function normalizeSpeechText(text) {
 }
 
 function alreadySpoken(responseId) {
-  const key = SPOKEN_KEY_PREFIX + responseId;
-  try {
-    if (sessionStorage.getItem(key)) return true;
-  } catch {}
+  // In-memory only: every page load is a fresh start so we never collide with
+  // stale sessionStorage markers from earlier sessions or removed extensions.
   const spoken = globalThis.__a0VoqualizerObservedResponses || new Set();
   globalThis.__a0VoqualizerObservedResponses = spoken;
   return spoken.has(responseId);
 }
 
 function markSpoken(responseId) {
-  const key = SPOKEN_KEY_PREFIX + responseId;
-  try { sessionStorage.setItem(key, '1'); } catch {}
+  // In-memory only.
   const spoken = globalThis.__a0VoqualizerObservedResponses || new Set();
   spoken.add(responseId);
   globalThis.__a0VoqualizerObservedResponses = spoken;
