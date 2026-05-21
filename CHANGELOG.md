@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Removed the older set_messages_after_loop speak-response extension; the completion-marker debounced observer in initFw_end supersedes it and was being preempted by the older path during streaming, causing first-sentence cutoff and broken TTS in conversational/ASR mode.
 - GUI response observer now waits for the A0 completion marker (.step-action-buttons) before speaking, with a fallback timeout, eliminating mid-stream TTS cutoff.
 - Debounced GUI response observer so partially streamed assistant responses no longer trigger early or duplicate TTS playback.
 - Added direct GUI TTS ack-chunk playback fallback so synthesized audio can still play when Socket.IO pushed chunk events are not observed by the browser.
