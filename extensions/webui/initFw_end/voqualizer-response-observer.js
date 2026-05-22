@@ -16,6 +16,8 @@ const INSTALL_GRACE_MS = 3000;      // ignore responses observed during initial 
 
 const pending = new Map(); // responseId -> { node, lastText, lastSeenAt, stabilityTimer, fallbackTimer, scheduledAt }
 const historicalNodes = new WeakSet(); // nodes that existed at install time -> never speak
+const responseNodeIds = new WeakMap(); // fallback ids for nodes with no stable DOM/message id
+let nextResponseNodeId = 1;
 
 export default async function installVoqualizerResponseObserver() {
   if (globalThis[OBSERVER_FLAG]) return;
@@ -234,9 +236,19 @@ function responseIdentity(node) {
     || node?.id
     || '';
   if (raw) return String(raw);
-  const container = node.closest?.('.message-container') || node.parentElement || node;
-  const index = container ? Array.prototype.indexOf.call(container.parentNode?.children || [], container) : -1;
-  return `dom-${index}-${node.tagName}`;
+
+  // Some A0 response nodes do not expose stable message ids. The previous
+  // fallback used DOM sibling indexes (dom-${index}-${tagName}), but many
+  // response nodes can report the same index as the DOM mutates/collapses.
+  // That collapses all responses into one pending entry, so the observer may
+  // dispatch old history/compaction text while the visible latest response is
+  // skipped or times out. Assign a page-lifetime id by node reference instead.
+  let assigned = responseNodeIds.get(node);
+  if (!assigned) {
+    assigned = `node-${nextResponseNodeId++}-${node.tagName || 'NODE'}`;
+    responseNodeIds.set(node, assigned);
+  }
+  return assigned;
 }
 
 function responseTextFromNode(node) {
