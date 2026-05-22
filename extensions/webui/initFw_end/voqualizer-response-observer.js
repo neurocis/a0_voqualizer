@@ -15,6 +15,7 @@ const MIN_STABILITY_MS = 600;       // require this much DOM-quiet before speaki
 const INSTALL_GRACE_MS = 3000;      // ignore responses observed during initial history render
 
 const pending = new Map(); // responseId -> { node, lastText, lastSeenAt, stabilityTimer, fallbackTimer, scheduledAt }
+const historicalNodes = new WeakSet(); // nodes that existed at install time -> never speak
 
 export default async function installVoqualizerResponseObserver() {
   if (globalThis[OBSERVER_FLAG]) return;
@@ -24,7 +25,6 @@ export default async function installVoqualizerResponseObserver() {
   state.installedAt = Date.now();
 
   const observer = new MutationObserver(() => {
-    if (!state.armedAt) return; // ignore mutations during grace period
     queueMicrotask(() => scanRenderedResponses('mutation'));
   });
 
@@ -45,24 +45,25 @@ export default async function installVoqualizerResponseObserver() {
     pending,
   };
 
-  // Defer pre-mark and arming until after A0 has had time to render the
-  // initial chat history. Before this fires, mutations are ignored so we do
-  // not try to speak historical responses that stream in during page load.
-  setTimeout(() => {
-    preMarkHistoricalResponses();
-    state.armedAt = Date.now();
-    scanRenderedResponses('armed');
-  }, INSTALL_GRACE_MS);
+  // Snapshot existing .message-agent-response nodes by reference. Any node
+  // that exists at install time is historical and must never be spoken, even
+  // if its text mutates later (streaming render, collapse/expand, etc).
+  // New nodes added later are naturally not in the WeakSet and will be
+  // considered for speech. This is more robust than time-based grace windows.
+  preMarkHistoricalResponses();
+  state.armedAt = Date.now();
+  scanRenderedResponses('armed');
 }
 
 function preMarkHistoricalResponses() {
-  // On install, mark every already-rendered .message-agent-response as spoken
-  // so we do not retroactively speak the conversation history. Only responses
-  // that appear AFTER install will be considered for speech.
+  // On install, capture every already-rendered .message-agent-response node
+  // by reference in a WeakSet. These nodes are historical — they must never
+  // be spoken even if mutated later (DOM re-renders, streaming completion,
+  // collapse/expand). New nodes added later are not in the WeakSet and will
+  // be considered for speech normally.
   const nodes = Array.from(document.querySelectorAll('.message-agent-response'));
   for (const node of nodes) {
-    const responseId = responseIdentity(node);
-    markSpoken(responseId);
+    historicalNodes.add(node);
     node.setAttribute?.(SPOKEN_ATTR, '1');
   }
   const state = ensureObserverDebugState();
@@ -95,6 +96,11 @@ function scanRenderedResponses(reason = 'scan') {
 function considerNode(node, store) {
   const state = ensureObserverDebugState();
   if (!node) return;
+  // Historical node by reference - never speak it, regardless of text changes.
+  if (historicalNodes.has(node)) {
+    state.lastSkipReason = 'historical_node';
+    return;
+  }
   if (node.getAttribute?.(SPOKEN_ATTR) === '1') return;
 
   const responseId = responseIdentity(node);

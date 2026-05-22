@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Fixed observer pre-mark collision that caused new responses to be skipped as `already_spoken` due to dom-index id reuse during streaming. Pre-mark now uses a WeakSet of node references, removing the fragile 3s grace window and reliably distinguishing historical nodes from new ones by reference identity.
 - GUI response observer now defers pre-marking and arming by a grace period so it never attempts to speak historical responses that stream in during initial page load.
 - GUI response observer now uses in-memory dedup only and pre-marks historical responses on install, eliminating sessionStorage collisions that blocked all new responses from being spoken.
 - Removed the older set_messages_after_loop speak-response extension; the completion-marker debounced observer in initFw_end supersedes it and was being preempted by the older path during streaming, causing first-sentence cutoff and broken TTS in conversational/ASR mode.
