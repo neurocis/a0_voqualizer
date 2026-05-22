@@ -1,4 +1,8 @@
 ## [Unreleased]
+## Unreleased
+
+- Add conservative GUI TTS delivery accounting that keeps the reliable `ack_chunks` fallback intact while tracking live pushed `voqualizer_tts_chunk`/`voqualizer_tts_done` events separately from ACK-fallback playback. ACK fallback is now suppressed only when pushed chunks for the same utterance were actually observed.
+
 - Fixed repeated GUI direct TTS transport failures against the Lemonade/OpenAI-compatible endpoint by using a fresh TTS provider/aiohttp ClientSession per `voqualizer_user_text` request. The endpoint was returning `ServerDisconnectedError` and then `ClientConnectionError: Connector is closed` on reused sessions, while fresh-provider direct repros and tester-page requests succeeded.
 - Restored delayed response-observer arming after fixing fallback id collisions: A0 renders chat history asynchronously after initFw_end, so immediate pre-marking produced preMarkedHistoricalCount=0 and let old history/compaction text be treated as new. The observer again waits for the initial history render before pre-marking, now safely using WeakSet node references plus WeakMap fallback ids.
 - Fixed GUI response observer fallback identity collision: response nodes without stable DOM/message ids no longer use fragile `dom-${index}-${tagName}` ids, which collapsed many responses into `dom-0-DIV` and caused old history/compaction text to be spoken or time out instead of the latest assistant reply. Fallback ids are now assigned per DOM node via WeakMap.

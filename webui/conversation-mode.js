@@ -147,7 +147,15 @@ export function createVoqualizerStore(options = {}) {
     lastTtsChunkAt: 0,
     lastTtsDoneAt: 0,
     lastTtsChunkBytes: 0,
+    lastTtsChunkSource: '',
     lastTtsUtteranceId: '',
+    pushedTtsChunkCount: 0,
+    pushedTtsDoneCount: 0,
+    ackTtsChunkCount: 0,
+    ackTtsDoneCount: 0,
+    lastPushedTtsUtteranceId: '',
+    lastAckTtsUtteranceId: '',
+    pushedTtsChunksByUtterance: {},
     lastTtsSkipReason: '',
     lastPlaybackStartAt: 0,
     lastRawTtsPushEvent: '',
@@ -272,7 +280,15 @@ export function createVoqualizerStore(options = {}) {
         lastTtsChunkAt: this.lastTtsChunkAt,
         lastTtsDoneAt: this.lastTtsDoneAt,
         lastTtsChunkBytes: this.lastTtsChunkBytes,
+        lastTtsChunkSource: this.lastTtsChunkSource,
         lastTtsUtteranceId: this.lastTtsUtteranceId,
+        pushedTtsChunkCount: this.pushedTtsChunkCount,
+        pushedTtsDoneCount: this.pushedTtsDoneCount,
+        ackTtsChunkCount: this.ackTtsChunkCount,
+        ackTtsDoneCount: this.ackTtsDoneCount,
+        lastPushedTtsUtteranceId: this.lastPushedTtsUtteranceId,
+        lastAckTtsUtteranceId: this.lastAckTtsUtteranceId,
+        pushedTtsChunksByUtterance: this.pushedTtsChunksByUtterance,
         lastTtsSkipReason: this.lastTtsSkipReason,
         lastPlaybackStartAt: this.lastPlaybackStartAt,
         lastRawTtsPushEvent: this.lastRawTtsPushEvent,
@@ -658,11 +674,11 @@ export function createVoqualizerStore(options = {}) {
       socket.on('voqualizer_asr_final', guard((payload) => this._handleAsrFinal(payload)));
       socket.on('voqualizer_tts_chunk', guard((payload) => {
         this._recordRawTtsPush('voqualizer_tts_chunk', payload);
-        this._handleTtsChunk(payload);
+        this._handleTtsChunk(payload, 'push');
       }));
       socket.on('voqualizer_tts_done', guard((payload) => {
         this._recordRawTtsPush('voqualizer_tts_done', payload);
-        this._handleTtsDone(payload);
+        this._handleTtsDone(payload, 'push');
       }));
       socket.on('voqualizer_error', guard((payload) => {
         if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) return;
@@ -1155,36 +1171,53 @@ export function createVoqualizerStore(options = {}) {
       const data = this._unwrapPayload(ack);
       const chunks = Array.isArray(data.tts_chunks) ? data.tts_chunks : [];
       if (!chunks.length) return;
-      // If server-pushed chunks already arrived, avoid duplicate playback.
-      if (this.ttsChunkCount > 0 && this.lastTtsUtteranceId === String(data.utterance_id || '')) {
-        this.lastAckTtsFallbackReason = 'push_already_received';
+      const utteranceId = String(data.utterance_id || '');
+      const pushedForUtterance = utteranceId ? Number(this.pushedTtsChunksByUtterance[utteranceId] || 0) : 0;
+      // If server-pushed chunks for THIS utterance already arrived, avoid duplicate playback.
+      // Do not use the aggregate ttsChunkCount here: ACK fallback chunks also increment it,
+      // and previous utterances must never suppress the reliable fallback for a new one.
+      if (pushedForUtterance > 0) {
+        this.lastAckTtsFallbackReason = `push_already_received:${pushedForUtterance}`;
         this._publishDebug();
         return;
       }
       this.lastAckTtsFallbackAt = Date.now();
       this.lastAckTtsFallbackChunks = chunks.length;
       this.lastAckTtsFallbackReason = 'ack_chunks';
+      this.lastAckTtsUtteranceId = utteranceId;
       for (const chunk of chunks) {
-        this._handleTtsChunk(chunk);
+        this._handleTtsChunk(chunk, 'ack');
       }
       if (data.tts_done) {
-        this._handleTtsDone(data.tts_done);
+        this._handleTtsDone(data.tts_done, 'ack');
       } else {
         this._handleTtsDone({
           session_id: data.session_id || this.sessionId || '',
           utterance_id: data.utterance_id || '',
           chunks: chunks.length,
           cancelled: false,
-        });
+        }, 'ack');
       }
       this._publishDebug();
     },
-    async _handleTtsChunk(payload) {
+    async _handleTtsChunk(payload, deliverySource = 'unknown') {
       const data = this._unwrapPayload(payload);
-      const utteranceId = data.utterance_id || 'default';
+      const utteranceId = String(data.utterance_id || 'default');
       this.lastTtsChunkAt = Date.now();
       this.lastTtsUtteranceId = utteranceId;
+      this.lastTtsChunkSource = deliverySource;
       this.ttsChunkCount += 1;
+      if (deliverySource === 'push') {
+        this.pushedTtsChunkCount += 1;
+        this.lastPushedTtsUtteranceId = utteranceId;
+        this.pushedTtsChunksByUtterance = {
+          ...this.pushedTtsChunksByUtterance,
+          [utteranceId]: Number(this.pushedTtsChunksByUtterance[utteranceId] || 0) + 1,
+        };
+      } else if (deliverySource === 'ack') {
+        this.ackTtsChunkCount += 1;
+        this.lastAckTtsUtteranceId = utteranceId;
+      }
       if (!this.isTtsEnabled()) { this.lastTtsSkipReason = 'tts_disabled_ui'; this._publishDebug(); return; }
       const audio = bytesFromTtsPayload(payload);
       this.lastTtsChunkBytes = audio.byteLength || 0;
@@ -1214,11 +1247,18 @@ export function createVoqualizerStore(options = {}) {
       rememberPlaybackSource(tracker, utteranceId, source);
       this._publishDebug();
     },
-    _handleTtsDone(payload) {
+    _handleTtsDone(payload, deliverySource = 'unknown') {
       const data = this._unwrapPayload(payload);
-      const utteranceId = data.utterance_id || 'default';
+      const utteranceId = String(data.utterance_id || 'default');
       this.lastTtsDoneAt = Date.now();
       this.ttsDoneCount += 1;
+      if (deliverySource === 'push') {
+        this.pushedTtsDoneCount += 1;
+        this.lastPushedTtsUtteranceId = utteranceId;
+      } else if (deliverySource === 'ack') {
+        this.ackTtsDoneCount += 1;
+        this.lastAckTtsUtteranceId = utteranceId;
+      }
       this.lastTtsUtteranceId = utteranceId;
       if (data.reason) this.lastTtsSkipReason = data.reason;
       if (data.cancelled || data.reason === 'barge_in') { this.lastPlaybackStopReason = data.reason || 'cancelled'; tracker.stopPlaybackForUtterance(utteranceId); }
