@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Fixed one-and-done TTS in main GUI: the cached TTS provider instance held a stale aiohttp ClientSession after its first successful request, so every subsequent voqualizer_user_text call from the GUI failed with TTS_TRANSPORT_ERROR. The handler now drops the cached provider on transport-class errors so the next call rebuilds a fresh session. Also surfaces the real underlying exception in the error message for diagnosability.
 - Fixed observer pre-mark collision that caused new responses to be skipped as `already_spoken` due to dom-index id reuse during streaming. Pre-mark now uses a WeakSet of node references, removing the fragile 3s grace window and reliably distinguishing historical nodes from new ones by reference identity.
 - GUI response observer now defers pre-marking and arming by a grace period so it never attempts to speak historical responses that stream in during initial page load.
 - GUI response observer now uses in-memory dedup only and pre-marks historical responses on install, eliminating sessionStorage collisions that blocked all new responses from being spoken.

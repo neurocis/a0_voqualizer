@@ -1535,6 +1535,18 @@ class WsVoqualizer(WsHandler):
             }
         except TTSError as exc:
             await self._emit_tts_error(session, exc)
+            # Drop the cached provider on transport-class errors so the next
+            # request rebuilds a fresh aiohttp ClientSession. Cached sessions
+            # can become stale between requests (event-loop affinity, server
+            # keep-alive teardown, etc), causing every call after the first to
+            # fail with TTS_TRANSPORT_ERROR.
+            if exc.code in ("TTS_TRANSPORT_ERROR", "TTS_BAD_RESPONSE"):
+                cached = session.metadata.pop("tts_provider_instance", None)
+                if cached is not None:
+                    try:
+                        await cached.stop()
+                    except Exception:
+                        pass
             err = exc.to_dict()
             return WsResult.error(
                 code=err["code"],

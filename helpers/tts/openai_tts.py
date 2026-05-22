@@ -223,11 +223,12 @@ class OpenAITTSProvider(TTSProvider):
         except TTSError:
             raise
         except Exception as exc:
+            _real = f"{type(exc).__name__}: {exc}"
             raise TTSError(
-                "OpenAI TTS transport failed",
+                f"OpenAI TTS transport failed: {_real}",
                 code="TTS_TRANSPORT_ERROR",
                 recoverable=True,
-                details={"provider": self.spec.name, "error": str(exc)},
+                details={"provider": self.spec.name, "error": _real},
             ) from exc
 
         final_index = len(raw_chunks) - 1
