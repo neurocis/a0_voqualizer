@@ -1408,84 +1408,6 @@ class WsVoqualizer(WsHandler):
             )
             await session.sender("voqualizer_error", payload)
 
-    async def _stream_user_text_tts(
-        self,
-        session: BridgeSession,
-        cfg: dict,
-        request: TTSRequest,
-        utterance_id: str,
-    ) -> None:
-        """Stream direct GUI TTS chunks in the background.
-
-        ``voqualizer_user_text`` used to hold the Socket.IO acknowledgement open
-        until the whole utterance had been synthesized, then returned every audio
-        chunk in the ack as a fallback. That made TTS reliable, but playback could
-        not start until synthesis completed. This task keeps the fresh-provider
-        reliability fix while allowing browser clients to consume live
-        ``voqualizer_tts_chunk`` push events immediately.
-        """
-        chunks = 0
-        provider: TTSProvider | None = None
-        try:
-            spec = _provider_config(cfg, "tts", session.tts_provider)
-            if spec is None:
-                raise TTSError(
-                    f"unknown TTS provider {session.tts_provider!r}",
-                    code="TTS_PROVIDER_NOT_FOUND",
-                    details={"provider": session.tts_provider},
-                )
-            provider = _build_tts_provider(spec)
-            await provider.start()
-            session.metadata["tts_active_utterance_id"] = utterance_id
-            try:
-                session.transition_to("speaking")
-            except Exception:
-                pass
-            async for chunk in provider.stream(request):
-                if session.cancel_tts.is_set():
-                    await self._emit_tts_done(
-                        session,
-                        utterance_id=utterance_id,
-                        cancelled=True,
-                        chunks=chunks,
-                        reason="barge_in",
-                    )
-                    return
-                await self._emit_tts_chunk(session, chunk)
-                chunks += 1
-                session.metadata["tts_chunks_emitted"] = chunks
-                if session.cancel_tts.is_set():
-                    await self._emit_tts_done(
-                        session,
-                        utterance_id=utterance_id,
-                        cancelled=True,
-                        chunks=chunks,
-                        reason="barge_in",
-                    )
-                    return
-            await self._emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
-        except TTSError as exc:
-            await self._emit_tts_error(session, exc)
-        except Exception as exc:
-            err = TTSError(
-                f"direct GUI TTS stream failed: {type(exc).__name__}: {exc!r}",
-                code="TTS_STREAM_ERROR",
-                details={"utterance_id": utterance_id},
-                recoverable=True,
-            )
-            await self._emit_tts_error(session, err)
-        finally:
-            if provider is not None:
-                try:
-                    await provider.stop()
-                except Exception:
-                    pass
-            session.metadata.pop("tts_active_utterance_id", None)
-            try:
-                session.transition_to(STATE_READY)
-            except Exception:
-                pass
-
     async def _handle_user_text(self, data: Mapping[str, Any], sid: str) -> dict[str, Any] | WsResult:
         if self._session_id is None:
             return WsResult.error(
@@ -1512,69 +1434,141 @@ class WsVoqualizer(WsHandler):
         if voice is not None:
             voice = str(voice)
 
-        try:
-            cfg = _safe_load_config()
-            provider_spec = _provider_config(cfg, "tts", session.tts_provider) or {}
-            provider_format = str(
-                provider_spec.get("format")
-                or provider_spec.get("response_format")
-                or (provider_spec.get("options") or {}).get("format")
-                or (provider_spec.get("options") or {}).get("response_format")
-                or ""
-            ).lower()
-            provider_sample_rate = int(
-                provider_spec.get("sample_rate")
-                or (provider_spec.get("options") or {}).get("sample_rate")
-                or 0
-            )
-            if provider_format == "pcm" and provider_sample_rate == 24000:
-                default_codec = "pcm16/24k"
-            elif provider_format == "pcm" and provider_sample_rate == 16000:
-                default_codec = "pcm16/16k"
-            else:
-                default_codec = session.output_codec or "pcm16/16k"
-            codec = str(data.get("codec") or default_codec)
-            sample_rate = int(data.get("sample_rate") or provider_sample_rate or (24000 if codec == "pcm16/24k" else 16000))
-            provider_speed = float(
-                provider_spec.get("speed")
-                or (provider_spec.get("options") or {}).get("speed")
-                or 1.0
-            )
-            speed = float(data.get("speed") or provider_speed)
-            metadata = dict(data.get("metadata") or {})
-            metadata.setdefault("source", "voqualizer_user_text")
-            if provider_format:
-                metadata.setdefault("response_format", provider_format)
+        cfg = _safe_load_config()
+        provider_spec = _provider_config(cfg, "tts", session.tts_provider) or {}
+        provider_format = str(
+            provider_spec.get("format")
+            or provider_spec.get("response_format")
+            or (provider_spec.get("options") or {}).get("format")
+            or (provider_spec.get("options") or {}).get("response_format")
+            or ""
+        ).lower()
+        provider_sample_rate = int(
+            provider_spec.get("sample_rate")
+            or (provider_spec.get("options") or {}).get("sample_rate")
+            or 0
+        )
+        if provider_format == "pcm" and provider_sample_rate == 24000:
+            default_codec = "pcm16/24k"
+        elif provider_format == "pcm" and provider_sample_rate == 16000:
+            default_codec = "pcm16/16k"
+        else:
+            default_codec = session.output_codec or "pcm16/16k"
+        codec = str(data.get("codec") or default_codec)
+        sample_rate = int(data.get("sample_rate") or provider_sample_rate or (24000 if codec == "pcm16/24k" else 16000))
+        provider_speed = float(
+            provider_spec.get("speed")
+            or (provider_spec.get("options") or {}).get("speed")
+            or 1.0
+        )
+        speed = float(data.get("speed") or provider_speed)
+        metadata = dict(data.get("metadata") or {})
+        metadata.setdefault("source", "voqualizer_user_text")
+        if provider_format:
+            metadata.setdefault("response_format", provider_format)
 
-            session.reset_cancel()
-            session.metadata["tts_chunks_emitted"] = 0
-            if isinstance(session.metadata.get("tts_barge_in_notified"), set):
-                session.metadata["tts_barge_in_notified"].clear()
-            request = TTSRequest(
-                text=text,
-                utterance_id=utterance_id,
-                voice=voice,
-                codec=codec,
-                sample_rate=sample_rate,
-                speed=speed,
-                metadata=metadata,
+        session.reset_cancel()
+        session.metadata["tts_chunks_emitted"] = 0
+        if isinstance(session.metadata.get("tts_barge_in_notified"), set):
+            session.metadata["tts_barge_in_notified"].clear()
+        request = TTSRequest(
+            text=text,
+            utterance_id=utterance_id,
+            voice=voice,
+            codec=codec,
+            sample_rate=sample_rate,
+            speed=speed,
+            metadata=metadata,
+        )
+
+        chunks = 0
+        ack_tts_chunks: list[dict[str, Any]] = []
+        provider: TTSProvider | None = None
+        try:
+            # Use a fresh provider/client session for each direct GUI TTS
+            # request. The Lemonade/OpenAI-compatible endpoint has been observed
+            # to close keep-alive connections between requests; reusing the
+            # cached aiohttp ClientSession then fails with ServerDisconnectedError
+            # followed by "Connector is closed". A fresh provider per request
+            # matches the direct Python repro and tester path, both of which work.
+            spec = _provider_config(cfg, "tts", session.tts_provider)
+            if spec is None:
+                raise TTSError(
+                    f"unknown TTS provider {session.tts_provider!r}",
+                    code="TTS_PROVIDER_NOT_FOUND",
+                    details={"provider": session.tts_provider},
+                )
+            provider = _build_tts_provider(spec)
+            await provider.start()
+            session.metadata["tts_active_utterance_id"] = utterance_id
+            try:
+                session.transition_to("speaking")
+            except Exception:
+                pass
+            async for chunk in provider.stream(request):
+                if session.cancel_tts.is_set():
+                    await self._emit_tts_done(
+                        session,
+                        utterance_id=utterance_id,
+                        cancelled=True,
+                        chunks=chunks,
+                        reason="barge_in",
+                    )
+                    return {
+                        "event": "voqualizer_tts_cancelled",
+                        "session_id": session.session_id,
+                        "utterance_id": utterance_id,
+                        "chunks": chunks,
+                    }
+                ack_chunk = await self._emit_tts_chunk(session, chunk)
+                ack_tts_chunks.append(ack_chunk)
+                chunks += 1
+                session.metadata["tts_chunks_emitted"] = chunks
+                if session.cancel_tts.is_set():
+                    await self._emit_tts_done(
+                        session,
+                        utterance_id=utterance_id,
+                        cancelled=True,
+                        chunks=chunks,
+                        reason="barge_in",
+                    )
+                    return {
+                        "event": "voqualizer_tts_cancelled",
+                        "session_id": session.session_id,
+                        "utterance_id": utterance_id,
+                        "chunks": chunks,
+                    }
+            ack_tts_done = await self._emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
+            return {
+                "event": "voqualizer_tts_ack",
+                "session_id": session.session_id,
+                "utterance_id": utterance_id,
+                "chunks": chunks,
+                "tts_chunks": ack_tts_chunks,
+                "tts_done": ack_tts_done,
+                "delivery_fallback": "ack_chunks",
+            }
+        except TTSError as exc:
+            await self._emit_tts_error(session, exc)
+            err = exc.to_dict()
+            return WsResult.error(
+                code=err["code"],
+                message=err["message"],
+                details={"recoverable": err["recoverable"], **err.get("details", {})},
             )
         except (ValueError, TypeError) as exc:
             return WsResult.error(code=BAD_REQUEST, message=str(exc))
-
-        task = asyncio.create_task(
-            self._stream_user_text_tts(session, cfg, request, utterance_id)
-        )
-        tasks = session.metadata.setdefault("tts_background_tasks", set())
-        if isinstance(tasks, set):
-            tasks.add(task)
-            task.add_done_callback(tasks.discard)
-        return {
-            "event": "voqualizer_tts_started",
-            "session_id": session.session_id,
-            "utterance_id": utterance_id,
-            "delivery": "push_stream",
-        }
+        finally:
+            if provider is not None:
+                try:
+                    await provider.stop()
+                except Exception:
+                    pass
+            session.metadata.pop("tts_active_utterance_id", None)
+            try:
+                session.transition_to(STATE_READY)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # voqualizer_control
