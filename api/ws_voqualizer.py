@@ -1482,6 +1482,9 @@ class WsVoqualizer(WsHandler):
         )
 
         chunks = 0
+        pushed_emit_count = 0
+        pushed_done_emit_count = 0
+        sender_present = session.sender is not None
         ack_tts_chunks: list[dict[str, Any]] = []
         provider: TTSProvider | None = None
         try:
@@ -1514,13 +1517,20 @@ class WsVoqualizer(WsHandler):
                         chunks=chunks,
                         reason="barge_in",
                     )
+                    if sender_present:
+                        pushed_done_emit_count += 1
                     return {
                         "event": "voqualizer_tts_cancelled",
                         "session_id": session.session_id,
                         "utterance_id": utterance_id,
                         "chunks": chunks,
+                        "pushed_emit_count": pushed_emit_count,
+                        "pushed_done_emit_count": pushed_done_emit_count,
+                        "sender_present": sender_present,
                     }
                 ack_chunk = await self._emit_tts_chunk(session, chunk)
+                if sender_present:
+                    pushed_emit_count += 1
                 ack_tts_chunks.append(ack_chunk)
                 chunks += 1
                 session.metadata["tts_chunks_emitted"] = chunks
@@ -1532,13 +1542,20 @@ class WsVoqualizer(WsHandler):
                         chunks=chunks,
                         reason="barge_in",
                     )
+                    if sender_present:
+                        pushed_done_emit_count += 1
                     return {
                         "event": "voqualizer_tts_cancelled",
                         "session_id": session.session_id,
                         "utterance_id": utterance_id,
                         "chunks": chunks,
+                        "pushed_emit_count": pushed_emit_count,
+                        "pushed_done_emit_count": pushed_done_emit_count,
+                        "sender_present": sender_present,
                     }
             ack_tts_done = await self._emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
+            if sender_present:
+                pushed_done_emit_count += 1
             return {
                 "event": "voqualizer_tts_ack",
                 "session_id": session.session_id,
@@ -1547,6 +1564,9 @@ class WsVoqualizer(WsHandler):
                 "tts_chunks": ack_tts_chunks,
                 "tts_done": ack_tts_done,
                 "delivery_fallback": "ack_chunks",
+                "pushed_emit_count": pushed_emit_count,
+                "pushed_done_emit_count": pushed_done_emit_count,
+                "sender_present": sender_present,
             }
         except TTSError as exc:
             await self._emit_tts_error(session, exc)
