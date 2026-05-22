@@ -27,6 +27,7 @@ export default async function installVoqualizerResponseObserver() {
   state.installedAt = Date.now();
 
   const observer = new MutationObserver(() => {
+    if (!state.armedAt) return; // ignore initial history render mutations
     queueMicrotask(() => scanRenderedResponses('mutation'));
   });
 
@@ -47,14 +48,19 @@ export default async function installVoqualizerResponseObserver() {
     pending,
   };
 
-  // Snapshot existing .message-agent-response nodes by reference. Any node
-  // that exists at install time is historical and must never be spoken, even
-  // if its text mutates later (streaming render, collapse/expand, etc).
-  // New nodes added later are naturally not in the WeakSet and will be
-  // considered for speech. This is more robust than time-based grace windows.
-  preMarkHistoricalResponses();
-  state.armedAt = Date.now();
-  scanRenderedResponses('armed');
+  // A0 renders chat history asynchronously after initFw_end. If we scan
+  // immediately, preMarkedHistoricalCount can be 0 and old history/compaction
+  // responses are treated as new, causing the observer to speak or timeout on
+  // stale text before it ever reaches the latest assistant reply.
+  //
+  // Delay arming long enough for initial history to render, then pre-mark the
+  // nodes by WeakSet reference. The earlier dom-index collision is fixed by
+  // responseNodeIds, so delayed pre-marking is safe again.
+  setTimeout(() => {
+    preMarkHistoricalResponses();
+    state.armedAt = Date.now();
+    scanRenderedResponses('armed');
+  }, INSTALL_GRACE_MS);
 }
 
 function preMarkHistoricalResponses() {
