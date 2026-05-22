@@ -1395,6 +1395,45 @@ class WsVoqualizer(WsHandler):
             await session.sender("voqualizer_tts_done", emit_payload)
         return payload
 
+    async def _emit_tts_push_probe(
+        self,
+        session: BridgeSession,
+        *,
+        utterance_id: str,
+        chunks: int = 0,
+        pushed_emit_count: int = 0,
+        pushed_done_emit_count: int = 0,
+        delay_ms: int = 100,
+    ) -> None:
+        """Emit a delayed diagnostic probe after direct-TTS ACK unwinds.
+
+        This intentionally does not affect playback. It lets the GUI distinguish
+        between same-handler push events that are not delivered while the inbound
+        request is running and pushed events that cannot reach the GUI socket at
+        all. ACK chunks remain the reliable playback path.
+        """
+        try:
+            await asyncio.sleep(max(0, delay_ms) / 1000)
+            if session.sender is None:
+                return
+            await session.sender("voqualizer_tts_push_probe", {
+                "session_id": session.session_id,
+                "utterance_id": utterance_id,
+                "chunks": chunks,
+                "pushed_emit_count": pushed_emit_count,
+                "pushed_done_emit_count": pushed_done_emit_count,
+                "sender_present": True,
+                "delay_ms": delay_ms,
+            })
+        except Exception as exc:
+            log_voqualizer_error(
+                "TTS_PUSH_PROBE_ERROR",
+                f"voqualizer TTS push probe failed: {type(exc).__name__}: {exc!r}",
+                session_id=session.session_id,
+                operation="voqualizer_tts_push_probe",
+                severity="warning",
+            )
+
     async def _emit_tts_error(self, session: BridgeSession, err: TTSError) -> None:
         if session.sender is not None:
             payload = err.to_dict()
@@ -1519,6 +1558,13 @@ class WsVoqualizer(WsHandler):
                     )
                     if sender_present:
                         pushed_done_emit_count += 1
+                        asyncio.create_task(self._emit_tts_push_probe(
+                            session,
+                            utterance_id=utterance_id,
+                            chunks=chunks,
+                            pushed_emit_count=pushed_emit_count,
+                            pushed_done_emit_count=pushed_done_emit_count,
+                        ))
                     return {
                         "event": "voqualizer_tts_cancelled",
                         "session_id": session.session_id,
@@ -1544,6 +1590,13 @@ class WsVoqualizer(WsHandler):
                     )
                     if sender_present:
                         pushed_done_emit_count += 1
+                        asyncio.create_task(self._emit_tts_push_probe(
+                            session,
+                            utterance_id=utterance_id,
+                            chunks=chunks,
+                            pushed_emit_count=pushed_emit_count,
+                            pushed_done_emit_count=pushed_done_emit_count,
+                        ))
                     return {
                         "event": "voqualizer_tts_cancelled",
                         "session_id": session.session_id,
@@ -1556,6 +1609,13 @@ class WsVoqualizer(WsHandler):
             ack_tts_done = await self._emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
             if sender_present:
                 pushed_done_emit_count += 1
+                asyncio.create_task(self._emit_tts_push_probe(
+                    session,
+                    utterance_id=utterance_id,
+                    chunks=chunks,
+                    pushed_emit_count=pushed_emit_count,
+                    pushed_done_emit_count=pushed_done_emit_count,
+                ))
             return {
                 "event": "voqualizer_tts_ack",
                 "session_id": session.session_id,

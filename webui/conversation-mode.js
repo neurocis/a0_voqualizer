@@ -162,6 +162,13 @@ export function createVoqualizerStore(options = {}) {
     lastRawTtsPushAt: 0,
     lastRawTtsPushKeys: '',
     lastRawTtsPushDataKeys: '',
+    ttsPushProbeCount: 0,
+    lastTtsPushProbeAt: 0,
+    lastTtsPushProbeUtteranceId: '',
+    lastTtsPushProbeChunks: 0,
+    lastTtsPushProbePushedEmitCount: 0,
+    lastTtsPushProbePushedDoneEmitCount: 0,
+    lastTtsPushProbeSenderPresent: null,
     lastAckTtsFallbackAt: 0,
     lastAckTtsFallbackChunks: 0,
     lastAckTtsFallbackReason: '',
@@ -295,6 +302,13 @@ export function createVoqualizerStore(options = {}) {
         lastRawTtsPushAt: this.lastRawTtsPushAt,
         lastRawTtsPushKeys: this.lastRawTtsPushKeys,
         lastRawTtsPushDataKeys: this.lastRawTtsPushDataKeys,
+        ttsPushProbeCount: this.ttsPushProbeCount,
+        lastTtsPushProbeAt: this.lastTtsPushProbeAt,
+        lastTtsPushProbeUtteranceId: this.lastTtsPushProbeUtteranceId,
+        lastTtsPushProbeChunks: this.lastTtsPushProbeChunks,
+        lastTtsPushProbePushedEmitCount: this.lastTtsPushProbePushedEmitCount,
+        lastTtsPushProbePushedDoneEmitCount: this.lastTtsPushProbePushedDoneEmitCount,
+        lastTtsPushProbeSenderPresent: this.lastTtsPushProbeSenderPresent,
         lastAckTtsFallbackAt: this.lastAckTtsFallbackAt,
         lastAckTtsFallbackChunks: this.lastAckTtsFallbackChunks,
         lastAckTtsFallbackReason: this.lastAckTtsFallbackReason,
@@ -679,6 +693,10 @@ export function createVoqualizerStore(options = {}) {
       socket.on('voqualizer_tts_done', guard((payload) => {
         this._recordRawTtsPush('voqualizer_tts_done', payload);
         this._handleTtsDone(payload, 'push');
+      }));
+      socket.on('voqualizer_tts_push_probe', guard((payload) => {
+        this._recordRawTtsPush('voqualizer_tts_push_probe', payload);
+        this._handleTtsPushProbe(payload);
       }));
       socket.on('voqualizer_error', guard((payload) => {
         if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) return;
@@ -1165,6 +1183,17 @@ export function createVoqualizerStore(options = {}) {
           this._clearAsrPromptMirror('asr_final_event_blank_populate');
         }
       }
+      this._publishDebug();
+    },
+    _handleTtsPushProbe(payload) {
+      const data = this._unwrapPayload(payload);
+      this.ttsPushProbeCount += 1;
+      this.lastTtsPushProbeAt = Date.now();
+      this.lastTtsPushProbeUtteranceId = String(data.utterance_id || '');
+      this.lastTtsPushProbeChunks = Number(data.chunks || 0);
+      this.lastTtsPushProbePushedEmitCount = Number(data.pushed_emit_count || 0);
+      this.lastTtsPushProbePushedDoneEmitCount = Number(data.pushed_done_emit_count || 0);
+      this.lastTtsPushProbeSenderPresent = !!data.sender_present;
       this._publishDebug();
     },
     _handleAckTtsFallback(ack) {

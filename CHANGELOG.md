@@ -1,6 +1,10 @@
 ## [Unreleased]
 ## Unreleased
 
+- Add a deferred `voqualizer_tts_push_probe` diagnostic event after direct GUI TTS ACK completion, plus frontend probe counters, to determine whether pushed Socket.IO events reach the main GUI after the inbound handler unwinds. ACK fallback behavior remains unchanged.
+
+## Unreleased
+
 - Add backend ACK debug fields for direct GUI TTS (`pushed_emit_count`, `pushed_done_emit_count`, and `sender_present`) while preserving the reliable `ack_chunks` fallback behavior unchanged. These fields let the GUI compare backend pushed-event attempts against frontend pushed-event receipt.
 
 ## Unreleased
