@@ -1483,8 +1483,23 @@ class WsVoqualizer(WsHandler):
 
         chunks = 0
         ack_tts_chunks: list[dict[str, Any]] = []
+        provider: TTSProvider | None = None
         try:
-            provider = await self._tts_provider_for_session(session, cfg)
+            # Use a fresh provider/client session for each direct GUI TTS
+            # request. The Lemonade/OpenAI-compatible endpoint has been observed
+            # to close keep-alive connections between requests; reusing the
+            # cached aiohttp ClientSession then fails with ServerDisconnectedError
+            # followed by "Connector is closed". A fresh provider per request
+            # matches the direct Python repro and tester path, both of which work.
+            spec = _provider_config(cfg, "tts", session.tts_provider)
+            if spec is None:
+                raise TTSError(
+                    f"unknown TTS provider {session.tts_provider!r}",
+                    code="TTS_PROVIDER_NOT_FOUND",
+                    details={"provider": session.tts_provider},
+                )
+            provider = _build_tts_provider(spec)
+            await provider.start()
             session.metadata["tts_active_utterance_id"] = utterance_id
             try:
                 session.transition_to("speaking")
@@ -1535,18 +1550,6 @@ class WsVoqualizer(WsHandler):
             }
         except TTSError as exc:
             await self._emit_tts_error(session, exc)
-            # Drop the cached provider on transport-class errors so the next
-            # request rebuilds a fresh aiohttp ClientSession. Cached sessions
-            # can become stale between requests (event-loop affinity, server
-            # keep-alive teardown, etc), causing every call after the first to
-            # fail with TTS_TRANSPORT_ERROR.
-            if exc.code in ("TTS_TRANSPORT_ERROR", "TTS_BAD_RESPONSE"):
-                cached = session.metadata.pop("tts_provider_instance", None)
-                if cached is not None:
-                    try:
-                        await cached.stop()
-                    except Exception:
-                        pass
             err = exc.to_dict()
             return WsResult.error(
                 code=err["code"],
@@ -1556,6 +1559,11 @@ class WsVoqualizer(WsHandler):
         except (ValueError, TypeError) as exc:
             return WsResult.error(code=BAD_REQUEST, message=str(exc))
         finally:
+            if provider is not None:
+                try:
+                    await provider.stop()
+                except Exception:
+                    pass
             session.metadata.pop("tts_active_utterance_id", None)
             try:
                 session.transition_to(STATE_READY)
