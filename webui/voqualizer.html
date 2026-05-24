@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>Voqualizer</title>
+  <link rel="stylesheet" href="/plugins/a0_voqualizer/webui/voqualizer.css" />
+  <script type="module" src="/plugins/a0_voqualizer/webui/voqualizer.js"></script>
+</head>
+<body>
+  <div class="voq-app" data-voqualizer-page="standalone">
+    <header class="voq-topbar" aria-label="Voqualizer top bar">
+      <div class="voq-context-wrap">
+        <label class="voq-brand" for="voq-context-select">Voqualizer:</label>
+        <select id="voq-context-select" class="voq-context-select" aria-label="Select Voqualizer context">
+          <option value="" selected>Context / Agent Name</option>
+        </select>
+      </div>
+      <a
+        id="voq-settings-button"
+        class="voq-icon-button voq-settings-button"
+        href="/plugins/a0_voqualizer/webui/providers.html"
+        aria-label="Voqualizer settings"
+        title="Voqualizer settings"
+      >
+        <span class="voq-icon" aria-hidden="true">⚙</span>
+      </a>
+    </header>
+
+    <main id="voq-chat" class="voq-chat" aria-label="Voqualizer chat transcript" aria-live="polite">
+      <section class="voq-empty-state" aria-label="Empty chat state">
+        <div class="voq-orb" aria-hidden="true">◌</div>
+        <h1>Voqualizer</h1>
+        <p>Speak or type to an A0 context. Minimal, dark, and focused.</p>
+      </section>
+    </main>
+
+    <footer class="voq-composer" aria-label="Voqualizer prompt composer">
+      <textarea
+        id="voq-prompt-input"
+        class="voq-prompt-input"
+        rows="1"
+        placeholder="Type or speak…"
+        aria-label="Prompt input / text window"
+        autocomplete="off"
+        spellcheck="true"
+      ></textarea>
+      <div class="voq-actions" aria-label="Prompt actions">
+        <button id="voq-send-button" class="voq-action-button" type="button" aria-label="Send prompt" title="Send">
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">send</span>
+          <span class="voq-text-fallback">send</span>
+        </button>
+        <button id="voq-tts-button" class="voq-action-button" type="button" aria-label="Toggle text to speech" title="TTS">
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">graphic_eq</span>
+          <span class="voq-text-fallback">tts</span>
+        </button>
+        <button id="voq-asr-button" class="voq-action-button" type="button" aria-label="Toggle speech recognition" title="ASR">
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">mic</span>
+          <span class="voq-text-fallback">asr</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

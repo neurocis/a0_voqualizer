@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Add standalone `Voqualizer` web page static shell at `/plugins/a0_voqualizer/webui/voqualizer.html`, with a dark responsive full-width chat layout, `Voqualizer:` context picker, top-right settings cog, and bottom prompt row with send/TTS/ASR actions.
 ## Unreleased
 
 - Add a deferred `voqualizer_tts_push_probe` diagnostic event after direct GUI TTS ACK completion, plus frontend probe counters, to determine whether pushed Socket.IO events reach the main GUI after the inbound handler unwinds. ACK fallback behavior remains unchanged.
