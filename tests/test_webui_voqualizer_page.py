@@ -68,6 +68,36 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m1-static-shell" in js
+    assert "m2-context-picker" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
+    assert "milestone: 2" in js
+
+
+
+def test_voqualizer_context_picker_wiring():
+    js = read(JS)
+    assert "import { callJsonApi } from '/js/api.js';" in js
+    assert "plugins/a0_voqualizer/voqualizer_admin" in js
+    assert "action: 'contexts'" in js
+    assert "a0_voqualizer.standalone.selected_context_id" in js
+    assert "function normalizeContext" in js
+    assert "function normalizeContexts" in js
+    assert "async function fetchContexts" in js
+    assert "async function loadContextPicker" in js
+    assert "Loading contexts…" in js
+    assert "No contexts found" in js
+    assert "Contexts unavailable" in js
+
+
+def test_voqualizer_context_picker_debug_fields():
+    js = read(JS)
+    for token in [
+        "adminEndpoint",
+        "selectedContextStorageKey",
+        "contextsLoading",
+        "contextError",
+        "contextCount",
+        "selectedContextId",
+    ]:
+        assert token in js

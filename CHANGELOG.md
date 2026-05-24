@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Populate the standalone `Voqualizer` page context picker from the existing Voqualizer admin `contexts` action, persisting the selected context under `a0_voqualizer.standalone.selected_context_id` with loading, empty, and unavailable states.
 - Add standalone `Voqualizer` web page static shell at `/plugins/a0_voqualizer/webui/voqualizer.html`, with a dark responsive full-width chat layout, `Voqualizer:` context picker, top-right settings cog, and bottom prompt row with send/TTS/ASR actions.
 ## Unreleased
 
