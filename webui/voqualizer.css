@@ -272,3 +272,7 @@ body { min-height: 100dvh; overflow: hidden; }
 .voq-action-button[disabled] { opacity: 0.5; cursor: not-allowed; }
 .voq-action-button[data-busy="true"] { animation: voq-busy 1.2s ease-in-out infinite; }
 @keyframes voq-busy { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+.voq-action-button[data-tts-state="off"] { opacity: 0.55; }
+.voq-action-button[data-tts-state="speaking"] { border-color: rgba(139, 92, 246, 0.6); box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.22); }
+.voq-action-button[data-tts-state="error"] { border-color: rgba(248, 113, 113, 0.5); }

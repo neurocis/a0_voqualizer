@@ -1,12 +1,64 @@
 import { callJsonApi } from '/js/api.js';
+import {
+  bytesFromTtsPayload,
+  concatAudioBytes,
+  repairRiffWaveHeader,
+  normalizeTtsCodec,
+  ttsSampleRate,
+  pcm16ToFloat32,
+  alignPcm16Bytes,
+  clearPcm16Carry,
+  createPlaybackTracker,
+  rememberPlaybackSource,
+} from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js';
 
-const PAGE_VERSION = 'm3-typed-prompt';
+const PAGE_VERSION = 'm4-reliable-tts';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'message_async';
 const POLL_ENDPOINT = 'poll';
+const VOQUALIZER_HANDLER = 'plugins/a0_voqualizer/ws_voqualizer';
 const SELECTED_CONTEXT_STORAGE_KEY = 'a0_voqualizer.standalone.selected_context_id';
+const TTS_ENABLED_STORAGE_KEY = 'a0_voqualizer.standalone.tts_enabled';
 const POLL_INTERVAL_MS = 700;
 const POLL_HARD_TIMEOUT_MS = 120000;
+
+const tts = {
+  socket: null,
+  sessionId: '',
+  bearerToken: '',
+  contextId: '',
+  connecting: null,
+  ready: false,
+  enabled: loadTtsEnabled(),
+  tracker: createPlaybackTracker(),
+  pcm16CarryMap: new Map(),
+  audioContext: null,
+  playbackTail: 0,
+  encodedBuffers: new Map(),
+  spokenResponseIds: new Set(),
+  lastError: '',
+  lastSpeakAt: 0,
+};
+
+function loadTtsEnabled() {
+  try {
+    const stored = globalThis.localStorage?.getItem(TTS_ENABLED_STORAGE_KEY);
+    if (stored === null || stored === undefined) return true;
+    return stored === 'true';
+  } catch (_err) {
+    return true;
+  }
+}
+
+function persistTtsEnabled(value) {
+  try {
+    globalThis.localStorage?.setItem(TTS_ENABLED_STORAGE_KEY, value ? 'true' : 'false');
+  } catch (_err) {}
+}
+
+function safeString(value) {
+  return value === undefined || value === null ? '' : String(value);
+}
 
 function autosizePrompt(textarea) {
   if (!textarea) return;
@@ -14,26 +66,19 @@ function autosizePrompt(textarea) {
   textarea.style.height = `${Math.min(textarea.scrollHeight, window.innerHeight * 0.34)}px`;
 }
 
-function safeString(value) {
-  return value === undefined || value === null ? '' : String(value);
-}
-
 function readSelectedContextHint() {
   const params = new URLSearchParams(globalThis.location?.search || '');
   const queryValue = params.get('ctxid') || params.get('context_id') || params.get('contextId');
   if (queryValue) return safeString(queryValue).trim();
-
   try {
     const stored = globalThis.localStorage?.getItem(SELECTED_CONTEXT_STORAGE_KEY);
     if (stored) return safeString(stored).trim();
   } catch (_err) {}
-
   try {
     if (typeof globalThis.getContext === 'function') {
       return safeString(globalThis.getContext()).trim();
     }
   } catch (_err) {}
-
   return '';
 }
 
@@ -93,18 +138,15 @@ function setSelectPlaceholder(select, label, { disabled = true } = {}) {
 function renderContexts(select, contexts, selectedContextId) {
   if (!select) return '';
   select.innerHTML = '';
-
   if (!contexts.length) {
     setSelectPlaceholder(select, 'No contexts found', { disabled: true });
     return '';
   }
-
   const ids = new Set(contexts.map((ctx) => ctx.id));
   const nextSelected = selectedContextId && ids.has(selectedContextId) ? selectedContextId : contexts[0].id;
   if (selectedContextId && !ids.has(selectedContextId)) {
     persistSelectedContextId('');
   }
-
   for (const ctx of contexts) {
     const option = document.createElement('option');
     option.value = ctx.id;
@@ -115,7 +157,6 @@ function renderContexts(select, contexts, selectedContextId) {
     select.appendChild(option);
     ctx.active = ctx.id === nextSelected;
   }
-
   select.disabled = false;
   select.value = nextSelected;
   persistSelectedContextId(nextSelected);
@@ -131,9 +172,7 @@ function setPageStatus(message, level = 'info') {
 
 function generateMessageId() {
   try {
-    if (globalThis.crypto?.randomUUID) {
-      return globalThis.crypto.randomUUID();
-    }
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   } catch (_err) {}
   return `voq-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -165,7 +204,6 @@ function createBubble({ id, role, content, kind }) {
   bubble.dataset.bubbleId = id;
   bubble.dataset.role = role;
   if (kind) bubble.dataset.kind = kind;
-
   const body = document.createElement('div');
   body.className = 'voq-bubble-body';
   body.textContent = safeString(content);
@@ -193,7 +231,6 @@ function renderOrUpdateLogBubble(state, item) {
   const existing = state.transcriptIds.get(key);
   const role = item.type === 'response' ? 'assistant' : item.type === 'agent' ? 'assistant' : 'system';
   const content = item.content ?? '';
-
   if (existing) {
     const body = existing.querySelector('.voq-bubble-body');
     if (body) body.textContent = safeString(content);
@@ -206,6 +243,9 @@ function renderOrUpdateLogBubble(state, item) {
     state.transcriptIds.set(key, bubble);
   }
   maybeAutoScroll(chat, wasNearBottom);
+  if (item.type === 'response') {
+    maybeSpeakResponse(item);
+  }
 }
 
 function renderErrorRow(state, message) {
@@ -228,17 +268,25 @@ function updateSendButton(state) {
   const hasContext = !!(globalThis.__voqualizer_page?.selectedContextId);
   const hasText = !!prompt?.value.trim();
   const busy = !!state.isSubmitting;
-  const disabled = busy || !hasContext || !hasText;
-  button.disabled = disabled;
+  button.disabled = busy || !hasContext || !hasText;
   button.dataset.busy = busy ? 'true' : 'false';
-  if (select) select.disabled = busy || select.disabled === true && !hasContext;
+  if (select) select.disabled = busy || (select.disabled === true && !hasContext);
+}
+
+function updateTtsButton() {
+  const button = document.getElementById('voq-tts-button');
+  if (!button) return;
+  let state = 'idle';
+  if (!tts.enabled) state = 'off';
+  else if (tts.tracker.activePlaybackSources.size > 0) state = 'speaking';
+  else if (tts.lastError) state = 'error';
+  button.dataset.ttsState = state;
+  button.setAttribute('aria-pressed', tts.enabled ? 'true' : 'false');
+  button.setAttribute('aria-label', tts.enabled ? 'Speak responses (on)' : 'Speak responses (off)');
 }
 
 async function pollOnce(contextId, logFrom) {
-  return callJsonApi(POLL_ENDPOINT, {
-    context: contextId,
-    log_from: logFrom,
-  });
+  return callJsonApi(POLL_ENDPOINT, { context: contextId, log_from: logFrom });
 }
 
 async function runPollLoop(state, contextId, submissionId) {
@@ -255,9 +303,7 @@ async function runPollLoop(state, contextId, submissionId) {
     if (snapshot && Array.isArray(snapshot.logs)) {
       for (const item of snapshot.logs) {
         if (!item || !item.id) continue;
-        if (item.type === 'user') {
-          continue;
-        }
+        if (item.type === 'user') continue;
         if (item.type === 'agent' || item.type === 'response') {
           renderOrUpdateLogBubble(state, item);
           if (item.type === 'response') sawResponse = true;
@@ -270,9 +316,7 @@ async function runPollLoop(state, contextId, submissionId) {
         setPageStatus('Context was deselected by server.', 'warn');
         break;
       }
-      if (sawResponse && snapshot.log_progress_active === false) {
-        break;
-      }
+      if (sawResponse && snapshot.log_progress_active === false) break;
     }
     if (Date.now() - started > POLL_HARD_TIMEOUT_MS) {
       renderErrorRow(state, 'Agent did not respond within the timeout window.');
@@ -303,7 +347,7 @@ async function submitPrompt(state) {
     return;
   }
   if (state.isSubmitting) return;
-
+  ensureAudioContext();
   const messageId = generateMessageId();
   state.isSubmitting = true;
   state.activeSubmissionId = messageId;
@@ -313,17 +357,11 @@ async function submitPrompt(state) {
   }
   setPageStatus('Sending…', 'loading');
   updateSendButton(state);
-
   renderUserBubble(state, { id: messageId, text });
   prompt.value = '';
   autosizePrompt(prompt);
-
   try {
-    const result = await callJsonApi(MESSAGE_ENDPOINT, {
-      text,
-      context: contextId,
-      message_id: messageId,
-    });
+    const result = await callJsonApi(MESSAGE_ENDPOINT, { text, context: contextId, message_id: messageId });
     if (!result) throw new Error('empty response from message_async');
     setPageStatus('Awaiting response…', 'loading');
     await runPollLoop(state, contextId, messageId);
@@ -331,9 +369,7 @@ async function submitPrompt(state) {
     renderErrorRow(state, `Send failed: ${error?.message || error}`);
     state.isSubmitting = false;
     state.activeSubmissionId = '';
-    if (globalThis.__voqualizer_page) {
-      globalThis.__voqualizer_page.isSubmitting = false;
-    }
+    if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.isSubmitting = false;
     setPageStatus('Send failed', 'error');
     updateSendButton(state);
   }
@@ -353,9 +389,7 @@ function bindPromptInput(state) {
     event.preventDefault();
     void submitPrompt(state);
   });
-  if (button) {
-    button.addEventListener('click', () => void submitPrompt(state));
-  }
+  if (button) button.addEventListener('click', () => void submitPrompt(state));
   autosizePrompt(prompt);
   updateSendButton(state);
 }
@@ -363,12 +397,10 @@ function bindPromptInput(state) {
 async function loadContextPicker(state, select) {
   const page = globalThis.__voqualizer_page;
   if (!select || !page) return [];
-
   setSelectPlaceholder(select, 'Loading contexts…', { disabled: true });
   page.contextsLoading = true;
   page.contextError = '';
   setPageStatus('Loading contexts…', 'loading');
-
   try {
     const contexts = await fetchContexts();
     const selectedContextId = renderContexts(select, contexts, readSelectedContextHint());
@@ -378,6 +410,7 @@ async function loadContextPicker(state, select) {
     page.contextError = '';
     page.contextCount = contexts.length;
     state.lastLogVersion = 0;
+    tts.contextId = selectedContextId;
     setPageStatus(contexts.length ? `Selected ${selectedContextId}` : 'No contexts found', contexts.length ? 'ready' : 'empty');
     updateSendButton(state);
     return contexts;
@@ -406,13 +439,307 @@ function bindContextPicker(state, select) {
       globalThis.__voqualizer_page.lastContextChangeAt = Date.now();
       globalThis.__voqualizer_page.lastLogVersion = 0;
       const contexts = globalThis.__voqualizer_page.contexts || [];
-      for (const ctx of contexts) {
-        ctx.active = ctx.id === selectedContextId;
-      }
+      for (const ctx of contexts) ctx.active = ctx.id === selectedContextId;
     }
+    handleContextChange(selectedContextId);
     setPageStatus(selectedContextId ? `Selected ${selectedContextId}` : 'No context selected', selectedContextId ? 'ready' : 'empty');
     updateSendButton(state);
   });
+}
+
+function handleContextChange(newContextId) {
+  cancelInflightTts();
+  tts.spokenResponseIds.clear();
+  tts.pcm16CarryMap.clear();
+  tts.encodedBuffers.clear();
+  if (tts.contextId !== newContextId) {
+    disconnectVoq();
+  }
+  tts.contextId = newContextId;
+}
+
+function ensureAudioContext() {
+  if (!tts.audioContext) {
+    try {
+      const Ctx = globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (Ctx) tts.audioContext = new Ctx();
+    } catch (_err) {}
+  }
+  if (tts.audioContext && tts.audioContext.state === 'suspended') {
+    try { tts.audioContext.resume(); } catch (_err) {}
+  }
+  return tts.audioContext;
+}
+
+async function loadSocketIo() {
+  if (globalThis.io) return globalThis.io;
+  try {
+    const mod = await import('/vendor/socket.io.esm.min.js');
+    return mod.io || mod.default || globalThis.io;
+  } catch (error) {
+    tts.lastError = `socket.io load failed: ${error?.message || error}`;
+    throw error;
+  }
+}
+
+async function fetchCsrfTokenSafe() {
+  try {
+    const api = await import('/js/api.js');
+    if (typeof api.getCsrfToken === 'function') return await api.getCsrfToken();
+  } catch (_err) {}
+  return '';
+}
+
+async function connectVoq() {
+  if (tts.socket && tts.socket.connected) return tts.socket;
+  if (tts.connecting) return tts.connecting;
+  tts.connecting = (async () => {
+    const io = await loadSocketIo();
+    const csrf = await fetchCsrfTokenSafe();
+    const socket = io('/', {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+      auth: (cb) => cb({ csrf_token: csrf, handlers: [VOQUALIZER_HANDLER] }),
+    });
+    tts.socket = socket;
+    socket.on('voqualizer_tts_chunk', handleTtsChunk);
+    socket.on('voqualizer_tts_done', handleTtsDone);
+    socket.on('voqualizer_error', handleVoqError);
+    socket.on('disconnect', () => { tts.ready = false; updateTtsButton(); });
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('socket connect timeout')), 8000);
+      socket.on('connect', () => { clearTimeout(timeout); resolve(); });
+      socket.on('connect_error', (err) => { clearTimeout(timeout); reject(err); });
+    });
+    return socket;
+  })();
+  try {
+    return await tts.connecting;
+  } finally {
+    tts.connecting = null;
+  }
+}
+
+async function initVoqSession(contextId) {
+  if (tts.ready && tts.contextId === contextId && tts.sessionId) return tts;
+  const socket = await connectVoq();
+  const sessionId = generateMessageId();
+  const payload = {
+    session_id: sessionId,
+    context_id: contextId,
+    barge_in: false,
+    asr: { enabled: false },
+    tts: { enabled: !!tts.enabled },
+  };
+  const ready = await new Promise((resolve, reject) => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('voqualizer_init timeout'));
+    }, 10000);
+    socket.emit(VOQUALIZER_HANDLER, { event: 'voqualizer_init', data: payload }, (ack) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (ack && ack.event === 'voqualizer_ready') resolve(ack);
+      else if (ack && ack.error) reject(new Error(ack.error.message || 'voqualizer_init failed'));
+      else resolve(ack || {});
+    });
+  });
+  tts.sessionId = ready.session_id || sessionId;
+  tts.bearerToken = ready.bearer_token || '';
+  tts.contextId = contextId;
+  tts.ready = true;
+  return tts;
+}
+
+async function speakText(text, { utteranceId } = {}) {
+  const trimmed = safeString(text).trim();
+  if (!trimmed) return;
+  if (!tts.enabled) return;
+  const contextId = tts.contextId || (globalThis.__voqualizer_page?.selectedContextId || '');
+  if (!contextId) return;
+  ensureAudioContext();
+  try {
+    await initVoqSession(contextId);
+  } catch (error) {
+    tts.lastError = `init failed: ${error?.message || error}`;
+    updateTtsButton();
+    return;
+  }
+  const id = utteranceId || `voq-utt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  tts.lastSpeakAt = Date.now();
+  tts.lastError = '';
+  try {
+    tts.socket.emit(VOQUALIZER_HANDLER, {
+      event: 'voqualizer_user_text',
+      data: {
+        session_id: tts.sessionId,
+        bearer_token: tts.bearerToken,
+        utterance_id: id,
+        text: trimmed,
+      },
+    }, (ack) => {
+      if (ack && ack.error) {
+        tts.lastError = ack.error.message || 'speak failed';
+        updateTtsButton();
+      }
+    });
+  } catch (error) {
+    tts.lastError = `speak failed: ${error?.message || error}`;
+  }
+  updateTtsButton();
+}
+
+function cancelInflightTts() {
+  if (tts.tracker) tts.tracker.stopAllPlayback();
+  if (tts.socket && tts.socket.connected && tts.sessionId) {
+    try {
+      tts.socket.emit(VOQUALIZER_HANDLER, {
+        event: 'voqualizer_control',
+        data: {
+          session_id: tts.sessionId,
+          bearer_token: tts.bearerToken,
+          action: 'cancel_tts',
+        },
+      });
+    } catch (_err) {}
+  }
+  updateTtsButton();
+}
+
+function disconnectVoq() {
+  cancelInflightTts();
+  if (tts.socket) {
+    try {
+      tts.socket.emit(VOQUALIZER_HANDLER, {
+        event: 'voqualizer_control',
+        data: {
+          session_id: tts.sessionId,
+          bearer_token: tts.bearerToken,
+          action: 'end_session',
+        },
+      });
+    } catch (_err) {}
+    try { tts.socket.disconnect(); } catch (_err) {}
+  }
+  tts.socket = null;
+  tts.sessionId = '';
+  tts.bearerToken = '';
+  tts.ready = false;
+}
+
+function handleVoqError(payload) {
+  const data = (payload && payload.data) || payload || {};
+  tts.lastError = safeString(data.message || data.code || 'voqualizer error');
+  updateTtsButton();
+}
+
+function handleTtsChunk(payload) {
+  if (!tts.enabled) return;
+  const data = (payload && payload.data) || payload || {};
+  const utteranceId = safeString(data.utterance_id || data.utteranceId || 'default');
+  if (tts.tracker.cancelledTtsUtterances.has(utteranceId)) return;
+  const codec = normalizeTtsCodec(data, payload);
+  const sampleRate = ttsSampleRate(data, payload, codec);
+  const bytes = bytesFromTtsPayload(payload);
+  if (!bytes || !bytes.byteLength) return;
+  if (codec === 'pcm16/16k' || codec === 'pcm16/24k') {
+    playPcmChunk(bytes, sampleRate, utteranceId);
+  } else {
+    bufferEncodedChunk(bytes, codec, utteranceId, !!(data.is_final || data.final));
+  }
+}
+
+function playPcmChunk(bytes, sampleRate, utteranceId) {
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+  const aligned = alignPcm16Bytes(bytes, tts.pcm16CarryMap, utteranceId);
+  if (!aligned.byteLength) return;
+  const float = pcm16ToFloat32(aligned);
+  if (!float.length) return;
+  const buffer = ctx.createBuffer(1, float.length, sampleRate);
+  buffer.copyToChannel(float, 0);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  const startAt = Math.max(ctx.currentTime + 0.01, tts.playbackTail);
+  source.start(startAt);
+  tts.playbackTail = startAt + buffer.duration;
+  rememberPlaybackSource(tts.tracker, utteranceId, source);
+  updateTtsButton();
+}
+
+function bufferEncodedChunk(bytes, codec, utteranceId, isFinal) {
+  const key = utteranceId || 'default';
+  const existing = tts.encodedBuffers.get(key) || [];
+  existing.push(bytes);
+  tts.encodedBuffers.set(key, existing);
+  if (isFinal) {
+    const joined = concatAudioBytes(existing);
+    const repaired = codec === 'wav' ? repairRiffWaveHeader(joined) : joined;
+    tts.encodedBuffers.delete(key);
+    const mime = codec === 'wav' ? 'audio/wav' : codec === 'mp3' ? 'audio/mpeg' : 'audio/ogg';
+    const blob = new Blob([repaired], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.addEventListener('ended', () => { URL.revokeObjectURL(url); }, { once: true });
+    try { audio.play(); } catch (_err) {}
+  }
+}
+
+function handleTtsDone(payload) {
+  const data = (payload && payload.data) || payload || {};
+  const utteranceId = safeString(data.utterance_id || data.utteranceId || 'default');
+  if (data.cancelled || data.reason === 'barge_in') {
+    tts.tracker.stopPlaybackForUtterance(utteranceId);
+  }
+  clearPcm16Carry(tts.pcm16CarryMap, utteranceId);
+  tts.encodedBuffers.delete(utteranceId);
+  updateTtsButton();
+}
+
+function maybeSpeakResponse(item) {
+  if (!tts.enabled) return;
+  if (!item || item.type !== 'response' || !item.id) return;
+  if (tts.spokenResponseIds.has(item.id)) return;
+  tts.spokenResponseIds.add(item.id);
+  const utteranceId = `voq-resp-${item.id}`;
+  void speakText(String(item.content || ''), { utteranceId });
+}
+
+function bindTtsButton() {
+  const button = document.getElementById('voq-tts-button');
+  if (!button) return;
+  button.addEventListener('click', () => {
+    tts.enabled = !tts.enabled;
+    persistTtsEnabled(tts.enabled);
+    if (!tts.enabled) {
+      cancelInflightTts();
+    } else {
+      ensureAudioContext();
+      const contextId = globalThis.__voqualizer_page?.selectedContextId || '';
+      if (contextId) void initVoqSession(contextId).catch((err) => {
+        tts.lastError = `init failed: ${err?.message || err}`;
+      });
+    }
+    if (tts.socket && tts.socket.connected && tts.sessionId) {
+      try {
+        tts.socket.emit(VOQUALIZER_HANDLER, {
+          event: 'voqualizer_control',
+          data: {
+            session_id: tts.sessionId,
+            bearer_token: tts.bearerToken,
+            action: 'set_tts_enabled',
+            enabled: !!tts.enabled,
+          },
+        });
+      } catch (_err) {}
+    }
+    updateTtsButton();
+  });
+  updateTtsButton();
 }
 
 function initVoqualizerPage() {
@@ -424,13 +751,15 @@ function initVoqualizerPage() {
     version: PAGE_VERSION,
     loadedAt: Date.now(),
     route: '/plugins/a0_voqualizer/webui/voqualizer.html',
-    milestone: 3,
+    milestone: 4,
     standalone: true,
     adminEndpoint: ADMIN_ENDPOINT,
     messageEndpoint: MESSAGE_ENDPOINT,
     pollEndpoint: POLL_ENDPOINT,
+    voqualizerHandler: VOQUALIZER_HANDLER,
     pollIntervalMs: POLL_INTERVAL_MS,
     selectedContextStorageKey: SELECTED_CONTEXT_STORAGE_KEY,
+    ttsEnabledStorageKey: TTS_ENABLED_STORAGE_KEY,
     contexts: [],
     selectedContextId: '',
     contextsLoading: false,
@@ -439,6 +768,10 @@ function initVoqualizerPage() {
     isSubmitting: false,
     lastSubmitId: '',
     lastLogVersion: 0,
+    ttsEnabled: tts.enabled,
+    sessionId: '',
+    lastTtsAt: 0,
+    lastTtsError: '',
   };
 
   const state = {
@@ -459,7 +792,10 @@ function initVoqualizerPage() {
 
   bindPromptInput(state);
   bindContextPicker(state, contextSelect);
+  bindTtsButton();
   void loadContextPicker(state, contextSelect);
+
+  globalThis.addEventListener('beforeunload', () => { disconnectVoq(); });
 }
 
 if (document.readyState === 'loading') {
@@ -475,9 +811,19 @@ export {
   POLL_ENDPOINT,
   POLL_INTERVAL_MS,
   SELECTED_CONTEXT_STORAGE_KEY,
+  TTS_ENABLED_STORAGE_KEY,
+  VOQUALIZER_HANDLER,
+  cancelInflightTts,
+  connectVoq,
+  disconnectVoq,
   fetchContexts,
+  handleTtsChunk,
+  handleTtsDone,
+  initVoqSession,
   initVoqualizerPage,
+  maybeSpeakResponse,
   normalizeContext,
   normalizeContexts,
+  speakText,
   submitPrompt,
 };

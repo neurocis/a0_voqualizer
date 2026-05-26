@@ -68,10 +68,10 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m3-typed-prompt" in js
+    assert "m4-reliable-tts" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
-    assert "milestone: 3" in js
+    assert "milestone: 4" in js
 
 
 
@@ -133,5 +133,38 @@ def test_voqualizer_typed_prompt_no_main_gui_coupling():
         "voqualizer-response-observer",
         "/js/tts-service.js",
         "/js/stt-service.js",
+    ]:
+        assert forbidden not in js, forbidden
+
+
+
+def test_voqualizer_tts_wiring():
+    js = read(JS)
+    assert "voqualizer-audio.js" in js
+    assert "plugins/a0_voqualizer/ws_voqualizer" in js
+    assert "a0_voqualizer.standalone.tts_enabled" in js
+    assert "function connectVoq" in js
+    assert "async function initVoqSession" in js
+    assert "async function speakText" in js
+    assert "function cancelInflightTts" in js
+    assert "function disconnectVoq" in js
+    assert "function handleTtsChunk" in js
+    assert "function handleTtsDone" in js
+    assert "function maybeSpeakResponse" in js
+    assert "voqualizer_user_text" in js
+    assert "voqualizer_init" in js
+    assert "set_tts_enabled" in js
+    assert "cancel_tts" in js
+
+
+def test_voqualizer_tts_no_legacy_imports():
+    js = read(JS)
+    for forbidden in [
+        "tester-store.js",
+        "conversation-mode.js",
+        "Alpine.store('chats'",
+        "globalThis.sendMessage",
+        "voqualizer-response-observer",
+        "set_messages_after_loop",
     ]:
         assert forbidden not in js, forbidden

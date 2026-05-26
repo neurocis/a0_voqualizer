@@ -162,3 +162,11 @@ The plugin is installable through the standard A0 plugin mechanism:
 - `hooks.py` provides standard `install()` / `uninstall()` hooks.
 - `requirements.txt` and `hooks.py` cover runtime dependency installation/status.
 - `default_config.yaml` provides the default provider catalogue and runtime limits.
+
+## 2026-05-26 — Milestone 4: reliable TTS playback
+
+- Standalone Voqualizer page now speaks finalized `response` items via a dedicated TTS-only Voqualizer WebSocket session.
+- Reuses shared `webui/lib/voqualizer-audio.js` helpers for ACK-chunk PCM and encoded-audio playback; no live-push dependency.
+- TTS toggle persisted under `a0_voqualizer.standalone.tts_enabled`; off-toggle cancels in-flight playback and informs the server.
+- Deduplicates spoken responses by id (`voq-resp-<built-in function id>`); resets state on context change.
+- No imports of tester-store/conversation-mode; no main GUI observer/store coupling.
