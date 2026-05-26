@@ -68,10 +68,10 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m2-context-picker" in js
+    assert "m3-typed-prompt" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
-    assert "milestone: 2" in js
+    assert "milestone: 3" in js
 
 
 
@@ -101,3 +101,37 @@ def test_voqualizer_context_picker_debug_fields():
         "selectedContextId",
     ]:
         assert token in js
+
+
+
+def test_voqualizer_typed_prompt_path():
+    js = read(JS)
+    assert "const MESSAGE_ENDPOINT = 'message_async';" in js
+    assert "const POLL_ENDPOINT = 'poll';" in js
+    assert "callJsonApi(MESSAGE_ENDPOINT, {" in js
+    assert "context: contextId" in js
+    assert "message_id: messageId" in js
+    assert "callJsonApi(POLL_ENDPOINT, {" in js
+    assert "log_from: logFrom" in js
+    assert "function runPollLoop" in js
+    assert "function submitPrompt" in js
+    assert "function renderUserBubble" in js
+    assert "function renderOrUpdateLogBubble" in js
+    assert "renderErrorRow" in js
+    assert "voq-bubble--user" in js
+    assert "voq-bubble--assistant" in js
+
+
+def test_voqualizer_typed_prompt_no_main_gui_coupling():
+    js = read(JS)
+    for forbidden in [
+        "Alpine.store('chats'",
+        "globalThis.sendMessage",
+        "set_messages_after_loop",
+        "chat-input-box-end",
+        "step-action-buttons",
+        "voqualizer-response-observer",
+        "/js/tts-service.js",
+        "/js/stt-service.js",
+    ]:
+        assert forbidden not in js, forbidden

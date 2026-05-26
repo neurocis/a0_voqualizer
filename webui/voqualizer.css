@@ -246,3 +246,29 @@ body { min-height: 100dvh; overflow: hidden; }
   .voq-material { font-size: 21px; }
   .voq-text-fallback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
+
+.voq-bubble {
+  margin: 8px 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--voq-border);
+  background: rgba(15, 23, 42, 0.62);
+  color: var(--voq-text);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+.voq-bubble--user {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(6, 182, 212, 0.18));
+  border-color: rgba(139, 92, 246, 0.32);
+}
+.voq-bubble--assistant {
+  background: rgba(2, 6, 23, 0.62);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+.voq-bubble--system { color: var(--voq-muted); }
+.voq-bubble--error { color: #fca5a5; border-color: rgba(248, 113, 113, 0.4); }
+.voq-action-button[disabled] { opacity: 0.5; cursor: not-allowed; }
+.voq-action-button[data-busy="true"] { animation: voq-busy 1.2s ease-in-out infinite; }
+@keyframes voq-busy { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
