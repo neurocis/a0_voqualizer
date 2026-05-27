@@ -16,7 +16,7 @@ import {
   WORKLET_PROCESSOR,
 } from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js';
 
-const PAGE_VERSION = 'm5-asr-input';
+const PAGE_VERSION = 'm6-polish-final';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'message_async';
 const POLL_ENDPOINT = 'poll';
@@ -205,10 +205,21 @@ function renderContexts(select, contexts, selectedContextId) {
 }
 
 function setPageStatus(message, level = 'info') {
+  const text = message || 'Ready';
   const root = document.querySelector('[data-voqualizer-page="standalone"]');
-  if (!root) return;
-  root.dataset.status = level;
-  root.dataset.statusMessage = message || '';
+  if (root) {
+    root.dataset.status = level;
+    root.dataset.statusMessage = text;
+  }
+  const status = document.getElementById('voq-status');
+  if (status) {
+    status.textContent = text;
+    status.dataset.level = level;
+  }
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastStatus = text;
+    globalThis.__voqualizer_page.lastStatusLevel = level;
+  }
 }
 
 function generateMessageId() {
@@ -234,9 +245,32 @@ function isNearBottom(chat) {
   return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 96;
 }
 
+function updateJumpLatest() {
+  const chat = transcriptElement();
+  const button = document.getElementById('voq-jump-latest');
+  if (!chat || !button) return;
+  button.hidden = isNearBottom(chat);
+}
+
+function scrollTranscriptToBottom() {
+  const chat = transcriptElement();
+  if (!chat) return;
+  chat.scrollTop = chat.scrollHeight;
+  updateJumpLatest();
+}
+
 function maybeAutoScroll(chat, wasNearBottom) {
   if (!chat) return;
   if (wasNearBottom) chat.scrollTop = chat.scrollHeight;
+  updateJumpLatest();
+}
+
+function bindTranscriptControls() {
+  const chat = transcriptElement();
+  const button = document.getElementById('voq-jump-latest');
+  if (chat) chat.addEventListener('scroll', updateJumpLatest, { passive: true });
+  if (button) button.addEventListener('click', scrollTranscriptToBottom);
+  updateJumpLatest();
 }
 
 function createBubble({ id, role, content, kind }) {
@@ -244,6 +278,8 @@ function createBubble({ id, role, content, kind }) {
   bubble.className = `voq-bubble voq-bubble--${role}`;
   bubble.dataset.bubbleId = id;
   bubble.dataset.role = role;
+  bubble.setAttribute('role', role === 'error' ? 'alert' : 'article');
+  bubble.setAttribute('aria-label', role === 'user' ? 'You' : role === 'assistant' ? 'Assistant' : role === 'error' ? 'Error' : 'System');
   if (kind) bubble.dataset.kind = kind;
   const body = document.createElement('div');
   body.className = 'voq-bubble-body';
@@ -311,7 +347,13 @@ function updateSendButton(state) {
   const busy = !!state.isSubmitting;
   button.disabled = busy || !hasContext || !hasText;
   button.dataset.busy = busy ? 'true' : 'false';
-  if (select) select.disabled = busy || (select.disabled === true && !hasContext);
+  button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
+  button.setAttribute('title', busy ? 'Waiting for assistant response' : !hasContext ? 'Select a context before sending' : !hasText ? 'Type a prompt or use ASR' : 'Send prompt');
+  if (select) {
+    select.disabled = busy || (select.disabled === true && !hasContext);
+    const selected = select.selectedOptions && select.selectedOptions[0];
+    select.setAttribute('title', selected ? selected.textContent || 'Select Voqualizer context' : 'Select Voqualizer context');
+  }
 }
 
 function updateTtsButton() {
@@ -324,6 +366,7 @@ function updateTtsButton() {
   button.dataset.ttsState = state;
   button.setAttribute('aria-pressed', tts.enabled ? 'true' : 'false');
   button.setAttribute('aria-label', tts.enabled ? 'Speak responses (on)' : 'Speak responses (off)');
+  button.setAttribute('title', state === 'off' ? 'TTS off — click to speak assistant responses' : state === 'speaking' ? 'Speaking — click to stop and mute' : state === 'error' ? 'TTS error — click to retry/enable' : 'TTS on — click to mute assistant responses');
 }
 
 async function pollOnce(contextId, logFrom) {
@@ -807,6 +850,7 @@ function updateAsrButton() {
   button.dataset.asrState = state;
   button.setAttribute('aria-pressed', asr.enabled ? 'true' : 'false');
   button.setAttribute('aria-label', asr.enabled ? 'Microphone input (on)' : 'Microphone input (off)');
+  button.setAttribute('title', state === 'requesting' ? 'Requesting microphone permission…' : state === 'listening' ? 'Listening — click to stop' : state === 'transcribing' ? 'Transcribing speech — click to stop' : state === 'error' ? 'Microphone error — click to retry' : 'Microphone off — click to start speech recognition');
 }
 
 function sessionEnvelope() {
@@ -1028,7 +1072,7 @@ function initVoqualizerPage() {
     version: PAGE_VERSION,
     loadedAt: Date.now(),
     route: '/plugins/a0_voqualizer/webui/voqualizer.html',
-    milestone: 5,
+    milestone: 6,
     standalone: true,
     adminEndpoint: ADMIN_ENDPOINT,
     messageEndpoint: MESSAGE_ENDPOINT,
@@ -1049,6 +1093,8 @@ function initVoqualizerPage() {
     sessionId: '',
     lastTtsAt: 0,
     lastTtsError: '',
+    lastStatus: 'Ready',
+    lastStatusLevel: 'info',
     asrEnabledStorageKey: ASR_ENABLED_STORAGE_KEY,
     asrSubmitMode: ASR_SUBMIT_MODE,
     workletUrl: WORKLET_URL,
@@ -1075,6 +1121,7 @@ function initVoqualizerPage() {
   if (settings) {
     settings.addEventListener('click', () => {
       globalThis.__voqualizer_page.lastSettingsClickAt = Date.now();
+      setPageStatus('Opening Voqualizer provider settings…', 'info');
     });
   }
 
@@ -1083,6 +1130,7 @@ function initVoqualizerPage() {
   bindContextPicker(state, contextSelect);
   bindTtsButton();
   bindAsrButton();
+  bindTranscriptControls();
   void loadContextPicker(state, contextSelect);
 
   document.addEventListener('visibilitychange', () => {
@@ -1134,4 +1182,6 @@ export {
   handleAsrFinal,
   routeAsrFinal,
   maybeLocalBargeIn,
+  updateJumpLatest,
+  scrollTranscriptToBottom,
 };

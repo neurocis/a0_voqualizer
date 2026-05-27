@@ -68,10 +68,10 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m5-asr-input" in js
+    assert "m6-polish-final" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
-    assert "milestone: 5" in js
+    assert "milestone: 6" in js
 
 
 
@@ -207,3 +207,68 @@ def test_voqualizer_asr_no_legacy_imports():
         "/js/stt-service.js",
     ]:
         assert forbidden not in js, forbidden
+
+
+
+def test_voqualizer_accessibility_regions():
+    html = read(HTML)
+    assert 'role="log"' in html
+    assert 'aria-relevant="additions text"' in html
+    assert 'aria-atomic="false"' in html
+    assert 'tabindex="0"' in html
+    assert 'id="voq-status"' in html
+    assert 'role="status"' in html
+    assert 'aria-live="polite"' in html
+    assert 'aria-describedby="voq-status' in html
+    assert 'id="voq-input-help"' in html
+
+
+def test_voqualizer_buttons_accessibility():
+    html = read(HTML)
+    js = read(JS)
+    assert 'aria-label="Send prompt"' in html
+    assert 'aria-label="Toggle text to speech"' in html
+    assert 'aria-label="Toggle speech recognition"' in html
+    assert "aria-pressed" in js
+    assert "aria-disabled" in js
+    assert "setAttribute('title'" in js or 'setAttribute("title"' in js
+    assert "Speak responses (on)" in js
+    assert "Microphone input (on)" in js
+
+
+def test_voqualizer_status_and_jump_latest():
+    html = read(HTML)
+    js = read(JS)
+    css = read(CSS)
+    assert 'id="voq-status"' in html
+    assert 'id="voq-jump-latest"' in html
+    assert "function updateJumpLatest" in js
+    assert "function scrollTranscriptToBottom" in js
+    assert "function bindTranscriptControls" in js
+    assert "Jump to latest" in html
+    assert ".voq-jump-latest" in css
+    assert 'role="status"' in html
+    assert "lastStatus" in js
+    assert "lastStatusLevel" in js
+
+
+def test_voqualizer_responsive_polish_css():
+    css = read(CSS)
+    for token in [
+        "@media (max-width: 420px)",
+        "@media (prefers-reduced-motion: reduce)",
+        "position: sticky",
+        "safe-area-inset-bottom",
+        ".voq-sr-only",
+        ":focus-visible",
+    ]:
+        assert token in css, token
+
+
+def test_voqualizer_settings_link_and_debug():
+    html = read(HTML)
+    js = read(JS)
+    assert '/plugins/a0_voqualizer/webui/providers.html' in html
+    assert "Open Voqualizer provider settings" in html
+    assert "lastSettingsClickAt" in js
+    assert "Opening Voqualizer provider settings" in js

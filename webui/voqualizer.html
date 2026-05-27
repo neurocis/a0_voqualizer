@@ -13,7 +13,7 @@
     <header class="voq-topbar" aria-label="Voqualizer top bar">
       <div class="voq-context-wrap">
         <label class="voq-brand" for="voq-context-select">Voqualizer:</label>
-        <select id="voq-context-select" class="voq-context-select" aria-label="Select Voqualizer context">
+        <select id="voq-context-select" class="voq-context-select" aria-label="Select Voqualizer context" aria-describedby="voq-status">
           <option value="" selected>Context / Agent Name</option>
         </select>
       </div>
@@ -21,20 +21,34 @@
         id="voq-settings-button"
         class="voq-icon-button voq-settings-button"
         href="/plugins/a0_voqualizer/webui/providers.html"
-        aria-label="Voqualizer settings"
-        title="Voqualizer settings"
+        aria-label="Open Voqualizer provider settings"
+        title="Open Voqualizer provider settings"
       >
         <span class="voq-icon" aria-hidden="true">⚙</span>
       </a>
     </header>
 
-    <main id="voq-chat" class="voq-chat" aria-label="Voqualizer chat transcript" aria-live="polite">
-      <section class="voq-empty-state" aria-label="Empty chat state">
-        <div class="voq-orb" aria-hidden="true">◌</div>
-        <h1>Voqualizer</h1>
-        <p>Speak or type to an A0 context. Minimal, dark, and focused.</p>
-      </section>
-    </main>
+    <div id="voq-status" class="voq-status" role="status" aria-live="polite" aria-atomic="true">Ready</div>
+
+    <div class="voq-chat-wrap">
+      <main
+        id="voq-chat"
+        class="voq-chat"
+        role="log"
+        aria-label="Voqualizer chat transcript"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-atomic="false"
+        tabindex="0"
+      >
+        <section class="voq-empty-state" aria-label="Empty chat state">
+          <div class="voq-orb" aria-hidden="true">◌</div>
+          <h1>Voqualizer</h1>
+          <p>Speak or type to an A0 context. Minimal, dark, and focused.</p>
+        </section>
+      </main>
+      <button id="voq-jump-latest" class="voq-jump-latest" type="button" hidden>Jump to latest</button>
+    </div>
 
     <footer class="voq-composer" aria-label="Voqualizer prompt composer">
       <textarea
@@ -43,9 +57,11 @@
         rows="1"
         placeholder="Type or speak…"
         aria-label="Prompt input / text window"
+        aria-describedby="voq-status voq-input-help"
         autocomplete="off"
         spellcheck="true"
       ></textarea>
+      <p id="voq-input-help" class="voq-sr-only">Press Enter to send. Press Shift Enter for a new line.</p>
       <div class="voq-actions" aria-label="Prompt actions">
         <button id="voq-send-button" class="voq-action-button" type="button" aria-label="Send prompt" title="Send">
           <span class="material-symbols-outlined voq-material" aria-hidden="true">send</span>

@@ -180,3 +180,13 @@ The plugin is installable through the standard A0 plugin mechanism:
 - Light local barge-in cancels in-flight TTS on first VU above 0.05 while TTS is playing.
 - Capture stops on context change, on hidden tab, and on page unload; AudioContext is shared with M4 TTS and left open.
 - No imports of tester-store/conversation-mode; no main GUI observer/store coupling.
+
+## 2026-05-26 — Milestone 6: final standalone polish
+
+- Standalone Voqualizer page now exposes `m6-polish-final` / milestone 6 markers.
+- Added visible `#voq-status` live region for loading, error, listening, speaking, and navigation feedback.
+- Added transcript `role=log`, prompt helper text, ARIA descriptors, bubble roles/labels, dynamic button titles, and `aria-disabled` send state.
+- Added `Jump to latest` affordance that appears when the transcript is scrolled away from the bottom.
+- Added responsive/mobile polish, sticky safe-area composer behavior, focus-visible fallback, and reduced-motion support.
+- Kept settings cog linked to existing provider settings while recording status/debug click state.
+- Preserved M3 typed-chat, M4 ACK-chunk TTS, and M5 ASR pipelines without introducing main WebGUI coupling or live-push TTS changes.
