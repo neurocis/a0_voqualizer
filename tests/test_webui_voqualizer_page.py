@@ -22,8 +22,15 @@ def test_voqualizer_page_identity_and_assets():
     assert 'data-voqualizer-page="standalone"' in html
     assert '/plugins/a0_voqualizer/webui/voqualizer.css' in html
     assert '/plugins/a0_voqualizer/webui/voqualizer.js' in html
+    assert 'voqualizer.css?v=' in html
+    assert 'voqualizer.js?v=' in html
     assert 'Voqualizer:' in html
     assert 'Context:' not in html
+
+
+def test_voqualizer_mobile_version_marker_in_css():
+    css = read(CSS)
+    assert 'voq-mobile-version:' in css
 
 
 def test_voqualizer_page_required_regions_and_controls():
