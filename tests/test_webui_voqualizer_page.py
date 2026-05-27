@@ -361,3 +361,37 @@ def test_voqualizer_word_plan_handler_present():
     css = (Path(__file__).resolve().parents[1] / "webui" / "voqualizer.css").read_text()
     for token in [".voq-word", ".voq-word--active"]:
         assert token in css, token
+
+def test_voqualizer_realtime_cleanup_helpers_present():
+    js = read(JS)
+    for token in [
+        'function clearCxStreamState',
+        'function cxActiveStreamCount',
+        'clearAllWordHighlights();',
+        'lastRealtimeDisconnectAt',
+        'cxActiveStreamCount',
+        'clearCxStreamState({ keepCapability: true })',
+    ]:
+        assert token in js
+
+
+def test_voqualizer_late_word_plan_guard_present():
+    js = read(JS)
+    for token in [
+        'endedByUtteranceId.has(utteranceId)',
+        'lastLateWordPlanAt',
+        'lastLateWordPlanUtteranceId',
+        'lastTtsWordPlanEventAt',
+    ]:
+        assert token in js
+
+
+def test_voqualizer_active_word_debug_fields_present():
+    js = read(JS)
+    for token in [
+        'activeWordUtteranceId',
+        'activeWordIndex',
+        'wordPlan.activeIndexByUtteranceId',
+    ]:
+        assert token in js
+

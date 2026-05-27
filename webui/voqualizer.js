@@ -89,6 +89,39 @@ const wordPlan = {
   rafId: 0,
 };
 
+function cxActiveStreamCount() {
+  let count = 0;
+  for (const streamId of cx.streamsByStreamId.keys()) {
+    if (!cx.finalByStreamId.has(streamId)) count += 1;
+  }
+  return count;
+}
+
+function clearCxStreamState({ keepCapability = true } = {}) {
+  cx.streamsBySubmitId.clear();
+  cx.bubblesByStreamId.clear();
+  cx.streamsByStreamId.clear();
+  cx.lastSeqByStreamId.clear();
+  cx.finalByStreamId.clear();
+  cx.reconciledLogIds.clear();
+  cx.lastEventAt = 0;
+  cx.lastEvent = '';
+  cx.lastError = '';
+  if (!keepCapability) cx.enabledByCapability = false;
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.cxLastEvent = '';
+    globalThis.__voqualizer_page.cxLastStreamId = '';
+    globalThis.__voqualizer_page.cxLastSeq = 0;
+    globalThis.__voqualizer_page.cxLastError = '';
+    globalThis.__voqualizer_page.cxActiveStreamCount = 0;
+  }
+}
+
+function updateCxActiveStreamDebug() {
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.cxActiveStreamCount = cxActiveStreamCount();
+  }
+}
 
 function loadTtsEnabled() {
   try {
@@ -608,6 +641,7 @@ function handleContextChange(newContextId) {
     void stopAsrCapture({ silent: true });
   }
   tts.spokenResponseIds.clear();
+  clearCxStreamState({ keepCapability: true });
   clearAllWordHighlights();
   tts.pcm16CarryMap.clear();
   tts.encodedBuffers.clear();
@@ -672,7 +706,17 @@ async function connectVoq() {
     socket.on('voqualizer_cx_stream_final', handleCxStreamFinal);
     socket.on('voqualizer_cx_stream_error', handleCxStreamError);
     socket.on('voqualizer_tts_word_plan', handleTtsWordPlan);
-    socket.on('disconnect', () => { tts.ready = false; updateTtsButton(); });
+    socket.on('disconnect', () => {
+      tts.ready = false;
+      clearAllWordHighlights();
+      clearCxStreamState({ keepCapability: true });
+      updateTtsButton();
+      if (globalThis.__voqualizer_page) {
+        globalThis.__voqualizer_page.lastRealtimeDisconnectAt = Date.now();
+        globalThis.__voqualizer_page.activeWordUtteranceId = '';
+        globalThis.__voqualizer_page.activeWordIndex = -1;
+      }
+    });
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('socket connect timeout')), 8000);
       socket.on('connect', () => { clearTimeout(timeout); resolve(); });
@@ -923,6 +967,7 @@ function handleCxStreamStart(payload) {
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.cxLastEvent = cx.lastEvent;
     globalThis.__voqualizer_page.cxLastStreamId = streamId;
+    globalThis.__voqualizer_page.cxActiveStreamCount = cxActiveStreamCount();
   }
   findOrCreateCxBubble(streamId, messageId);
 }
@@ -975,6 +1020,7 @@ function handleCxStreamFinal(payload) {
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.cxLastEvent = cx.lastEvent;
     globalThis.__voqualizer_page.cxLastStreamId = streamId;
+    globalThis.__voqualizer_page.cxActiveStreamCount = cxActiveStreamCount();
   }
 }
 
@@ -1066,19 +1112,38 @@ function handleTtsWordPlan(payload) {
   if (!utteranceId) return;
   const words = Array.isArray(data.words) ? data.words : [];
   if (!words.length) return;
+  const alreadyEnded = wordPlan.endedByUtteranceId.has(utteranceId);
+  const planData = { text: safeString(data.text), words, durationMs: Number(data.duration_ms || 0) };
   const bubble = bubbleForUtterance(utteranceId);
   if (!bubble) {
-    wordPlan.plansByUtteranceId.set(utteranceId, { text: safeString(data.text), words, durationMs: Number(data.duration_ms || 0) });
+    wordPlan.plansByUtteranceId.set(utteranceId, planData);
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastTtsWordPlanEventAt = Date.now();
+      globalThis.__voqualizer_page.lastWordPlanUtteranceId = utteranceId;
+      globalThis.__voqualizer_page.lastWordPlanWordCount = words.length;
+      globalThis.__voqualizer_page.lastWordPlanDurationMs = planData.durationMs;
+    }
     return;
   }
-  const spans = renderWordSpansInto(bubble, safeString(data.text), words);
+  const spans = renderWordSpansInto(bubble, planData.text, words);
   wordPlan.spansByUtteranceId.set(utteranceId, spans);
-  wordPlan.plansByUtteranceId.set(utteranceId, { text: safeString(data.text), words, durationMs: Number(data.duration_ms || 0) });
+  wordPlan.plansByUtteranceId.set(utteranceId, planData);
   wordPlan.activeIndexByUtteranceId.set(utteranceId, -1);
   if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastTtsWordPlanEventAt = Date.now();
     globalThis.__voqualizer_page.lastWordPlanUtteranceId = utteranceId;
     globalThis.__voqualizer_page.lastWordPlanWordCount = words.length;
-    globalThis.__voqualizer_page.lastWordPlanDurationMs = Number(data.duration_ms || 0);
+    globalThis.__voqualizer_page.lastWordPlanDurationMs = planData.durationMs;
+  }
+  if (alreadyEnded) {
+    for (const span of spans || []) span.classList.remove('voq-word--active');
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastLateWordPlanUtteranceId = utteranceId;
+      globalThis.__voqualizer_page.lastLateWordPlanAt = Date.now();
+      globalThis.__voqualizer_page.activeWordUtteranceId = '';
+      globalThis.__voqualizer_page.activeWordIndex = -1;
+    }
+    return;
   }
   ensureWordHighlightLoop();
 }
@@ -1091,6 +1156,10 @@ function setActiveWord(utteranceId, index) {
   if (previous != null && previous >= 0 && spans[previous]) spans[previous].classList.remove('voq-word--active');
   if (index >= 0 && spans[index]) spans[index].classList.add('voq-word--active');
   wordPlan.activeIndexByUtteranceId.set(utteranceId, index);
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.activeWordUtteranceId = index >= 0 ? utteranceId : '';
+    globalThis.__voqualizer_page.activeWordIndex = index;
+  }
 }
 
 function ensureWordHighlightLoop() {
@@ -1439,6 +1508,13 @@ function initVoqualizerPage() {
     lastWordPlanUtteranceId: '',
     lastWordPlanWordCount: 0,
     lastWordPlanDurationMs: 0,
+    lastTtsWordPlanEventAt: 0,
+    lastLateWordPlanAt: 0,
+    lastLateWordPlanUtteranceId: '',
+    activeWordUtteranceId: '',
+    activeWordIndex: -1,
+    cxActiveStreamCount: 0,
+    lastRealtimeDisconnectAt: 0,
     cxStreamCapability: false,
     protocolVersion: '',
     cxLastEvent: '',
