@@ -18,7 +18,7 @@ import {
 
 const PAGE_VERSION = 'm6-polish-final';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
-const MESSAGE_ENDPOINT = 'message_async';
+const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
 const VOQUALIZER_HANDLER = 'plugins/a0_voqualizer/ws_voqualizer';
 const SELECTED_CONTEXT_STORAGE_KEY = 'a0_voqualizer.standalone.selected_context_id';
@@ -157,8 +157,35 @@ function normalizeContexts(contexts) {
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
+async function callJsonApiWithDiagnostics(endpoint, data, stage) {
+  const page = globalThis.__voqualizer_page;
+  if (page) {
+    page.lastApiStage = stage || endpoint;
+    page.lastApiEndpoint = endpoint;
+    page.lastApiPayload = data ? JSON.parse(JSON.stringify(data)) : null;
+    page.lastApiError = '';
+    page.lastApiErrorAt = 0;
+  }
+  try {
+    const result = await callJsonApi(endpoint, data);
+    if (page) {
+      page.lastApiResult = result ? JSON.parse(JSON.stringify(result)) : result;
+      page.lastApiOkAt = Date.now();
+    }
+    return result;
+  } catch (error) {
+    const message = error?.message || String(error);
+    if (page) {
+      page.lastApiError = message.slice(0, 2000);
+      page.lastApiErrorAt = Date.now();
+      page.lastApiResult = null;
+    }
+    throw error;
+  }
+}
+
 async function fetchContexts() {
-  const result = await callJsonApi(ADMIN_ENDPOINT, { action: 'contexts' });
+  const result = await callJsonApiWithDiagnostics(ADMIN_ENDPOINT, { action: 'contexts' }, 'contexts');
   if (!result || result.ok === false) {
     throw new Error(result?.message || result?.code || 'contexts request failed');
   }
@@ -370,7 +397,7 @@ function updateTtsButton() {
 }
 
 async function pollOnce(contextId, logFrom) {
-  return callJsonApi(POLL_ENDPOINT, { context: contextId, log_from: logFrom });
+  return callJsonApiWithDiagnostics(POLL_ENDPOINT, { context: contextId, log_from: logFrom }, 'poll');
 }
 
 async function runPollLoop(state, contextId, submissionId) {
@@ -445,7 +472,7 @@ async function submitPrompt(state) {
   prompt.value = '';
   autosizePrompt(prompt);
   try {
-    const result = await callJsonApi(MESSAGE_ENDPOINT, { text, context: contextId, message_id: messageId });
+    const result = await callJsonApiWithDiagnostics(MESSAGE_ENDPOINT, { text, context: contextId, message_id: messageId }, 'message_async');
     if (!result) throw new Error('empty response from message_async');
     setPageStatus('Awaiting response…', 'loading');
     await runPollLoop(state, contextId, messageId);
@@ -1078,6 +1105,13 @@ function initVoqualizerPage() {
     messageEndpoint: MESSAGE_ENDPOINT,
     pollEndpoint: POLL_ENDPOINT,
     voqualizerHandler: VOQUALIZER_HANDLER,
+    lastApiStage: '',
+    lastApiEndpoint: '',
+    lastApiPayload: null,
+    lastApiResult: null,
+    lastApiOkAt: 0,
+    lastApiError: '',
+    lastApiErrorAt: 0,
     pollIntervalMs: POLL_INTERVAL_MS,
     selectedContextStorageKey: SELECTED_CONTEXT_STORAGE_KEY,
     ttsEnabledStorageKey: TTS_ENABLED_STORAGE_KEY,

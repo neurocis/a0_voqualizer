@@ -106,12 +106,12 @@ def test_voqualizer_context_picker_debug_fields():
 
 def test_voqualizer_typed_prompt_path():
     js = read(JS)
-    assert "const MESSAGE_ENDPOINT = 'message_async';" in js
+    assert "const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';" in js
     assert "const POLL_ENDPOINT = 'poll';" in js
-    assert "callJsonApi(MESSAGE_ENDPOINT, {" in js
+    assert "callJsonApiWithDiagnostics(MESSAGE_ENDPOINT, {" in js
     assert "context: contextId" in js
     assert "message_id: messageId" in js
-    assert "callJsonApi(POLL_ENDPOINT, {" in js
+    assert "callJsonApiWithDiagnostics(POLL_ENDPOINT, {" in js
     assert "log_from: logFrom" in js
     assert "function runPollLoop" in js
     assert "function submitPrompt" in js
@@ -272,3 +272,23 @@ def test_voqualizer_settings_link_and_debug():
     assert "Open Voqualizer provider settings" in html
     assert "lastSettingsClickAt" in js
     assert "Opening Voqualizer provider settings" in js
+
+
+def test_voqualizer_api_diagnostics():
+    js = read(JS)
+    assert "async function callJsonApiWithDiagnostics" in js
+    assert "lastApiStage" in js
+    assert "lastApiEndpoint" in js
+    assert "lastApiPayload" in js
+    assert "lastApiError" in js
+    assert "message_async" in js
+    assert "poll" in js
+
+
+def test_voqualizer_message_async_proxy_endpoint():
+    proxy = ROOT / "api" / "voqualizer_message_async.py"
+    text = read(proxy)
+    assert "class VoqualizerMessageAsync" in text
+    assert "from api.message_async import MessageAsync" in text
+    assert "return await core.process(payload, request)" in text
+    assert "requires_auth" in text

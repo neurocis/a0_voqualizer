@@ -1,4 +1,5 @@
 ## [Unreleased]
+- Add a plugin-scoped `voqualizer_message_async` proxy for standalone typed prompts, avoiding a live core `/message_async` route failure while preserving the same `{text, context, message_id}` prompt flow.
 - Add typed chat path to the standalone `Voqualizer` page: submits prompts to `/message_async` against the selected context and polls `/poll` to render assistant `agent`/`response` log items incrementally, with local user echo, error rows, deselect handling, and a hard timeout.
 - Populate the standalone `Voqualizer` page context picker from the existing Voqualizer admin `contexts` action, persisting the selected context under `a0_voqualizer.standalone.selected_context_id` with loading, empty, and unavailable states.
 - Add standalone `Voqualizer` web page static shell at `/plugins/a0_voqualizer/webui/voqualizer.html`, with a dark responsive full-width chat layout, `Voqualizer:` context picker, top-right settings cog, and bottom prompt row with send/TTS/ASR actions.
