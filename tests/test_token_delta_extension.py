@@ -50,6 +50,7 @@ sys.modules["agent"] = agent_mod
 from usr.plugins.a0_voqualizer.extensions.python.response_stream_chunk._50_voqualizer import (  # noqa: E402
     VoqualizerResponseStreamChunk,
     emit_agent_delta_for_context,
+    emit_cx_token_for_context,
 )
 from usr.plugins.a0_voqualizer.helpers.context_bridge import ContextBridge  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.registry import BridgeRegistry  # noqa: E402
@@ -175,12 +176,12 @@ def test_extension_uses_agent_context_and_stream_chunk(monkeypatch):
 
         await extension.execute(stream_data={"chunk": "token", "full": "token"})
 
-        assert emitted == [
-            (
-                "voqualizer_agent_delta",
-                {"session_id": "sess-1", "context_id": "ctx-1", "text": "token"},
-            )
-        ]
+        events = [event for event, _payload in emitted]
+        assert events == ["voqualizer_cx_stream_start", "voqualizer_cx_token", "voqualizer_agent_delta"]
+        assert emitted[-1] == (
+            "voqualizer_agent_delta",
+            {"session_id": "sess-1", "context_id": "ctx-1", "text": "token"},
+        )
 
     run(scenario())
 
@@ -207,3 +208,18 @@ def test_context_bridge_reverse_lookup_returns_copy():
     assert found == [binding]
     found.clear()
     assert bridge.bindings_for_context("ctx-1") == [binding]
+
+
+def test_emit_cx_token_for_context_sends_protocol_events(monkeypatch):
+    async def scenario():
+        _bridge, _session, emitted = await install_bound_session(monkeypatch)
+
+        result = await emit_cx_token_for_context(context_id="ctx-1", text="hello", full="hello")
+
+        assert result["event"] == "voqualizer_cx_token"
+        assert [event for event, _payload in emitted] == ["voqualizer_cx_stream_start", "voqualizer_cx_token"]
+        assert emitted[1][1]["delta"] == "hello"
+        assert emitted[1][1]["text"] == "hello"
+        assert emitted[1][1]["stream_id"].startswith("cx-ctx-1-")
+
+    run(scenario())

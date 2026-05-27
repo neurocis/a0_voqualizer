@@ -87,6 +87,9 @@ async def init_session(handler: CapturingWs, monkeypatch, cfg=None, *, session_i
         "SID1",
     )
     assert ready["event"] == "voqualizer_ready"
+    assert ready["capabilities"]["cx_stream"] is True
+    assert ready["capabilities"]["tts_word_plan"] is False
+    assert ready["capabilities"]["protocol_version"] == "1.1"
     assert isinstance(ready["bearer_token"], str) and ready["bearer_token"]
     handler.bearer_token = ready["bearer_token"]
     return cfg

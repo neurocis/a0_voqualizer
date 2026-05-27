@@ -243,7 +243,11 @@ def _build_capabilities(config: dict) -> dict[str, Any]:
         "heartbeat_interval_seconds": proto.get("heartbeat_interval_seconds", 15),
         "session_resume_window_seconds": proto.get("session_resume_window_seconds", 30),
         "barge_in_supported": bool(behavior.get("barge_in", True)),
-        "protocol_version": "1.0",
+        "cx_stream": True,
+        "tts_word_plan": False,
+        "tts_word_progress": False,
+        "provider_word_timestamps": False,
+        "protocol_version": "1.1",
     }
 
 

@@ -36,11 +36,34 @@ class VoqualizerResponseStreamChunk(Extension):
         if not isinstance(chunk, str) or not chunk:
             return
 
+        full = stream_data.get("full", "")
+        if not isinstance(full, str):
+            full = ""
+
         try:
+            await emit_cx_token_for_context(context_id=context_id, text=chunk, full=full)
             await emit_agent_delta_for_context(context_id=context_id, text=chunk)
             await buffer_agent_delta_for_tts(context_id=context_id, text=chunk)
         except Exception as exc:  # Keep streaming robust; never break A0 response generation.
             _PRINTER.print(f"[Voqualizer] Failed to stream agent delta: {exc}")
+
+# M7 protocol event emitted through helpers.cx_stream: voqualizer_cx_token
+
+async def emit_cx_token_for_context(*, context_id: str, text: str, full: str = "") -> dict[str, Any]:
+    """Emit one M7 context-token delta using the additive protocol stream."""
+
+    if not isinstance(context_id, str) or not context_id.strip():
+        return {"status": "skipped", "reason": "empty_context", "sessions": 0}
+    if not isinstance(text, str) or not text:
+        return {"status": "skipped", "reason": "empty_text", "sessions": 0}
+    from usr.plugins.a0_voqualizer.helpers.cx_stream import get_default_cx_stream_hub
+
+    return await get_default_cx_stream_hub().token(
+        context_id=context_id.strip(),
+        delta=text,
+        full=full,
+        source="response_stream_chunk",
+    )
 
 
 async def emit_agent_delta_for_context(*, context_id: str, text: str) -> int:
