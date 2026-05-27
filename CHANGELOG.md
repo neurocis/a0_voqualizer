@@ -170,3 +170,13 @@ The plugin is installable through the standard A0 plugin mechanism:
 - TTS toggle persisted under `a0_voqualizer.standalone.tts_enabled`; off-toggle cancels in-flight playback and informs the server.
 - Deduplicates spoken responses by id (`voq-resp-<built-in function id>`); resets state on context change.
 - No imports of tester-store/conversation-mode; no main GUI observer/store coupling.
+
+## 2026-05-26 — Milestone 5: ASR (microphone) input
+
+- Standalone Voqualizer page now captures mic audio via the shared `voqualizer-mic-processor` AudioWorklet and streams PCM16/16k frames via `audioChunkPayload` over the existing Voqualizer WS session.
+- Re-inits the session with `asr.enabled: true`, `barge_in: true`, and `asr_submit_mode: 'frontend_prompt'` so the server skips context injection and the page owns prompt routing.
+- On `voqualizer_asr_final`, routes recognized text back through the M3 `submitPrompt(state)` path; no duplicate user bubble or double-TTS.
+- ASR toggle persisted under `a0_voqualizer.standalone.asr_enabled`, default `false`; first click is the user gesture for mic + AudioContext.
+- Light local barge-in cancels in-flight TTS on first VU above 0.05 while TTS is playing.
+- Capture stops on context change, on hidden tab, and on page unload; AudioContext is shared with M4 TTS and left open.
+- No imports of tester-store/conversation-mode; no main GUI observer/store coupling.

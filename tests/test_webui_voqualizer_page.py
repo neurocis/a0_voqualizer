@@ -68,10 +68,10 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m4-reliable-tts" in js
+    assert "m5-asr-input" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
-    assert "milestone: 4" in js
+    assert "milestone: 5" in js
 
 
 
@@ -166,5 +166,44 @@ def test_voqualizer_tts_no_legacy_imports():
         "globalThis.sendMessage",
         "voqualizer-response-observer",
         "set_messages_after_loop",
+    ]:
+        assert forbidden not in js, forbidden
+
+
+
+def test_voqualizer_asr_wiring():
+    js = read(JS)
+    for token in [
+        "WORKLET_URL",
+        "WORKLET_PROCESSOR",
+        "voqualizer-mic-processor",
+        "a0_voqualizer.standalone.asr_enabled",
+        "asr_submit_mode",
+        "frontend_prompt",
+        "async function startAsrCapture",
+        "async function stopAsrCapture",
+        "function handleAsrPartial",
+        "async function handleAsrFinal",
+        "async function routeAsrFinal",
+        "function maybeLocalBargeIn",
+        "voqualizer_asr_partial",
+        "voqualizer_asr_final",
+        "audioChunkPayload",
+        "framePcm16",
+        "submitPrompt(pageState)",
+    ]:
+        assert token in js, token
+
+
+def test_voqualizer_asr_no_legacy_imports():
+    js = read(JS)
+    for forbidden in [
+        "tester-store.js",
+        "conversation-mode.js",
+        "Alpine.store('chats'",
+        "globalThis.sendMessage",
+        "voqualizer-response-observer",
+        "set_messages_after_loop",
+        "/js/stt-service.js",
     ]:
         assert forbidden not in js, forbidden

@@ -10,15 +10,23 @@ import {
   clearPcm16Carry,
   createPlaybackTracker,
   rememberPlaybackSource,
+  framePcm16,
+  audioChunkPayload,
+  WORKLET_URL,
+  WORKLET_PROCESSOR,
 } from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js';
 
-const PAGE_VERSION = 'm4-reliable-tts';
+const PAGE_VERSION = 'm5-asr-input';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'message_async';
 const POLL_ENDPOINT = 'poll';
 const VOQUALIZER_HANDLER = 'plugins/a0_voqualizer/ws_voqualizer';
 const SELECTED_CONTEXT_STORAGE_KEY = 'a0_voqualizer.standalone.selected_context_id';
 const TTS_ENABLED_STORAGE_KEY = 'a0_voqualizer.standalone.tts_enabled';
+const ASR_ENABLED_STORAGE_KEY = 'a0_voqualizer.standalone.asr_enabled';
+const ASR_SUBMIT_MODE = 'frontend_prompt';
+// Uses the shared voqualizer-mic-processor AudioWorklet from voqualizer-audio.js
+const BARGE_IN_LEVEL_THRESHOLD = 0.05;
 const POLL_INTERVAL_MS = 700;
 const POLL_HARD_TIMEOUT_MS = 120000;
 
@@ -40,6 +48,24 @@ const tts = {
   lastSpeakAt: 0,
 };
 
+const asr = {
+  enabled: loadAsrEnabled(),
+  capturing: false,
+  starting: false,
+  muted: false,
+  lastPartialText: '',
+  lastFinalText: '',
+  lastFinalAt: 0,
+  lastError: '',
+  inputBeforeCapture: '',
+  bargedThisUtterance: false,
+  mediaStream: null,
+  workletNode: null,
+  mediaSource: null,
+  monitorGain: null,
+  lastVuLevel: 0,
+};
+
 function loadTtsEnabled() {
   try {
     const stored = globalThis.localStorage?.getItem(TTS_ENABLED_STORAGE_KEY);
@@ -53,6 +79,21 @@ function loadTtsEnabled() {
 function persistTtsEnabled(value) {
   try {
     globalThis.localStorage?.setItem(TTS_ENABLED_STORAGE_KEY, value ? 'true' : 'false');
+  } catch (_err) {}
+}
+
+function loadAsrEnabled() {
+  try {
+    const stored = globalThis.localStorage?.getItem(ASR_ENABLED_STORAGE_KEY);
+    return stored === 'true';
+  } catch (_err) {
+    return false;
+  }
+}
+
+function persistAsrEnabled(value) {
+  try {
+    globalThis.localStorage?.setItem(ASR_ENABLED_STORAGE_KEY, value ? 'true' : 'false');
   } catch (_err) {}
 }
 
@@ -449,6 +490,9 @@ function bindContextPicker(state, select) {
 
 function handleContextChange(newContextId) {
   cancelInflightTts();
+  if (asr.capturing) {
+    void stopAsrCapture({ silent: true });
+  }
   tts.spokenResponseIds.clear();
   tts.pcm16CarryMap.clear();
   tts.encodedBuffers.clear();
@@ -504,6 +548,9 @@ async function connectVoq() {
     tts.socket = socket;
     socket.on('voqualizer_tts_chunk', handleTtsChunk);
     socket.on('voqualizer_tts_done', handleTtsDone);
+    socket.on('voqualizer_asr_partial', handleAsrPartial);
+    socket.on('voqualizer_asr_final', handleAsrFinal);
+    socket.on('voqualizer_audio_ack', handleAudioAck);
     socket.on('voqualizer_error', handleVoqError);
     socket.on('disconnect', () => { tts.ready = false; updateTtsButton(); });
     await new Promise((resolve, reject) => {
@@ -527,9 +574,10 @@ async function initVoqSession(contextId) {
   const payload = {
     session_id: sessionId,
     context_id: contextId,
-    barge_in: false,
-    asr: { enabled: false },
+    barge_in: !!asr.enabled,
+    asr: { enabled: !!asr.enabled },
     tts: { enabled: !!tts.enabled },
+    asr_submit_mode: ASR_SUBMIT_MODE,
   };
   const ready = await new Promise((resolve, reject) => {
     let settled = false;
@@ -742,6 +790,235 @@ function bindTtsButton() {
   updateTtsButton();
 }
 
+let pageState = null;
+
+function setPageStateRef(state) {
+  pageState = state;
+}
+
+function updateAsrButton() {
+  const button = document.getElementById('voq-asr-button');
+  if (!button) return;
+  let state = 'off';
+  if (asr.lastError) state = 'error';
+  else if (asr.starting) state = 'requesting';
+  else if (asr.capturing && asr.lastPartialText) state = 'transcribing';
+  else if (asr.capturing) state = 'listening';
+  button.dataset.asrState = state;
+  button.setAttribute('aria-pressed', asr.enabled ? 'true' : 'false');
+  button.setAttribute('aria-label', asr.enabled ? 'Microphone input (on)' : 'Microphone input (off)');
+}
+
+function sessionEnvelope() {
+  return { session_id: tts.sessionId, bearer_token: tts.bearerToken };
+}
+
+function handleVu(message) {
+  asr.lastVuLevel = Number(message?.level || 0);
+  maybeLocalBargeIn(message);
+}
+
+function maybeLocalBargeIn(vu) {
+  if (!asr.capturing) return;
+  if (asr.bargedThisUtterance) return;
+  if (!tts.enabled) return;
+  if (!tts.tracker || tts.tracker.activePlaybackSources.size === 0) return;
+  const level = Number(vu?.level || 0);
+  const peak = Number(vu?.peak || 0);
+  if (level < BARGE_IN_LEVEL_THRESHOLD && peak < BARGE_IN_LEVEL_THRESHOLD) return;
+  asr.bargedThisUtterance = true;
+  cancelInflightTts();
+}
+
+async function ensureWorklet(ctx) {
+  if (ctx[' __voq_worklet_loaded__']) return;
+  await ctx.audioWorklet.addModule(WORKLET_URL);
+  ctx[' __voq_worklet_loaded__'] = true;
+}
+
+async function startAsrCapture() {
+  if (asr.capturing || asr.starting) return;
+  if (!globalThis.isSecureContext && globalThis.location?.protocol !== 'file:') {
+    asr.lastError = 'Microphone requires HTTPS';
+    updateAsrButton();
+    return;
+  }
+  const contextId = globalThis.__voqualizer_page?.selectedContextId || '';
+  if (!contextId) {
+    asr.lastError = 'Select a context first';
+    updateAsrButton();
+    return;
+  }
+  asr.starting = true;
+  asr.lastError = '';
+  asr.bargedThisUtterance = false;
+  updateAsrButton();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+    asr.mediaStream = stream;
+    const ctx = ensureAudioContext();
+    if (!ctx) throw new Error('AudioContext unavailable');
+    await ensureWorklet(ctx);
+    const source = ctx.createMediaStreamSource(stream);
+    const node = new AudioWorkletNode(ctx, WORKLET_PROCESSOR);
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(node);
+    node.connect(gain);
+    gain.connect(ctx.destination);
+    asr.mediaSource = source;
+    asr.workletNode = node;
+    asr.monitorGain = gain;
+    node.port.onmessage = (event) => {
+      const m = event.data || {};
+      if (m.type === 'vu') { handleVu(m); return; }
+      if (m.type !== 'audio') return;
+      if (!asr.capturing || asr.muted) return;
+      if (!tts.socket || !tts.socket.connected || !tts.sessionId) return;
+      const payload = audioChunkPayload(m.seq || 0, m.tsMs || 0, m.pcm16);
+      try {
+        tts.socket.emit(VOQUALIZER_HANDLER, { ...sessionEnvelope(), ...payload });
+      } catch (_err) {}
+    };
+    node.port.postMessage({ type: 'setEnabled', enabled: true });
+    // Re-init session with ASR enabled.
+    tts.ready = false;
+    await initVoqSession(contextId);
+    asr.capturing = true;
+    asr.starting = false;
+    asr.inputBeforeCapture = document.getElementById('voq-prompt-input')?.value || '';
+    persistAsrEnabled(true);
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.asrEnabled = true;
+      globalThis.__voqualizer_page.asrCapturing = true;
+    }
+    setPageStatus('Listening…', 'loading');
+    updateAsrButton();
+  } catch (error) {
+    asr.lastError = error?.message || String(error) || 'mic error';
+    asr.starting = false;
+    asr.enabled = false;
+    persistAsrEnabled(false);
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.asrEnabled = false;
+      globalThis.__voqualizer_page.asrCapturing = false;
+      globalThis.__voqualizer_page.asrLastError = asr.lastError;
+    }
+    await stopAsrCapture({ silent: true });
+    updateAsrButton();
+  }
+}
+
+async function stopAsrCapture({ silent = false } = {}) {
+  asr.capturing = false;
+  asr.starting = false;
+  try { asr.workletNode?.port.postMessage({ type: 'setEnabled', enabled: false }); } catch (_err) {}
+  try { asr.workletNode?.disconnect(); } catch (_err) {}
+  try { asr.monitorGain?.disconnect(); } catch (_err) {}
+  try { asr.mediaSource?.disconnect(); } catch (_err) {}
+  if (asr.mediaStream) {
+    for (const track of asr.mediaStream.getTracks()) {
+      try { track.stop(); } catch (_err) {}
+    }
+  }
+  asr.mediaStream = null;
+  asr.workletNode = null;
+  asr.mediaSource = null;
+  asr.monitorGain = null;
+  asr.lastPartialText = '';
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.asrCapturing = false;
+    globalThis.__voqualizer_page.asrLastPartialText = '';
+  }
+  // Re-init session with ASR disabled so server stops expecting frames.
+  if (!silent && tts.socket && tts.socket.connected) {
+    const contextId = globalThis.__voqualizer_page?.selectedContextId || '';
+    if (contextId) {
+      tts.ready = false;
+      try { await initVoqSession(contextId); } catch (_err) {}
+    }
+  }
+  updateAsrButton();
+}
+
+function handleAsrPartial(payload) {
+  if (!asr.capturing) return;
+  const data = (payload && payload.data) || payload || {};
+  const text = String(data.text || '').trim();
+  if (!text) return;
+  asr.lastPartialText = text;
+  if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.asrLastPartialText = text;
+  const input = document.getElementById('voq-prompt-input');
+  if (input) {
+    if (input.value === asr.inputBeforeCapture || input.value === '' || input.dataset.voqAsrGhost === 'true') {
+      input.value = text;
+      input.dataset.voqAsrGhost = 'true';
+    }
+  }
+  updateAsrButton();
+}
+
+async function handleAsrFinal(payload) {
+  if (!asr.capturing) return;
+  const data = (payload && payload.data) || payload || {};
+  const text = String(data.text || '').trim();
+  asr.lastFinalText = text;
+  asr.lastFinalAt = Date.now();
+  asr.lastPartialText = '';
+  asr.bargedThisUtterance = false;
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.asrLastFinalText = text;
+    globalThis.__voqualizer_page.asrLastFinalAt = asr.lastFinalAt;
+    globalThis.__voqualizer_page.asrLastPartialText = '';
+  }
+  updateAsrButton();
+  if (!text) return;
+  await routeAsrFinal(text);
+}
+
+async function routeAsrFinal(text) {
+  if (!pageState) return;
+  if (pageState.isSubmitting) return;
+  const input = document.getElementById('voq-prompt-input');
+  if (input) {
+    input.value = text;
+    delete input.dataset.voqAsrGhost;
+    autosizePrompt(input);
+  }
+  asr.inputBeforeCapture = '';
+  await submitPrompt(pageState);
+}
+
+function handleAudioAck(payload) {
+  const data = (payload && payload.data) || payload || {};
+  if (globalThis.__voqualizer_page) {
+    if (typeof data.queued === 'number') globalThis.__voqualizer_page.asrAudioQueued = data.queued;
+    if (typeof data.emitted === 'number') globalThis.__voqualizer_page.asrAudioEmitted = data.emitted;
+  }
+}
+
+function bindAsrButton() {
+  const button = document.getElementById('voq-asr-button');
+  if (!button) return;
+  button.addEventListener('click', async () => {
+    if (asr.enabled || asr.capturing) {
+      asr.enabled = false;
+      persistAsrEnabled(false);
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.asrEnabled = false;
+      await stopAsrCapture();
+    } else {
+      asr.enabled = true;
+      ensureAudioContext();
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.asrEnabled = true;
+      await startAsrCapture();
+    }
+    updateAsrButton();
+  });
+  updateAsrButton();
+}
+
 function initVoqualizerPage() {
   const root = document.querySelector('[data-voqualizer-page="standalone"]');
   const settings = document.getElementById('voq-settings-button');
@@ -751,7 +1028,7 @@ function initVoqualizerPage() {
     version: PAGE_VERSION,
     loadedAt: Date.now(),
     route: '/plugins/a0_voqualizer/webui/voqualizer.html',
-    milestone: 4,
+    milestone: 5,
     standalone: true,
     adminEndpoint: ADMIN_ENDPOINT,
     messageEndpoint: MESSAGE_ENDPOINT,
@@ -772,6 +1049,17 @@ function initVoqualizerPage() {
     sessionId: '',
     lastTtsAt: 0,
     lastTtsError: '',
+    asrEnabledStorageKey: ASR_ENABLED_STORAGE_KEY,
+    asrSubmitMode: ASR_SUBMIT_MODE,
+    workletUrl: WORKLET_URL,
+    asrEnabled: asr.enabled,
+    asrCapturing: false,
+    asrLastPartialText: '',
+    asrLastFinalText: '',
+    asrLastFinalAt: 0,
+    asrLastError: '',
+    asrAudioQueued: 0,
+    asrAudioEmitted: 0,
   };
 
   const state = {
@@ -790,12 +1078,23 @@ function initVoqualizerPage() {
     });
   }
 
+  setPageStateRef(state);
   bindPromptInput(state);
   bindContextPicker(state, contextSelect);
   bindTtsButton();
+  bindAsrButton();
   void loadContextPicker(state, contextSelect);
 
-  globalThis.addEventListener('beforeunload', () => { disconnectVoq(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && asr.capturing) {
+      void stopAsrCapture({ silent: true });
+    }
+  });
+
+  globalThis.addEventListener('beforeunload', () => {
+    if (asr.capturing) { void stopAsrCapture({ silent: true }); }
+    disconnectVoq();
+  });
 }
 
 if (document.readyState === 'loading') {
@@ -826,4 +1125,13 @@ export {
   normalizeContexts,
   speakText,
   submitPrompt,
+  ASR_ENABLED_STORAGE_KEY,
+  ASR_SUBMIT_MODE,
+  BARGE_IN_LEVEL_THRESHOLD,
+  startAsrCapture,
+  stopAsrCapture,
+  handleAsrPartial,
+  handleAsrFinal,
+  routeAsrFinal,
+  maybeLocalBargeIn,
 };

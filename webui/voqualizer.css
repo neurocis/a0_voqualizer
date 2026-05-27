@@ -276,3 +276,9 @@ body { min-height: 100dvh; overflow: hidden; }
 .voq-action-button[data-tts-state="off"] { opacity: 0.55; }
 .voq-action-button[data-tts-state="speaking"] { border-color: rgba(139, 92, 246, 0.6); box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.22); }
 .voq-action-button[data-tts-state="error"] { border-color: rgba(248, 113, 113, 0.5); }
+
+.voq-action-button[data-asr-state="off"] { opacity: 0.55; }
+.voq-action-button[data-asr-state="requesting"] { border-color: rgba(250, 204, 21, 0.55); }
+.voq-action-button[data-asr-state="listening"] { border-color: rgba(34, 197, 94, 0.55); box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22); }
+.voq-action-button[data-asr-state="transcribing"] { border-color: rgba(34, 197, 94, 0.8); box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.32); }
+.voq-action-button[data-asr-state="error"] { border-color: rgba(248, 113, 113, 0.5); }
