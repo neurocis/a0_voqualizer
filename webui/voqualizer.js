@@ -16,7 +16,7 @@ import {
   WORKLET_PROCESSOR,
 } from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js';
 
-const PAGE_VERSION = 'm6-polish-final';
+const PAGE_VERSION = 'm6-polish-final+icons';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
