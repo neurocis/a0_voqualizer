@@ -69,10 +69,10 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m6-polish-final" in js
+    assert "m7-cx-stream" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
-    assert "milestone: 6" in js
+    assert "milestone: 7" in js
 
 
 
@@ -308,3 +308,36 @@ def test_voqualizer_logout_link_and_debug():
     assert "lastLogoutClickAt" in js
     assert "Logging out" in js
 
+
+
+def test_voqualizer_cx_stream_handlers_present():
+    js = (Path(__file__).resolve().parents[1] / "webui" / "voqualizer.js").read_text()
+    for token in [
+        "voqualizer_cx_stream_start",
+        "voqualizer_cx_token",
+        "voqualizer_cx_stream_final",
+        "voqualizer_cx_stream_error",
+        "handleCxStreamStart",
+        "handleCxToken",
+        "handleCxStreamFinal",
+        "handleCxStreamError",
+        "findOrCreateCxBubble",
+        "cxBubbleForLogItem",
+        "cxStreamCapability",
+        "data-cx-stream-id" if False else "cxStreamId",
+        "dataset.streaming",
+    ]:
+        assert token in js, token
+
+
+def test_voqualizer_cx_stream_no_main_gui_coupling():
+    js = (Path(__file__).resolve().parents[1] / "webui" / "voqualizer.js").read_text()
+    for forbidden in [
+        "Alpine.store('chats'",
+        "globalThis.sendMessage",
+        "set_messages_after_loop",
+        "voqualizer-response-observer",
+        "tester-store.js",
+        "conversation-mode.js",
+    ]:
+        assert forbidden not in js, forbidden

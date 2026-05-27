@@ -16,7 +16,7 @@ import {
   WORKLET_PROCESSOR,
 } from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js';
 
-const PAGE_VERSION = 'm6-polish-final+icons+logout';
+const PAGE_VERSION = 'm7-cx-stream';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -64,6 +64,19 @@ const asr = {
   mediaSource: null,
   monitorGain: null,
   lastVuLevel: 0,
+};
+
+const cx = {
+  enabledByCapability: false,
+  streamsBySubmitId: new Map(),
+  bubblesByStreamId: new Map(),
+  streamsByStreamId: new Map(),
+  lastSeqByStreamId: new Map(),
+  finalByStreamId: new Set(),
+  reconciledLogIds: new Set(),
+  lastEventAt: 0,
+  lastEvent: '',
+  lastError: '',
 };
 
 function loadTtsEnabled() {
@@ -335,6 +348,24 @@ function renderOrUpdateLogBubble(state, item) {
   const existing = state.transcriptIds.get(key);
   const role = item.type === 'response' ? 'assistant' : item.type === 'agent' ? 'assistant' : 'system';
   const content = item.content ?? '';
+  // M7.3: reconcile with a live cx-stream bubble so a single assistant bubble is shown.
+  if (!existing && (item.type === 'response' || item.type === 'agent')) {
+    const cxBubble = cxBubbleForLogItem(item);
+    if (cxBubble) {
+      const body = cxBubble.querySelector('.voq-bubble-body');
+      if (body) body.textContent = safeString(content);
+      cxBubble.dataset.kind = item.type;
+      cxBubble.dataset.final = item.type === 'response' ? 'true' : 'false';
+      cxBubble.dataset.streaming = 'false';
+      cxBubble.dataset.reconciledLogId = item.id;
+      const streamId = cxBubble.dataset.cxStreamId || '';
+      if (streamId) cx.reconciledLogIds.add(`${streamId}::${item.id}`);
+      state.transcriptIds.set(key, cxBubble);
+      maybeAutoScroll(chat, wasNearBottom);
+      if (item.type === 'response') maybeSpeakResponse(item);
+      return;
+    }
+  }
   if (existing) {
     const body = existing.querySelector('.voq-bubble-body');
     if (body) body.textContent = safeString(content);
@@ -462,6 +493,8 @@ async function submitPrompt(state) {
   const messageId = generateMessageId();
   state.isSubmitting = true;
   state.activeSubmissionId = messageId;
+  cx.streamsBySubmitId.set(messageId, { contextId, started: Date.now(), streamId: '' });
+  try { await initVoqSession(contextId); } catch (_err) { /* cx stream optional */ }
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.isSubmitting = true;
     globalThis.__voqualizer_page.lastSubmitId = messageId;
@@ -622,6 +655,10 @@ async function connectVoq() {
     socket.on('voqualizer_asr_final', handleAsrFinal);
     socket.on('voqualizer_audio_ack', handleAudioAck);
     socket.on('voqualizer_error', handleVoqError);
+    socket.on('voqualizer_cx_stream_start', handleCxStreamStart);
+    socket.on('voqualizer_cx_token', handleCxToken);
+    socket.on('voqualizer_cx_stream_final', handleCxStreamFinal);
+    socket.on('voqualizer_cx_stream_error', handleCxStreamError);
     socket.on('disconnect', () => { tts.ready = false; updateTtsButton(); });
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('socket connect timeout')), 8000);
@@ -669,6 +706,11 @@ async function initVoqSession(contextId) {
   tts.bearerToken = ready.bearer_token || '';
   tts.contextId = contextId;
   tts.ready = true;
+  cx.enabledByCapability = !!(ready.capabilities && ready.capabilities.cx_stream);
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.cxStreamCapability = cx.enabledByCapability;
+    globalThis.__voqualizer_page.protocolVersion = ready.capabilities && ready.capabilities.protocol_version || '';
+  }
   return tts;
 }
 
@@ -825,6 +867,124 @@ function maybeSpeakResponse(item) {
   tts.spokenResponseIds.add(item.id);
   const utteranceId = `voq-resp-${item.id}`;
   void speakText(String(item.content || ''), { utteranceId });
+}
+
+function findOrCreateCxBubble(streamId, messageId) {
+  if (!streamId) return null;
+  const existing = cx.bubblesByStreamId.get(streamId);
+  if (existing && existing.isConnected) return existing;
+  const chat = transcriptElement();
+  if (!chat) return null;
+  clearEmptyState();
+  const wasNearBottom = isNearBottom(chat);
+  const bubble = createBubble({ id: `cx-${streamId}`, role: 'assistant', content: '', kind: 'response' });
+  bubble.dataset.cxStreamId = streamId;
+  bubble.dataset.messageId = messageId || '';
+  bubble.dataset.final = 'false';
+  bubble.dataset.streaming = 'true';
+  chat.appendChild(bubble);
+  cx.bubblesByStreamId.set(streamId, bubble);
+  maybeAutoScroll(chat, wasNearBottom);
+  return bubble;
+}
+
+function handleCxStreamStart(payload) {
+  const data = (payload && payload.data) || payload || {};
+  const streamId = safeString(data.stream_id);
+  if (!streamId) return;
+  const messageId = safeString(data.message_id);
+  cx.streamsByStreamId.set(streamId, { messageId, contextId: safeString(data.context_id), startedAt: Date.now() });
+  cx.lastSeqByStreamId.set(streamId, 0);
+  cx.lastEvent = 'voqualizer_cx_stream_start';
+  cx.lastEventAt = Date.now();
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.cxLastEvent = cx.lastEvent;
+    globalThis.__voqualizer_page.cxLastStreamId = streamId;
+  }
+  findOrCreateCxBubble(streamId, messageId);
+}
+
+function handleCxToken(payload) {
+  const data = (payload && payload.data) || payload || {};
+  const streamId = safeString(data.stream_id);
+  if (!streamId) return;
+  const seq = Number(data.seq || 0);
+  const lastSeq = cx.lastSeqByStreamId.get(streamId) || 0;
+  if (seq && seq <= lastSeq) return;
+  if (seq) cx.lastSeqByStreamId.set(streamId, seq);
+  const messageId = safeString(data.message_id);
+  const bubble = findOrCreateCxBubble(streamId, messageId);
+  if (!bubble) return;
+  const chat = transcriptElement();
+  const wasNearBottom = chat ? isNearBottom(chat) : false;
+  const body = bubble.querySelector('.voq-bubble-body');
+  if (!body) return;
+  const fullText = safeString(data.text);
+  const delta = safeString(data.delta);
+  if (fullText) body.textContent = fullText;
+  else if (delta) body.textContent = (body.textContent || '') + delta;
+  bubble.dataset.streaming = 'true';
+  cx.lastEvent = 'voqualizer_cx_token';
+  cx.lastEventAt = Date.now();
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.cxLastEvent = cx.lastEvent;
+    globalThis.__voqualizer_page.cxLastStreamId = streamId;
+    globalThis.__voqualizer_page.cxLastSeq = seq;
+  }
+  if (chat) maybeAutoScroll(chat, wasNearBottom);
+}
+
+function handleCxStreamFinal(payload) {
+  const data = (payload && payload.data) || payload || {};
+  const streamId = safeString(data.stream_id);
+  if (!streamId) return;
+  cx.finalByStreamId.add(streamId);
+  const bubble = cx.bubblesByStreamId.get(streamId);
+  if (bubble) {
+    const body = bubble.querySelector('.voq-bubble-body');
+    const finalText = safeString(data.text);
+    if (body && finalText) body.textContent = finalText;
+    bubble.dataset.final = 'true';
+    bubble.dataset.streaming = 'false';
+  }
+  cx.lastEvent = 'voqualizer_cx_stream_final';
+  cx.lastEventAt = Date.now();
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.cxLastEvent = cx.lastEvent;
+    globalThis.__voqualizer_page.cxLastStreamId = streamId;
+  }
+}
+
+function handleCxStreamError(payload) {
+  const data = (payload && payload.data) || payload || {};
+  cx.lastError = safeString(data.message || data.code || 'cx stream error');
+  cx.lastEvent = 'voqualizer_cx_stream_error';
+  cx.lastEventAt = Date.now();
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.cxLastEvent = cx.lastEvent;
+    globalThis.__voqualizer_page.cxLastError = cx.lastError;
+  }
+}
+
+function cxBubbleForLogItem(item) {
+  if (!item) return null;
+  // Try to match by exact text first.
+  const targetText = safeString(item.content);
+  for (const [streamId, bubble] of cx.bubblesByStreamId.entries()) {
+    if (!bubble || !bubble.isConnected) continue;
+    const body = bubble.querySelector('.voq-bubble-body');
+    if (!body) continue;
+    if (cx.reconciledLogIds.has(`${streamId}::${item.id}`)) return bubble;
+  }
+  // Find most recent finalized stream that has not yet been reconciled.
+  let best = null;
+  for (const [streamId, bubble] of cx.bubblesByStreamId.entries()) {
+    if (!bubble || !bubble.isConnected) continue;
+    if (bubble.dataset.reconciledLogId) continue;
+    if (!cx.finalByStreamId.has(streamId)) continue;
+    best = { streamId, bubble };
+  }
+  return best ? best.bubble : null;
 }
 
 function bindTtsButton() {
@@ -1100,7 +1260,13 @@ function initVoqualizerPage() {
     version: PAGE_VERSION,
     loadedAt: Date.now(),
     route: '/plugins/a0_voqualizer/webui/voqualizer.html',
-    milestone: 6,
+    milestone: 7,
+    cxStreamCapability: false,
+    protocolVersion: '',
+    cxLastEvent: '',
+    cxLastStreamId: '',
+    cxLastSeq: 0,
+    cxLastError: '',
     standalone: true,
     adminEndpoint: ADMIN_ENDPOINT,
     messageEndpoint: MESSAGE_ENDPOINT,
@@ -1211,6 +1377,10 @@ export {
   initVoqSession,
   initVoqualizerPage,
   maybeSpeakResponse,
+  handleCxStreamStart,
+  handleCxToken,
+  handleCxStreamFinal,
+  handleCxStreamError,
   normalizeContext,
   normalizeContexts,
   speakText,

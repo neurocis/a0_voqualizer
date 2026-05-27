@@ -431,3 +431,18 @@ body { min-height: 100dvh; overflow: hidden; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* M7.3 streaming assistant bubble indicator */
+.voq-bubble--assistant[data-streaming="true"] .voq-bubble-body::after {
+  content: '\2026';
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--voq-accent-2);
+  opacity: 0.85;
+  animation: voq-stream-pulse 1.2s ease-in-out infinite;
+}
+.voq-bubble--assistant[data-final="true"] .voq-bubble-body::after { content: ''; animation: none; }
+@keyframes voq-stream-pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) {
+  .voq-bubble--assistant[data-streaming="true"] .voq-bubble-body::after { animation: none; opacity: 0.6; }
+}
