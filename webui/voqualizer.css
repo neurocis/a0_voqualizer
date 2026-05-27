@@ -1,4 +1,4 @@
-/* voq-mobile-version: m7-mobile-2026-05-27-1 */
+/* voq-mobile-version: m7-mobile-first-2026-05-27-2 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -21,6 +21,7 @@
 * { box-sizing: border-box; }
 
 html, body {
+  font-size: 16px;
   width: 100%;
   min-height: 100%;
   margin: 0;
@@ -55,11 +56,11 @@ body {
 
 .voq-topbar,
 .voq-status {
-  min-height: 1.25rem;
+  min-height: 1.5rem;
   padding: 0 4px;
   color: var(--voq-muted);
-  font-size: 0.86rem;
-  line-height: 1.25;
+  font-size: 1rem;
+  line-height: 1.35;
 }
 .voq-status[data-level="error"] { color: #fca5a5; }
 .voq-status[data-level="warn"] { color: #fde68a; }
@@ -110,7 +111,7 @@ body {
 }
 
 .voq-topbar {
-  min-height: 58px;
+  min-height: 60px;
   border-radius: var(--voq-radius);
   display: flex;
   align-items: center;
@@ -131,13 +132,15 @@ body {
   flex: 0 0 auto;
   font-weight: 750;
   letter-spacing: 0.01em;
+  font-size: 1.05rem;
   color: var(--voq-text);
 }
 
 .voq-context-select {
   min-width: 0;
   max-width: min(56vw, 520px);
-  height: 38px;
+  height: 44px;
+  font-size: 1rem;
   border: 1px solid var(--voq-border);
   border-radius: 999px;
   padding: 0 38px 0 14px;
@@ -186,8 +189,8 @@ body {
 .voq-settings-button,
 .voq-logout-button {
   flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   color: var(--voq-muted);
   text-decoration: none;
@@ -216,6 +219,8 @@ body {
   border-radius: calc(var(--voq-radius) + 4px);
   background: rgba(2, 6, 23, 0.42);
   padding: clamp(14px, 2vw, 28px);
+  font-size: 1rem;
+  line-height: 1.5;
   scrollbar-color: rgba(148, 163, 184, 0.36) transparent;
 }
 
@@ -230,7 +235,7 @@ body {
 
 .voq-empty-state h1 {
   margin: 14px 0 8px;
-  font-size: clamp(2.4rem, 8vw, 5.5rem);
+  font-size: clamp(2rem, 7vw, 4.4rem);
   line-height: 0.95;
   letter-spacing: -0.07em;
   color: var(--voq-text);
@@ -239,7 +244,8 @@ body {
 .voq-empty-state p {
   max-width: 36rem;
   margin: 0;
-  font-size: clamp(1rem, 2.4vw, 1.2rem);
+  font-size: clamp(1rem, 2.4vw, 1.15rem);
+  line-height: 1.55;
 }
 
 .voq-orb {
@@ -255,11 +261,11 @@ body {
 }
 
 .voq-status {
-  min-height: 1.25rem;
+  min-height: 1.5rem;
   padding: 0 4px;
   color: var(--voq-muted);
-  font-size: 0.86rem;
-  line-height: 1.25;
+  font-size: 1rem;
+  line-height: 1.35;
 }
 .voq-status[data-level="error"] { color: #fca5a5; }
 .voq-status[data-level="warn"] { color: #fde68a; }
@@ -315,17 +321,18 @@ body {
 
 .voq-prompt-input {
   width: 100%;
-  min-height: 46px;
+  min-height: 52px;
   max-height: 34dvh;
   resize: none;
   border: 1px solid var(--voq-border);
   border-radius: 16px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   background: rgba(2, 6, 23, 0.72);
   color: var(--voq-text);
   outline: none;
   font: inherit;
-  line-height: 1.35;
+  font-size: 1.05rem;
+  line-height: 1.4;
 }
 
 .voq-prompt-input::placeholder { color: var(--voq-faint); }
@@ -338,11 +345,12 @@ body {
 }
 
 .voq-action-button {
-  min-width: 48px;
-  height: 46px;
+  min-width: 52px;
+  height: 52px;
   border-radius: 14px;
   padding: 0 12px;
   gap: 6px;
+  font-size: 1rem;
   font-weight: 700;
   text-transform: lowercase;
 }
@@ -351,7 +359,7 @@ body {
   font-family: "Material Symbols Outlined";
   font-weight: normal;
   font-style: normal;
-  font-size: 22px;
+  font-size: 26px;
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
@@ -373,70 +381,16 @@ body {
   border: 0;
 }
 
-@media (max-width: 640px) {
-  :root { --voq-radius: 14px; }
-  .voq-app {
-    height: 100svh;
-    height: 100dvh;
-    padding: calc(6px + var(--voq-safe-top)) 6px calc(6px + var(--voq-safe-bottom));
-    gap: 6px;
-  }
-  .voq-topbar {
-    min-height: 46px;
-    padding: 6px 6px 6px 10px;
-    gap: 6px;
-    border-radius: 14px;
-  }
-  .voq-context-wrap { gap: 6px; min-width: 0; }
-  .voq-brand { font-size: clamp(0.94rem, 3.7vw, 1rem); }
-  .voq-context-select {
-    max-width: none;
-    flex: 1;
-    height: 34px;
-    min-height: 34px;
-    font-size: 1rem;
-    padding-left: 10px;
-    padding-right: 28px;
-  }
-  .voq-topbar-actions { gap: 5px; }
-  .voq-settings-button,
-  .voq-logout-button { width: 36px; height: 36px; }
-  .voq-status { font-size: 0.94rem; line-height: 1.2; min-height: 1.1rem; }
-  .voq-chat { border-radius: 14px; padding: 10px; }
-  .voq-empty-state h1 { font-size: clamp(2rem, 12vw, 3.2rem); letter-spacing: -0.055em; }
-  .voq-empty-state p { font-size: 1rem; max-width: 22rem; }
-  .voq-orb { width: 64px; height: 64px; font-size: 32px; }
-  .voq-composer {
-    bottom: calc(6px + var(--voq-safe-bottom));
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding: 7px;
-    gap: 7px;
-    border-radius: 14px;
-  }
-  .voq-prompt-input {
-    min-height: 46px;
-    max-height: 28dvh;
-    border-radius: 13px;
-    font-size: 1rem;
-    line-height: 1.42;
-    padding: 10px 12px;
-  }
-  .voq-actions { gap: 5px; }
-  .voq-action-button { min-width: 42px; width: 42px; height: 46px; padding: 0; border-radius: 12px; }
-  .voq-material { font-size: 22px; }
-  .voq-jump-latest { right: 10px; bottom: 10px; padding: 7px 10px; font-size: 0.92rem; }
-  .voq-text-fallback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
 
 .voq-bubble {
-  margin: 8px 0;
-  padding: 12px 14px;
-  font-size: clamp(0.98rem, 3.8vw, 1.05rem);
+  margin: 10px 0;
+  padding: 14px 16px;
+  font-size: 1.05rem;
   border-radius: 16px;
   border: 1px solid var(--voq-border);
   background: rgba(15, 23, 42, 0.62);
   color: var(--voq-text);
-  line-height: 1.45;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-wrap: break-word;
@@ -473,27 +427,68 @@ body {
   outline-offset: 2px;
 }
 
-@media (max-width: 420px) {
-  .voq-app { padding-left: 4px; padding-right: 4px; gap: 5px; }
-  .voq-topbar { gap: 5px; min-height: 42px; padding: 5px 5px 5px 8px; }
-  .voq-brand { font-size: 0.95rem; }
-  .voq-context-select { min-width: 0; font-size: 0.98rem; height: 32px; min-height: 32px; padding-left: 9px; padding-right: 24px; }
+
+
+
+@media (max-width: 768px) {
+  :root { --voq-radius: 14px; }
+  .voq-app {
+    height: 100svh;
+    height: 100dvh;
+    padding: calc(8px + var(--voq-safe-top)) 8px calc(8px + var(--voq-safe-bottom));
+    gap: 8px;
+  }
+  .voq-topbar {
+    min-height: 52px;
+    padding: 8px 8px 8px 12px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+  .voq-brand { font-size: 1.05rem; }
+  .voq-context-select {
+    max-width: none;
+    flex: 1;
+    height: 44px;
+    min-height: 44px;
+    font-size: 1.05rem;
+    padding-left: 12px;
+    padding-right: 32px;
+  }
   .voq-settings-button,
-  .voq-logout-button { width: 34px; height: 34px; }
-  .voq-chat { padding: 8px; border-radius: 12px; }
-  .voq-bubble { margin: 6px 0; padding: 10px 11px; font-size: 1rem; line-height: 1.48; border-radius: 13px; }
-  .voq-composer { grid-template-columns: 1fr; align-items: stretch; padding: 6px; gap: 6px; }
-  .voq-actions { justify-content: space-between; gap: 6px; width: 100%; }
-  .voq-action-button { flex: 1 1 0; min-width: 0; width: auto; height: 44px; }
+  .voq-logout-button { width: 44px; height: 44px; }
+  .voq-status { font-size: 1rem; line-height: 1.35; }
+  .voq-chat { border-radius: 14px; padding: 12px; font-size: 1.05rem; line-height: 1.55; }
+  .voq-empty-state h1 { font-size: clamp(2rem, 9vw, 3rem); letter-spacing: -0.055em; }
+  .voq-empty-state p { font-size: 1.05rem; max-width: 28rem; line-height: 1.55; }
+  .voq-orb { width: 72px; height: 72px; font-size: 34px; }
+  .voq-composer {
+    bottom: calc(8px + var(--voq-safe-bottom));
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 8px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+  .voq-prompt-input {
+    min-height: 56px;
+    max-height: 28dvh;
+    border-radius: 14px;
+    font-size: 1.1rem;
+    line-height: 1.45;
+    padding: 14px 16px;
+  }
+  .voq-actions { gap: 6px; }
+  .voq-action-button { min-width: 52px; width: 52px; height: 52px; padding: 0; border-radius: 12px; }
+  .voq-material { font-size: 26px; }
+  .voq-bubble { font-size: 1.05rem; line-height: 1.6; margin: 10px 0; padding: 12px 14px; }
+  .voq-jump-latest { right: 12px; bottom: 12px; padding: 8px 12px; font-size: 1rem; }
 }
 
-@media (max-width: 360px) {
-  .voq-brand { font-size: 0.9rem; }
-  .voq-context-select { font-size: 0.94rem; }
-  .voq-settings-button,
-  .voq-logout-button { width: 32px; height: 32px; }
-  .voq-action-button { height: 42px; }
-  .voq-material { font-size: 20px; }
+@media (max-width: 480px) {
+  .voq-composer { grid-template-columns: 1fr; align-items: stretch; }
+  .voq-actions { justify-content: space-between; gap: 8px; width: 100%; }
+  .voq-action-button { flex: 1 1 0; min-width: 0; width: auto; height: 52px; }
+  .voq-empty-state h1 { font-size: clamp(1.8rem, 8.5vw, 2.6rem); }
+  .voq-empty-state p { font-size: 1.05rem; max-width: 22rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

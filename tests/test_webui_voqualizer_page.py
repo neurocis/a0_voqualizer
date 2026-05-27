@@ -264,9 +264,9 @@ def test_voqualizer_status_and_jump_latest():
 def test_voqualizer_responsive_polish_css():
     css = read(CSS)
     for token in [
-        "@media (max-width: 640px)",
-        "@media (max-width: 420px)",
-        "@media (max-width: 360px)",
+        "font-size: 16px",
+        "@media (max-width: 768px)",
+        "@media (max-width: 480px)",
         "@media (prefers-reduced-motion: reduce)",
         "position: sticky",
         "safe-area-inset-bottom",
@@ -274,7 +274,8 @@ def test_voqualizer_responsive_polish_css():
         "overflow-x: hidden",
         "-webkit-text-size-adjust: 100%",
         "max-height: 28dvh",
-        "font-size: 1rem",
+        "font-size: 1.05rem",
+        "font-size: 1.1rem",
         ".voq-sr-only",
         ":focus-visible",
     ]:
