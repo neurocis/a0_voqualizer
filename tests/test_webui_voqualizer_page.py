@@ -118,8 +118,9 @@ def test_voqualizer_typed_prompt_path():
     assert "function renderUserBubble" in js
     assert "function renderOrUpdateLogBubble" in js
     assert "renderErrorRow" in js
-    assert "voq-bubble--user" in js
-    assert "voq-bubble--assistant" in js
+    combined = js + read(CSS)
+    assert "voq-bubble--user" in combined
+    assert "voq-bubble--assistant" in combined
 
 
 def test_voqualizer_typed_prompt_no_main_gui_coupling():
