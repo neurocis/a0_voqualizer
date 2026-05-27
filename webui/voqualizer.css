@@ -161,11 +161,34 @@ body { min-height: 100dvh; overflow: hidden; }
   background: rgba(30, 41, 59, 0.9);
 }
 
-.voq-settings-button {
+.voq-topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.voq-settings-button,
+.voq-logout-button {
   flex: 0 0 auto;
   width: 42px;
   height: 42px;
   border-radius: 999px;
+  color: var(--voq-muted);
+  text-decoration: none;
+}
+
+.voq-settings-button:hover {
+  color: var(--voq-text);
+  border-color: rgba(139, 92, 246, 0.46);
+  background: rgba(139, 92, 246, 0.14);
+}
+
+.voq-logout-button:hover {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.48);
+  background: rgba(127, 29, 29, 0.22);
 }
 
 .voq-chat {
@@ -337,7 +360,8 @@ body { min-height: 100dvh; overflow: hidden; }
   .voq-context-wrap { gap: 7px; }
   .voq-brand { font-size: 0.95rem; }
   .voq-context-select { max-width: none; flex: 1; height: 36px; font-size: 0.92rem; }
-  .voq-settings-button { width: 40px; height: 40px; }
+  .voq-settings-button,
+  .voq-logout-button { width: 40px; height: 40px; }
   .voq-chat { border-radius: 16px; padding: 12px; }
   .voq-composer { grid-template-columns: minmax(0, 1fr) auto; padding: 8px; gap: 8px; }
   .voq-prompt-input { min-height: 48px; border-radius: 14px; }

@@ -20,16 +20,28 @@
           <option value="" selected>Context / Agent Name</option>
         </select>
       </div>
-      <a
-        id="voq-settings-button"
-        class="voq-icon-button voq-settings-button"
-        href="/plugins/a0_voqualizer/webui/providers.html"
-        aria-label="Open Voqualizer provider settings"
-        title="Open Voqualizer provider settings"
-      >
-        <span class="material-symbols-outlined voq-material" aria-hidden="true">settings</span>
-        <span class="voq-text-fallback">settings</span>
-      </a>
+      <nav class="voq-topbar-actions" aria-label="Voqualizer page actions">
+        <a
+          id="voq-settings-button"
+          class="voq-icon-button voq-settings-button"
+          href="/plugins/a0_voqualizer/webui/providers.html"
+          aria-label="Open Voqualizer provider settings"
+          title="Open Voqualizer provider settings"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">settings</span>
+          <span class="voq-text-fallback">settings</span>
+        </a>
+        <a
+          id="voq-logout-button"
+          class="voq-icon-button voq-logout-button"
+          href="/logout"
+          aria-label="Log out of Agent Zero"
+          title="Log out"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">logout</span>
+          <span class="voq-text-fallback">logout</span>
+        </a>
+      </nav>
     </header>
 
     <div id="voq-status" class="voq-status" role="status" aria-live="polite" aria-atomic="true">Ready</div>

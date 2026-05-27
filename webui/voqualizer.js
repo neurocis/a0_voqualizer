@@ -16,7 +16,7 @@ import {
   WORKLET_PROCESSOR,
 } from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js';
 
-const PAGE_VERSION = 'm6-polish-final+icons';
+const PAGE_VERSION = 'm6-polish-final+icons+logout';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -1093,6 +1093,7 @@ function bindAsrButton() {
 function initVoqualizerPage() {
   const root = document.querySelector('[data-voqualizer-page="standalone"]');
   const settings = document.getElementById('voq-settings-button');
+  const logout = document.getElementById('voq-logout-button');
   const contextSelect = document.getElementById('voq-context-select');
 
   globalThis.__voqualizer_page = {
@@ -1156,6 +1157,13 @@ function initVoqualizerPage() {
     settings.addEventListener('click', () => {
       globalThis.__voqualizer_page.lastSettingsClickAt = Date.now();
       setPageStatus('Opening Voqualizer provider settings…', 'info');
+    });
+  }
+
+  if (logout) {
+    logout.addEventListener('click', () => {
+      globalThis.__voqualizer_page.lastLogoutClickAt = Date.now();
+      setPageStatus('Logging out…', 'info');
     });
   }
 

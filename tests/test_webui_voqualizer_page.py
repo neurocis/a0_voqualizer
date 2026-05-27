@@ -30,6 +30,7 @@ def test_voqualizer_page_required_regions_and_controls():
     html = read(HTML)
     assert 'id="voq-context-select"' in html
     assert 'id="voq-settings-button"' in html
+    assert 'id="voq-logout-button"' in html
     assert 'aria-label="Open Voqualizer provider settings"' in html
     assert 'id="voq-chat"' in html
     assert 'aria-label="Voqualizer chat transcript"' in html
@@ -272,6 +273,7 @@ def test_voqualizer_settings_link_and_debug():
     assert '/plugins/a0_voqualizer/webui/providers.html' in html
     assert "Open Voqualizer provider settings" in html
     assert "lastSettingsClickAt" in js
+    assert "lastLogoutClickAt" in js
     assert "Opening Voqualizer provider settings" in js
 
 
@@ -294,3 +296,15 @@ def test_voqualizer_message_async_proxy_endpoint():
     assert "context.communicate" in text
     assert "Message received." in text
     assert "requires_auth" in text
+
+
+def test_voqualizer_logout_link_and_debug():
+    html = read(HTML)
+    js = read(JS)
+    assert 'id="voq-logout-button"' in html
+    assert 'href="/logout"' in html
+    assert 'aria-label="Log out of Agent Zero"' in html
+    assert '>logout<' in html
+    assert "lastLogoutClickAt" in js
+    assert "Logging out" in js
+
