@@ -77,6 +77,7 @@ from usr.plugins.a0_voqualizer.helpers.tts import (  # noqa: E402
     TTSRequest,
     TTSError,
 )
+from usr.plugins.a0_voqualizer.helpers.tts_word_timing import build_word_plan_payload  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.registry import (  # noqa: E402
     BridgeRegistry,
     ConfigError,
@@ -244,7 +245,7 @@ def _build_capabilities(config: dict) -> dict[str, Any]:
         "session_resume_window_seconds": proto.get("session_resume_window_seconds", 30),
         "barge_in_supported": bool(behavior.get("barge_in", True)),
         "cx_stream": True,
-        "tts_word_plan": False,
+        "tts_word_plan": True,
         "tts_word_progress": False,
         "provider_word_timestamps": False,
         "protocol_version": "1.1",
@@ -1375,6 +1376,39 @@ class WsVoqualizer(WsHandler):
         ack_payload.pop("audio", None)
         return ack_payload
 
+    async def _emit_tts_word_plan(
+        self,
+        session: BridgeSession,
+        *,
+        utterance_id: str,
+        text: str,
+        codec: str,
+        sample_rate: int,
+        chunks: int = 0,
+        total_bytes: int = 0,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        metadata = dict(metadata or {})
+        payload = build_word_plan_payload(
+            session_id=session.session_id,
+            context_id=str(session.context_id or metadata.get("context_id") or ""),
+            message_id=str(metadata.get("message_id") or ""),
+            stream_id=str(metadata.get("stream_id") or ""),
+            utterance_id=utterance_id,
+            text=text,
+            codec=codec,
+            sample_rate=sample_rate,
+            chunks=chunks,
+            total_bytes=total_bytes,
+            source="estimated",
+            confidence=0.6,
+        )
+        if session.sender is not None:
+            emit_payload = dict(payload)
+            emit_payload.pop("event", None)
+            await session.sender("voqualizer_tts_word_plan", emit_payload)
+        return payload
+
     async def _emit_tts_done(
         self,
         session: BridgeSession,
@@ -1529,6 +1563,8 @@ class WsVoqualizer(WsHandler):
         pushed_done_emit_count = 0
         sender_present = session.sender is not None
         ack_tts_chunks: list[dict[str, Any]] = []
+        total_audio_bytes = 0
+        ack_word_plan: dict[str, Any] | None = None
         provider: TTSProvider | None = None
         try:
             # Use a fresh provider/client session for each direct GUI TTS
@@ -1579,6 +1615,7 @@ class WsVoqualizer(WsHandler):
                         "sender_present": sender_present,
                     }
                 ack_chunk = await self._emit_tts_chunk(session, chunk)
+                total_audio_bytes += len(chunk.data)
                 if sender_present:
                     pushed_emit_count += 1
                 ack_tts_chunks.append(ack_chunk)
@@ -1610,6 +1647,16 @@ class WsVoqualizer(WsHandler):
                         "pushed_done_emit_count": pushed_done_emit_count,
                         "sender_present": sender_present,
                     }
+            ack_word_plan = await self._emit_tts_word_plan(
+                session,
+                utterance_id=utterance_id,
+                text=text,
+                codec=codec,
+                sample_rate=sample_rate,
+                chunks=chunks,
+                total_bytes=total_audio_bytes,
+                metadata=metadata,
+            )
             ack_tts_done = await self._emit_tts_done(session, utterance_id=utterance_id, cancelled=False, chunks=chunks)
             if sender_present:
                 pushed_done_emit_count += 1
@@ -1627,6 +1674,7 @@ class WsVoqualizer(WsHandler):
                 "chunks": chunks,
                 "tts_chunks": ack_tts_chunks,
                 "tts_done": ack_tts_done,
+                "tts_word_plan": ack_word_plan,
                 "delivery_fallback": "ack_chunks",
                 "pushed_emit_count": pushed_emit_count,
                 "pushed_done_emit_count": pushed_done_emit_count,

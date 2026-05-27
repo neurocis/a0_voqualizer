@@ -88,7 +88,7 @@ async def init_session(handler: CapturingWs, monkeypatch, cfg=None, *, session_i
     )
     assert ready["event"] == "voqualizer_ready"
     assert ready["capabilities"]["cx_stream"] is True
-    assert ready["capabilities"]["tts_word_plan"] is False
+    assert ready["capabilities"]["tts_word_plan"] is True
     assert ready["capabilities"]["protocol_version"] == "1.1"
     assert isinstance(ready["bearer_token"], str) and ready["bearer_token"]
     handler.bearer_token = ready["bearer_token"]
@@ -280,3 +280,39 @@ def test_direct_tts_ack_includes_chunk_fallback_payload_markers():
         'return payload',
     ):
         assert marker in source, f'missing direct TTS ack fallback backend marker {marker!r}'
+
+
+def test_user_text_emits_tts_word_plan(monkeypatch):
+    async def scenario():
+        handler = CapturingWs()
+        await init_session(handler, monkeypatch)
+        ack = await handler.process(
+            "voqualizer_user_text",
+            {"text": "hello brave world", "utterance_id": "utt-plan", "codec": "pcm16/16k", "sample_rate": 16000, "bearer_token": handler.bearer_token},
+            "SID1",
+        )
+        assert ack["event"] == "voqualizer_tts_ack"
+        assert ack["tts_word_plan"]["event"] == "voqualizer_tts_word_plan"
+        assert ack["tts_word_plan"]["utterance_id"] == "utt-plan"
+        assert ack["tts_word_plan"]["source"] == "estimated"
+        assert ack["tts_word_plan"]["words"][0]["word"] == "hello"
+        assert ack["tts_word_plan"]["words"][0]["char_start"] == 0
+        word_events = [item for item in handler.emitted if item[1] == "voqualizer_tts_word_plan"]
+        assert len(word_events) == 1
+        assert word_events[0][2]["utterance_id"] == "utt-plan"
+        assert word_events[0][2]["words"][2]["word"] == "world"
+
+    run(scenario())
+
+
+def test_tts_word_plan_helper_markers():
+    source = (PLUGIN / 'helpers' / 'tts_word_timing.py').read_text(encoding='utf-8')
+    for marker in (
+        'build_word_plan_payload',
+        'estimate_word_timings',
+        'char_start',
+        'char_end',
+        'source: str = "estimated"',
+        'confidence: float = 0.6',
+    ):
+        assert marker in source, marker
