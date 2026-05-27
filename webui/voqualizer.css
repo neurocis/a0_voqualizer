@@ -30,11 +30,22 @@ html, body {
   color: var(--voq-text);
 }
 
-body { min-height: 100dvh; overflow: hidden; }
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
 .voq-app {
   width: 100%;
+  max-width: 100%;
+  height: 100vh;
   height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-rows: auto 1fr auto;
   padding: calc(12px + var(--voq-safe-top)) 12px calc(12px + var(--voq-safe-bottom));
@@ -57,7 +68,9 @@ body { min-height: 100dvh; overflow: hidden; }
 .voq-chat-wrap {
   position: relative;
   min-height: 0;
+  min-width: 0;
   display: flex;
+  overflow: hidden;
 }
 .voq-chat-wrap > .voq-chat { flex: 1 1 auto; }
 
@@ -193,8 +206,11 @@ body { min-height: 100dvh; overflow: hidden; }
 
 .voq-chat {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: calc(var(--voq-radius) + 4px);
   background: rgba(2, 6, 23, 0.42);
@@ -252,7 +268,9 @@ body { min-height: 100dvh; overflow: hidden; }
 .voq-chat-wrap {
   position: relative;
   min-height: 0;
+  min-width: 0;
   display: flex;
+  overflow: hidden;
 }
 .voq-chat-wrap > .voq-chat { flex: 1 1 auto; }
 
@@ -355,31 +373,71 @@ body { min-height: 100dvh; overflow: hidden; }
 }
 
 @media (max-width: 640px) {
-  .voq-app { padding-left: 8px; padding-right: 8px; gap: 8px; }
-  .voq-topbar { min-height: 54px; padding: 8px 8px 8px 12px; }
-  .voq-context-wrap { gap: 7px; }
-  .voq-brand { font-size: 0.95rem; }
-  .voq-context-select { max-width: none; flex: 1; height: 36px; font-size: 0.92rem; }
+  :root { --voq-radius: 14px; }
+  .voq-app {
+    height: 100svh;
+    height: 100dvh;
+    padding: calc(6px + var(--voq-safe-top)) 6px calc(6px + var(--voq-safe-bottom));
+    gap: 6px;
+  }
+  .voq-topbar {
+    min-height: 46px;
+    padding: 6px 6px 6px 10px;
+    gap: 6px;
+    border-radius: 14px;
+  }
+  .voq-context-wrap { gap: 6px; min-width: 0; }
+  .voq-brand { font-size: clamp(0.94rem, 3.7vw, 1rem); }
+  .voq-context-select {
+    max-width: none;
+    flex: 1;
+    height: 34px;
+    min-height: 34px;
+    font-size: 1rem;
+    padding-left: 10px;
+    padding-right: 28px;
+  }
+  .voq-topbar-actions { gap: 5px; }
   .voq-settings-button,
-  .voq-logout-button { width: 40px; height: 40px; }
-  .voq-chat { border-radius: 16px; padding: 12px; }
-  .voq-composer { grid-template-columns: minmax(0, 1fr) auto; padding: 8px; gap: 8px; }
-  .voq-prompt-input { min-height: 48px; border-radius: 14px; }
-  .voq-actions { gap: 6px; }
-  .voq-action-button { min-width: 42px; width: 42px; height: 48px; padding: 0; }
-  .voq-material { font-size: 21px; }
+  .voq-logout-button { width: 36px; height: 36px; }
+  .voq-status { font-size: 0.94rem; line-height: 1.2; min-height: 1.1rem; }
+  .voq-chat { border-radius: 14px; padding: 10px; }
+  .voq-empty-state h1 { font-size: clamp(2rem, 12vw, 3.2rem); letter-spacing: -0.055em; }
+  .voq-empty-state p { font-size: 1rem; max-width: 22rem; }
+  .voq-orb { width: 64px; height: 64px; font-size: 32px; }
+  .voq-composer {
+    bottom: calc(6px + var(--voq-safe-bottom));
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 7px;
+    gap: 7px;
+    border-radius: 14px;
+  }
+  .voq-prompt-input {
+    min-height: 46px;
+    max-height: 28dvh;
+    border-radius: 13px;
+    font-size: 1rem;
+    line-height: 1.42;
+    padding: 10px 12px;
+  }
+  .voq-actions { gap: 5px; }
+  .voq-action-button { min-width: 42px; width: 42px; height: 46px; padding: 0; border-radius: 12px; }
+  .voq-material { font-size: 22px; }
+  .voq-jump-latest { right: 10px; bottom: 10px; padding: 7px 10px; font-size: 0.92rem; }
   .voq-text-fallback { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
 .voq-bubble {
   margin: 8px 0;
   padding: 12px 14px;
+  font-size: clamp(0.98rem, 3.8vw, 1.05rem);
   border-radius: 16px;
   border: 1px solid var(--voq-border);
   background: rgba(15, 23, 42, 0.62);
   color: var(--voq-text);
   line-height: 1.45;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-wrap: break-word;
   max-width: 100%;
 }
@@ -415,12 +473,26 @@ body { min-height: 100dvh; overflow: hidden; }
 }
 
 @media (max-width: 420px) {
-  .voq-topbar { gap: 8px; }
+  .voq-app { padding-left: 4px; padding-right: 4px; gap: 5px; }
+  .voq-topbar { gap: 5px; min-height: 42px; padding: 5px 5px 5px 8px; }
+  .voq-brand { font-size: 0.95rem; }
+  .voq-context-select { min-width: 0; font-size: 0.98rem; height: 32px; min-height: 32px; padding-left: 9px; padding-right: 24px; }
+  .voq-settings-button,
+  .voq-logout-button { width: 34px; height: 34px; }
+  .voq-chat { padding: 8px; border-radius: 12px; }
+  .voq-bubble { margin: 6px 0; padding: 10px 11px; font-size: 1rem; line-height: 1.48; border-radius: 13px; }
+  .voq-composer { grid-template-columns: 1fr; align-items: stretch; padding: 6px; gap: 6px; }
+  .voq-actions { justify-content: space-between; gap: 6px; width: 100%; }
+  .voq-action-button { flex: 1 1 0; min-width: 0; width: auto; height: 44px; }
+}
+
+@media (max-width: 360px) {
   .voq-brand { font-size: 0.9rem; }
-  .voq-context-select { min-width: 0; font-size: 0.86rem; padding-left: 10px; padding-right: 28px; }
-  .voq-composer { grid-template-columns: 1fr; align-items: stretch; }
-  .voq-actions { justify-content: flex-end; }
-  .voq-action-button { flex: 0 0 44px; }
+  .voq-context-select { font-size: 0.94rem; }
+  .voq-settings-button,
+  .voq-logout-button { width: 32px; height: 32px; }
+  .voq-action-button { height: 42px; }
+  .voq-material { font-size: 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
