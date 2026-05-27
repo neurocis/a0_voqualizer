@@ -290,6 +290,7 @@ def test_voqualizer_message_async_proxy_endpoint():
     proxy = ROOT / "api" / "voqualizer_message_async.py"
     text = read(proxy)
     assert "class VoqualizerMessageAsync" in text
-    assert "from api.message_async import MessageAsync" in text
-    assert "return await core.process(payload, request)" in text
+    assert "from agent import UserMessage" in text
+    assert "context.communicate" in text
+    assert "Message received." in text
     assert "requires_auth" in text
