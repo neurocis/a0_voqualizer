@@ -446,3 +446,16 @@ body { min-height: 100dvh; overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .voq-bubble--assistant[data-streaming="true"] .voq-bubble-body::after { animation: none; opacity: 0.6; }
 }
+
+/* M7.5 active spoken word highlight */
+.voq-word { transition: background-color 80ms linear, color 80ms linear; }
+.voq-word--active {
+  font-weight: 700;
+  color: var(--voq-text);
+  background: rgba(139, 92, 246, 0.32);
+  border-radius: 0.28em;
+  padding: 0 0.12em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .voq-word { transition: none; }
+}

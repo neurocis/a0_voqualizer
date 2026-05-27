@@ -69,7 +69,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m7-cx-stream" in js
+    assert "m7-word-highlight" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -341,3 +341,23 @@ def test_voqualizer_cx_stream_no_main_gui_coupling():
         "conversation-mode.js",
     ]:
         assert forbidden not in js, forbidden
+
+
+def test_voqualizer_word_plan_handler_present():
+    js = (Path(__file__).resolve().parents[1] / "webui" / "voqualizer.js").read_text()
+    for token in [
+        "voqualizer_tts_word_plan",
+        "handleTtsWordPlan",
+        "renderWordSpansInto",
+        "finalizeWordHighlight",
+        "clearAllWordHighlights",
+        "wordPlanCapability",
+        "voq-word--active",
+        "playbackStartByUtteranceId",
+        "registerWordPlanBubble",
+        "requestAnimationFrame",
+    ]:
+        assert token in js, token
+    css = (Path(__file__).resolve().parents[1] / "webui" / "voqualizer.css").read_text()
+    for token in [".voq-word", ".voq-word--active"]:
+        assert token in css, token

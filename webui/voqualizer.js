@@ -16,7 +16,7 @@ import {
   WORKLET_PROCESSOR,
 } from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js';
 
-const PAGE_VERSION = 'm7-cx-stream';
+const PAGE_VERSION = 'm7-word-highlight';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -78,6 +78,17 @@ const cx = {
   lastEvent: '',
   lastError: '',
 };
+
+const wordPlan = {
+  plansByUtteranceId: new Map(),
+  bubblesByUtteranceId: new Map(),
+  spansByUtteranceId: new Map(),
+  activeIndexByUtteranceId: new Map(),
+  playbackStartByUtteranceId: new Map(),
+  endedByUtteranceId: new Set(),
+  rafId: 0,
+};
+
 
 function loadTtsEnabled() {
   try {
@@ -597,6 +608,7 @@ function handleContextChange(newContextId) {
     void stopAsrCapture({ silent: true });
   }
   tts.spokenResponseIds.clear();
+  clearAllWordHighlights();
   tts.pcm16CarryMap.clear();
   tts.encodedBuffers.clear();
   if (tts.contextId !== newContextId) {
@@ -659,6 +671,7 @@ async function connectVoq() {
     socket.on('voqualizer_cx_token', handleCxToken);
     socket.on('voqualizer_cx_stream_final', handleCxStreamFinal);
     socket.on('voqualizer_cx_stream_error', handleCxStreamError);
+    socket.on('voqualizer_tts_word_plan', handleTtsWordPlan);
     socket.on('disconnect', () => { tts.ready = false; updateTtsButton(); });
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('socket connect timeout')), 8000);
@@ -707,8 +720,10 @@ async function initVoqSession(contextId) {
   tts.contextId = contextId;
   tts.ready = true;
   cx.enabledByCapability = !!(ready.capabilities && ready.capabilities.cx_stream);
+  const wordPlanCap = !!(ready.capabilities && ready.capabilities.tts_word_plan);
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.cxStreamCapability = cx.enabledByCapability;
+    globalThis.__voqualizer_page.wordPlanCapability = wordPlanCap;
     globalThis.__voqualizer_page.protocolVersion = ready.capabilities && ready.capabilities.protocol_version || '';
   }
   return tts;
@@ -826,6 +841,10 @@ function playPcmChunk(bytes, sampleRate, utteranceId) {
   source.connect(ctx.destination);
   const startAt = Math.max(ctx.currentTime + 0.01, tts.playbackTail);
   source.start(startAt);
+  if (!wordPlan.playbackStartByUtteranceId.has(utteranceId)) {
+    wordPlan.playbackStartByUtteranceId.set(utteranceId, startAt);
+    ensureWordHighlightLoop();
+  }
   tts.playbackTail = startAt + buffer.duration;
   rememberPlaybackSource(tts.tracker, utteranceId, source);
   updateTtsButton();
@@ -854,6 +873,9 @@ function handleTtsDone(payload) {
   const utteranceId = safeString(data.utterance_id || data.utteranceId || 'default');
   if (data.cancelled || data.reason === 'barge_in') {
     tts.tracker.stopPlaybackForUtterance(utteranceId);
+    finalizeWordHighlight(utteranceId, { cancelled: true });
+  } else {
+    finalizeWordHighlight(utteranceId, { cancelled: false });
   }
   clearPcm16Carry(tts.pcm16CarryMap, utteranceId);
   tts.encodedBuffers.delete(utteranceId);
@@ -866,6 +888,7 @@ function maybeSpeakResponse(item) {
   if (tts.spokenResponseIds.has(item.id)) return;
   tts.spokenResponseIds.add(item.id);
   const utteranceId = `voq-resp-${item.id}`;
+  registerWordPlanBubble(utteranceId, item.id);
   void speakText(String(item.content || ''), { utteranceId });
 }
 
@@ -985,6 +1008,157 @@ function cxBubbleForLogItem(item) {
     best = { streamId, bubble };
   }
   return best ? best.bubble : null;
+}
+
+
+function registerWordPlanBubble(utteranceId, logId) {
+  if (!utteranceId || !logId) return;
+  const bubble = pageState && pageState.transcriptIds ? pageState.transcriptIds.get(`log-${logId}`) : null;
+  if (bubble) wordPlan.bubblesByUtteranceId.set(utteranceId, bubble);
+}
+
+function bubbleForUtterance(utteranceId) {
+  const existing = wordPlan.bubblesByUtteranceId.get(utteranceId);
+  if (existing && existing.isConnected) return existing;
+  // Fallback: utterance_id format voq-resp-{logId}
+  const match = /^voq-resp-(.+)$/.exec(utteranceId || '');
+  if (match && pageState && pageState.transcriptIds) {
+    const bubble = pageState.transcriptIds.get(`log-${match[1]}`);
+    if (bubble) {
+      wordPlan.bubblesByUtteranceId.set(utteranceId, bubble);
+      return bubble;
+    }
+  }
+  return null;
+}
+
+function renderWordSpansInto(bubble, text, words) {
+  if (!bubble || !Array.isArray(words) || !words.length) return [];
+  const body = bubble.querySelector('.voq-bubble-body');
+  if (!body) return [];
+  body.textContent = '';
+  const fragment = document.createDocumentFragment();
+  const safeText = safeString(text);
+  let cursor = 0;
+  const spans = [];
+  for (const word of words) {
+    const start = Number(word.char_start || 0);
+    const end = Number(word.char_end || start);
+    if (start > cursor) fragment.appendChild(document.createTextNode(safeText.slice(cursor, start)));
+    const span = document.createElement('span');
+    span.className = 'voq-word';
+    span.dataset.wordIndex = String(word.word_index);
+    span.dataset.charStart = String(start);
+    span.dataset.charEnd = String(end);
+    span.textContent = safeText.slice(start, end) || safeString(word.word);
+    fragment.appendChild(span);
+    spans.push(span);
+    cursor = end;
+  }
+  if (cursor < safeText.length) fragment.appendChild(document.createTextNode(safeText.slice(cursor)));
+  body.appendChild(fragment);
+  return spans;
+}
+
+function handleTtsWordPlan(payload) {
+  const data = (payload && payload.data) || payload || {};
+  const utteranceId = safeString(data.utterance_id || data.utteranceId);
+  if (!utteranceId) return;
+  const words = Array.isArray(data.words) ? data.words : [];
+  if (!words.length) return;
+  const bubble = bubbleForUtterance(utteranceId);
+  if (!bubble) {
+    wordPlan.plansByUtteranceId.set(utteranceId, { text: safeString(data.text), words, durationMs: Number(data.duration_ms || 0) });
+    return;
+  }
+  const spans = renderWordSpansInto(bubble, safeString(data.text), words);
+  wordPlan.spansByUtteranceId.set(utteranceId, spans);
+  wordPlan.plansByUtteranceId.set(utteranceId, { text: safeString(data.text), words, durationMs: Number(data.duration_ms || 0) });
+  wordPlan.activeIndexByUtteranceId.set(utteranceId, -1);
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastWordPlanUtteranceId = utteranceId;
+    globalThis.__voqualizer_page.lastWordPlanWordCount = words.length;
+    globalThis.__voqualizer_page.lastWordPlanDurationMs = Number(data.duration_ms || 0);
+  }
+  ensureWordHighlightLoop();
+}
+
+function setActiveWord(utteranceId, index) {
+  const spans = wordPlan.spansByUtteranceId.get(utteranceId);
+  if (!spans) return;
+  const previous = wordPlan.activeIndexByUtteranceId.get(utteranceId);
+  if (previous === index) return;
+  if (previous != null && previous >= 0 && spans[previous]) spans[previous].classList.remove('voq-word--active');
+  if (index >= 0 && spans[index]) spans[index].classList.add('voq-word--active');
+  wordPlan.activeIndexByUtteranceId.set(utteranceId, index);
+}
+
+function ensureWordHighlightLoop() {
+  if (wordPlan.rafId) return;
+  const tick = () => {
+    wordPlan.rafId = 0;
+    const ctx = tts.audioContext;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    let pending = 0;
+    for (const [utteranceId, startAt] of wordPlan.playbackStartByUtteranceId.entries()) {
+      const plan = wordPlan.plansByUtteranceId.get(utteranceId);
+      if (!plan) continue;
+      const elapsedMs = Math.max(0, (now - startAt) * 1000);
+      const words = plan.words;
+      let active = -1;
+      for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        const start = Number(w.start_ms || 0);
+        const end = Number(w.end_ms || start);
+        if (elapsedMs >= start && elapsedMs < end) { active = i; break; }
+        if (elapsedMs >= end) active = i;
+      }
+      setActiveWord(utteranceId, active);
+      const last = words[words.length - 1];
+      const endMs = last ? Number(last.end_ms || 0) : 0;
+      if (elapsedMs >= endMs && wordPlan.endedByUtteranceId.has(utteranceId)) {
+        // playback considered done; let finalizeWordHighlight clean up
+      } else {
+        pending += 1;
+      }
+    }
+    if (pending > 0) wordPlan.rafId = requestAnimationFrame(tick);
+  };
+  wordPlan.rafId = requestAnimationFrame(tick);
+}
+
+function finalizeWordHighlight(utteranceId, { cancelled } = {}) {
+  if (!utteranceId) return;
+  wordPlan.endedByUtteranceId.add(utteranceId);
+  const spans = wordPlan.spansByUtteranceId.get(utteranceId);
+  const plan = wordPlan.plansByUtteranceId.get(utteranceId);
+  if (spans && plan && !cancelled) {
+    setActiveWord(utteranceId, plan.words.length - 1);
+  }
+  // Brief delay before clearing the active class to avoid a flicker.
+  setTimeout(() => {
+    const lateSpans = wordPlan.spansByUtteranceId.get(utteranceId);
+    if (lateSpans) for (const span of lateSpans) span.classList.remove('voq-word--active');
+    wordPlan.activeIndexByUtteranceId.set(utteranceId, -1);
+    wordPlan.playbackStartByUtteranceId.delete(utteranceId);
+  }, cancelled ? 0 : 180);
+}
+
+function clearAllWordHighlights() {
+  for (const spans of wordPlan.spansByUtteranceId.values()) {
+    for (const span of spans) span.classList.remove('voq-word--active');
+  }
+  wordPlan.spansByUtteranceId.clear();
+  wordPlan.activeIndexByUtteranceId.clear();
+  wordPlan.playbackStartByUtteranceId.clear();
+  wordPlan.endedByUtteranceId.clear();
+  wordPlan.plansByUtteranceId.clear();
+  wordPlan.bubblesByUtteranceId.clear();
+  if (wordPlan.rafId) {
+    cancelAnimationFrame(wordPlan.rafId);
+    wordPlan.rafId = 0;
+  }
 }
 
 function bindTtsButton() {
@@ -1261,6 +1435,10 @@ function initVoqualizerPage() {
     loadedAt: Date.now(),
     route: '/plugins/a0_voqualizer/webui/voqualizer.html',
     milestone: 7,
+    wordPlanCapability: false,
+    lastWordPlanUtteranceId: '',
+    lastWordPlanWordCount: 0,
+    lastWordPlanDurationMs: 0,
     cxStreamCapability: false,
     protocolVersion: '',
     cxLastEvent: '',
@@ -1381,6 +1559,9 @@ export {
   handleCxToken,
   handleCxStreamFinal,
   handleCxStreamError,
+  handleTtsWordPlan,
+  finalizeWordHighlight,
+  clearAllWordHighlights,
   normalizeContext,
   normalizeContexts,
   speakText,
