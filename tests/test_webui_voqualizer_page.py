@@ -30,7 +30,7 @@ def test_voqualizer_page_required_regions_and_controls():
     html = read(HTML)
     assert 'id="voq-context-select"' in html
     assert 'id="voq-settings-button"' in html
-    assert 'aria-label="Voqualizer settings"' in html
+    assert 'aria-label="Open Voqualizer provider settings"' in html
     assert 'id="voq-chat"' in html
     assert 'aria-label="Voqualizer chat transcript"' in html
     assert 'id="voq-prompt-input"' in html
