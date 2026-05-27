@@ -33,6 +33,12 @@ def test_voqualizer_mobile_version_marker_in_css():
     assert 'voq-mobile-version:' in css
 
 
+def test_voqualizer_mobile_viewport_meta():
+    html = read(HTML)
+    assert 'width=device-width, initial-scale=1.0, maximum-scale=5.0' in html
+    assert 'viewport-fit=cover' in html
+
+
 def test_voqualizer_page_required_regions_and_controls():
     html = read(HTML)
     assert 'id="voq-context-select"' in html
@@ -268,14 +274,20 @@ def test_voqualizer_responsive_polish_css():
         "@media (max-width: 768px)",
         "@media (max-width: 480px)",
         "@media (prefers-reduced-motion: reduce)",
-        "position: sticky",
-        "safe-area-inset-bottom",
-        "height: 100svh",
+        "Common-denominator mobile readability pass",
+        "grid-template-rows: auto auto minmax(0, 1fr) auto",
+        "font-size: 18px",
+        "min-height: 2.75rem",
+        "grid-template-columns: 1fr",
+        "grid-template-columns: repeat(3, minmax(2.75rem, 1fr))",
+        "padding-left: 0.5rem",
+        "max-width: 100vw",
+        "max-height: 30dvh",
         "overflow-x: hidden",
-        "-webkit-text-size-adjust: 100%",
-        "max-height: 28dvh",
-        "font-size: 1.05rem",
-        "font-size: 1.1rem",
+        "safe-area-inset-bottom",
+        "position: sticky",
+        ".voq-word",
+        "font-size: inherit",
         ".voq-sr-only",
         ":focus-visible",
     ]:
