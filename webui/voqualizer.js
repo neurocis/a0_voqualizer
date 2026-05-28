@@ -180,6 +180,27 @@ function readSelectedContextHint() {
   return '';
 }
 
+async function fetchHeroDefaultContextId() {
+  // Best-effort: if the a0_superordinates plugin is installed and Hero Mode
+  // is enabled with a designated Hero context, return that ctxid so the
+  // standalone page can default-select the Hero's chat. Silently no-op when
+  // the plugin/endpoint is unavailable or Hero Mode is Disabled.
+  try {
+    const { callJsonApi } = await import('/js/api.js');
+    const result = await callJsonApi(
+      'plugins/a0_superordinates/superordinate_config',
+      {},
+    );
+    if (!result || result.ok === false) return '';
+    const hero = safeString(result.hero_mode_designated_hero || '').trim();
+    if (!hero) return '';
+    if (hero.toLowerCase() === 'disabled') return '';
+    return hero;
+  } catch (_err) {
+    return '';
+  }
+}
+
 function persistSelectedContextId(contextId) {
   try {
     if (contextId) {
@@ -600,7 +621,22 @@ async function loadContextPicker(state, select) {
   setPageStatus('Loading contexts…', 'loading');
   try {
     const contexts = await fetchContexts();
-    const selectedContextId = renderContexts(select, contexts, readSelectedContextHint());
+    let initialHint = readSelectedContextHint();
+    if (!initialHint) {
+      const heroHint = await fetchHeroDefaultContextId();
+      if (heroHint && contexts.some((ctx) => ctx.id === heroHint)) {
+        initialHint = heroHint;
+        page.heroDefaultApplied = true;
+        page.heroDefaultContextId = heroHint;
+      } else {
+        page.heroDefaultApplied = false;
+        page.heroDefaultContextId = heroHint || '';
+      }
+    } else {
+      page.heroDefaultApplied = false;
+      page.heroDefaultContextId = '';
+    }
+    const selectedContextId = renderContexts(select, contexts, initialHint);
     page.contexts = contexts;
     page.selectedContextId = selectedContextId;
     page.contextsLoading = false;

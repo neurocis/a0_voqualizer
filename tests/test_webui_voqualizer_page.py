@@ -422,3 +422,14 @@ def test_voqualizer_active_word_debug_fields_present():
     ]:
         assert token in js
 
+
+def test_voqualizer_hero_default_context_helper_present():
+    js = read(JS)
+    for token in [
+        'async function fetchHeroDefaultContextId',
+        'plugins/a0_superordinates/superordinate_config',
+        'hero_mode_designated_hero',
+        'heroDefaultApplied',
+        'heroDefaultContextId',
+    ]:
+        assert token in js, token
