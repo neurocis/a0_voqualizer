@@ -1,4 +1,4 @@
-/* voq-mobile-version: m7-hero-default-2026-05-27-7 */
+/* voq-mobile-version: m7-send-indicator-2026-05-27-8 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -408,6 +408,25 @@ body {
 .voq-bubble--error { color: #fca5a5; border-color: rgba(248, 113, 113, 0.4); }
 .voq-action-button[disabled] { opacity: 0.5; cursor: not-allowed; }
 .voq-action-button[data-busy="true"] { animation: voq-busy 1.2s ease-in-out infinite; }
+
+.voq-action-button[data-send-state="processing"] {
+  border-color: rgba(59, 130, 246, 0.85);
+  color: rgba(191, 219, 254, 1);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+  animation: voq-send-pulse 1.1s ease-in-out infinite;
+}
+.voq-action-button[data-send-state="success"] {
+  border-color: rgba(34, 197, 94, 0.85);
+  color: rgba(187, 247, 208, 1);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.32);
+}
+@keyframes voq-send-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.45); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voq-action-button[data-send-state="processing"] { animation: none; }
+}
 @keyframes voq-busy { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
 
 .voq-action-button[data-tts-state="off"] { opacity: 0.55; }

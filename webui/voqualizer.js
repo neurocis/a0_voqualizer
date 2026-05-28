@@ -469,6 +469,21 @@ function renderErrorRow(state, message) {
   maybeAutoScroll(chat, wasNearBottom);
 }
 
+const sendIndicator = { state: 'idle', wasBusy: false };
+
+function setSendIndicatorState(next) {
+  sendIndicator.state = next;
+  const button = document.getElementById('voq-send-button');
+  if (button) button.dataset.sendState = next;
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.sendIndicatorState = next;
+  }
+}
+
+function resetSendIndicatorOnInteraction() {
+  if (sendIndicator.state === 'success') setSendIndicatorState('idle');
+}
+
 function updateSendButton(state) {
   const button = document.getElementById('voq-send-button');
   const select = document.getElementById('voq-context-select');
@@ -479,8 +494,17 @@ function updateSendButton(state) {
   const busy = !!state.isSubmitting;
   button.disabled = busy || !hasContext || !hasText;
   button.dataset.busy = busy ? 'true' : 'false';
+  if (busy) {
+    setSendIndicatorState('processing');
+    sendIndicator.wasBusy = true;
+  } else if (sendIndicator.wasBusy) {
+    setSendIndicatorState('success');
+    sendIndicator.wasBusy = false;
+  } else {
+    button.dataset.sendState = sendIndicator.state;
+  }
   button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
-  button.setAttribute('title', busy ? 'Waiting for assistant response' : !hasContext ? 'Select a context before sending' : !hasText ? 'Type a prompt or use ASR' : 'Send prompt');
+  button.setAttribute('title', busy ? 'Processing — waiting for assistant response' : sendIndicator.state === 'success' ? 'Response complete' : !hasContext ? 'Select a context before sending' : !hasText ? 'Type a prompt or use ASR' : 'Send prompt');
   if (select) {
     select.disabled = busy || (select.disabled === true && !hasContext);
     const selected = select.selectedOptions && select.selectedOptions[0];
@@ -598,9 +622,11 @@ function bindPromptInput(state) {
   const button = document.getElementById('voq-send-button');
   if (!prompt) return;
   prompt.addEventListener('input', () => {
+    resetSendIndicatorOnInteraction();
     autosizePrompt(prompt);
     updateSendButton(state);
   });
+  prompt.addEventListener('focus', () => resetSendIndicatorOnInteraction());
   prompt.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     if (event.shiftKey) return;

@@ -433,3 +433,21 @@ def test_voqualizer_hero_default_context_helper_present():
         'heroDefaultContextId',
     ]:
         assert token in js, token
+
+def test_voqualizer_send_indicator_present():
+    js = read(JS)
+    for token in [
+        'sendIndicator',
+        'setSendIndicatorState',
+        'resetSendIndicatorOnInteraction',
+        "data-send-state",
+        'sendIndicatorState',
+    ]:
+        assert token in js, token
+    css = (Path(__file__).resolve().parents[1] / 'webui' / 'voqualizer.css').read_text()
+    for token in [
+        'data-send-state="processing"',
+        'data-send-state="success"',
+        'voq-send-pulse',
+    ]:
+        assert token in css, token
