@@ -464,3 +464,21 @@ def test_voqualizer_send_indicator_present():
         'voq-send-pulse',
     ]:
         assert token in css, token
+
+def test_voqualizer_tts_ack_fallback_playback_present():
+    js = read(JS)
+    for token in [
+        'function handleTtsAckFallback',
+        'handleTtsAckFallback(ack, id)',
+        'ack.tts_chunks',
+        'ack.delivery_fallback',
+        'lastAckTtsFallbackAt',
+        'lastAckTtsFallbackChunks',
+        'lastAckTtsFallbackReason',
+        'lastAckTtsPushedEmitCount',
+        'lastAckTtsSenderPresent',
+        'handleTtsChunk(data)',
+        'handleTtsWordPlan(ack.tts_word_plan)',
+        'handleTtsDone(ack.tts_done)',
+    ]:
+        assert token in js, token

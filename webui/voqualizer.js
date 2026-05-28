@@ -890,6 +890,7 @@ async function speakText(text, { utteranceId } = {}) {
         text: trimmed,
       },
     }, (ack) => {
+      handleTtsAckFallback(ack, id);
       if (ack && ack.error) {
         tts.lastError = ack.error.message || 'speak failed';
         updateTtsButton();
@@ -959,6 +960,28 @@ function handleTtsChunk(payload) {
   } else {
     bufferEncodedChunk(bytes, codec, utteranceId, !!(data.is_final || data.final));
   }
+}
+
+function handleTtsAckFallback(ack, fallbackUtteranceId = '') {
+  if (!ack || ack.error || !tts.enabled) return;
+  const chunks = Array.isArray(ack.tts_chunks) ? ack.tts_chunks : [];
+  if (!chunks.length) return;
+  const utteranceId = safeString(ack.utterance_id || fallbackUtteranceId || 'default');
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastAckTtsFallbackAt = Date.now();
+    globalThis.__voqualizer_page.lastAckTtsFallbackChunks = chunks.length;
+    globalThis.__voqualizer_page.lastAckTtsFallbackReason = ack.delivery_fallback || 'ack_chunks';
+    globalThis.__voqualizer_page.lastAckTtsPushedEmitCount = Number(ack.pushed_emit_count || 0);
+    globalThis.__voqualizer_page.lastAckTtsSenderPresent = !!ack.sender_present;
+  }
+  for (const chunk of chunks) {
+    const data = chunk && chunk.data ? { ...chunk.data } : { ...(chunk || {}) };
+    if (!data.utterance_id && !data.utteranceId) data.utterance_id = utteranceId;
+    handleTtsChunk(data);
+  }
+  if (ack.tts_word_plan) handleTtsWordPlan(ack.tts_word_plan);
+  if (ack.tts_done) handleTtsDone(ack.tts_done);
+  updateTtsButton();
 }
 
 function playPcmChunk(bytes, sampleRate, utteranceId) {
@@ -1620,6 +1643,11 @@ function initVoqualizerPage() {
     sessionId: '',
     lastTtsAt: 0,
     lastTtsError: '',
+    lastAckTtsFallbackAt: 0,
+    lastAckTtsFallbackChunks: 0,
+    lastAckTtsFallbackReason: '',
+    lastAckTtsPushedEmitCount: 0,
+    lastAckTtsSenderPresent: false,
     lastStatus: 'Ready',
     lastStatusLevel: 'info',
     asrEnabledStorageKey: ASR_ENABLED_STORAGE_KEY,
