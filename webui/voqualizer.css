@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-tts-playback-diagnostics-2026-05-28-2 */
+/* voq-mobile-version: m8-tts-enabled-ring-2026-05-28-3 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -903,6 +903,19 @@ body {
 .voqualizer-idle {
   border-color: var(--voq-border, rgba(148, 163, 184, 0.32));
   background: rgba(127,127,127,0.04);
+}
+.voqualizer-speaker.voqualizer-tts-on,
+.voqualizer-speaker[data-tts-enabled="true"] {
+  border-color: rgba(34, 197, 94, 0.95);
+  box-shadow:
+    0 0 0 2px rgba(34, 197, 94, 0.95) inset,
+    0 0 0 2px rgba(34, 197, 94, 0.24),
+    0 0 11px rgba(34, 197, 94, 0.38);
+  background: rgba(34, 197, 94, 0.12);
+}
+.voqualizer-speaker.voqualizer-tts-on .material-symbols-outlined,
+.voqualizer-speaker[data-tts-enabled="true"] .material-symbols-outlined {
+  color: rgba(187, 247, 208, 1);
 }
 .voqualizer-tts-off {
   opacity: 0.45 !important;

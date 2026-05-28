@@ -483,3 +483,19 @@ def test_voqualizer_tts_ack_fallback_playback_present():
         'handleTtsDone(ack.tts_done)',
     ]:
         assert token in js, token
+
+def test_voqualizer_tts_enabled_ring_present():
+    js = read(JS)
+    css = read(CSS)
+    for token in [
+        'voqualizer-tts-on',
+        'data-tts-enabled',
+        "speaker.classList.toggle('voqualizer-tts-on'",
+    ]:
+        assert token in js, token
+    for token in [
+        '.voqualizer-speaker.voqualizer-tts-on',
+        'data-tts-enabled="true"',
+        'rgba(34, 197, 94',
+    ]:
+        assert token in css, token

@@ -1498,6 +1498,8 @@ function bindVoqualizerButtons() {
     const ttsOff = !tts.enabled;
     if (speaker) {
       speaker.classList.toggle('voqualizer-tts-off', ttsOff);
+      speaker.classList.toggle('voqualizer-tts-on', !ttsOff);
+      speaker.setAttribute('data-tts-enabled', String(!ttsOff));
       speaker.setAttribute('aria-pressed', String(!ttsOff));
       speaker.setAttribute('aria-label', speakerLabel(ttsOff));
       speaker.setAttribute('title', speakerLabel(ttsOff));
