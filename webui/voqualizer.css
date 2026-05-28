@@ -787,7 +787,7 @@ body {
 
 
 /* ===== M8 standalone Voqualizer mic/speaker button parity =====
-   Mirrors extensions/webui/chat-input-box-end/voqualizer-buttons.html so the
+   Mirrors the DOM Voqualizer button extension so the
    standalone page renders the same VU/PTT/conversational visuals driven by
    the createVoqualizerStore() state machine. */
 .voqualizer-buttons-row {

@@ -204,7 +204,6 @@ def test_voqualizer_asr_wiring_m8_parity():
         "/plugins/a0_voqualizer/webui/conversation-mode.js",
         "voqualizer-mic-button",
         "voqualizer-speaker-button",
-        "voqualizer-buttons-row",
         "voqualizer-active",
         "voqualizer-ptt",
         "voqualizer-connecting",
@@ -220,6 +219,8 @@ def test_voqualizer_asr_wiring_m8_parity():
         "onAsrFinal",
     ]:
         assert token in js, token
+    html = read(HTML)
+    assert "voqualizer-buttons-row" in html
 
 
 def test_voqualizer_asr_no_legacy_imports():
@@ -256,13 +257,13 @@ def test_voqualizer_buttons_accessibility():
     html = read(HTML)
     js = read(JS)
     assert 'aria-label="Send prompt"' in html
-    assert 'aria-label="Toggle text to speech"' in html
-    assert 'aria-label="Toggle speech recognition"' in html
+    assert 'aria-label="Voqualizer TTS is on. Click to mute TTS for this chat."' in html
+    assert 'aria-label="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."' in html
     assert "aria-pressed" in js
     assert "aria-disabled" in js
     assert "setAttribute('title'" in js or 'setAttribute("title"' in js
-    assert "Speak responses (on)" in js
-    assert "Microphone input (on)" in js
+    assert "Voqualizer TTS is on. Click to mute TTS for this chat." in js
+    assert "Voqualizer mic off. Tap for conversation. Hold for push-to-talk." in js
 
 
 def test_voqualizer_status_and_jump_latest():
@@ -453,7 +454,7 @@ def test_voqualizer_send_indicator_present():
         'sendIndicator',
         'setSendIndicatorState',
         'resetSendIndicatorOnInteraction',
-        "data-send-state",
+        "dataset.sendState",
         'sendIndicatorState',
     ]:
         assert token in js, token
