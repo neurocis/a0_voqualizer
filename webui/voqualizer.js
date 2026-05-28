@@ -291,7 +291,11 @@ function renderContexts(select, contexts, selectedContextId) {
 function setPageStatus(message, level = 'info') {
   // Suppress decorative status lines requested to be hidden from the page UI.
   const _msg = typeof message === 'string' ? message : '';
-  if (_msg === 'Response complete' || _msg.indexOf('Selected ') === 0) {
+  if (
+    _msg === 'Response complete' ||
+    _msg.indexOf('Selected ') === 0 ||
+    _msg.indexOf('Loading contexts') === 0
+  ) {
     return;
   }
   const text = message || 'Ready';
