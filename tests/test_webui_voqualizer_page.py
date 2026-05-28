@@ -275,7 +275,7 @@ def test_voqualizer_responsive_polish_css():
         "@media (max-width: 480px)",
         "@media (prefers-reduced-motion: reduce)",
         "Common-denominator mobile readability pass",
-        "grid-template-rows: auto auto minmax(0, 1fr) auto",
+        "Hide decorative status row",
         "font-size: 18px",
         "min-height: 2.75rem",
         "grid-template-columns: 1fr",

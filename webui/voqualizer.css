@@ -1,4 +1,4 @@
-/* voq-mobile-version: m7-status-clean-2026-05-27-5 */
+/* voq-mobile-version: m7-status-hidden-2026-05-27-6 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -49,7 +49,7 @@ body {
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   padding: calc(12px + var(--voq-safe-top)) 12px calc(12px + var(--voq-safe-bottom));
   gap: 12px;
 }
@@ -531,7 +531,7 @@ body {
 
 /* Common-denominator mobile readability pass */
 .voq-app {
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .voq-bubble-body,
@@ -748,4 +748,21 @@ body {
   }
 }
 /* End common-denominator mobile readability pass */
+
+
+/* Hide decorative status row */
+.voq-status {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  min-height: 0 !important;
+}
+.voq-app { grid-template-rows: auto minmax(0, 1fr) auto; }
+/* End hide decorative status row */
 
