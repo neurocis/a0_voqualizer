@@ -1,4 +1,4 @@
-/* voq-mobile-version: m7-send-indicator-2026-05-27-8 */
+/* voq-mobile-version: m8-asr-parity-2026-05-27-1 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -785,3 +785,144 @@ body {
 .voq-app { grid-template-rows: auto minmax(0, 1fr) auto; }
 /* End hide decorative status row */
 
+
+/* ===== M8 standalone Voqualizer mic/speaker button parity =====
+   Mirrors extensions/webui/chat-input-box-end/voqualizer-buttons.html so the
+   standalone page renders the same VU/PTT/conversational visuals driven by
+   the createVoqualizerStore() state machine. */
+.voqualizer-buttons-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  line-height: 0.5rem;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+.voqualizer-button {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--voq-text);
+  background: transparent;
+  border: 1px solid var(--voq-border, rgba(148, 163, 184, 0.32));
+  transition: transform 0.08s ease, box-shadow 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+.voqualizer-button:hover { transform: translateY(-1px); }
+.voqualizer-button:focus-visible {
+  outline: 2px solid var(--voq-accent, #8b5cf6);
+  outline-offset: 2px;
+}
+.voqualizer-button-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: 4px;
+  background: var(--voq-accent, #8b5cf6);
+  color: #000;
+  pointer-events: none;
+}
+.voqualizer-button-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--voq-accent, #8b5cf6);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.voqualizer-mic .material-symbols-outlined,
+.voqualizer-mic .voqualizer-button-ring { z-index: 2; }
+.voqualizer-mic .material-symbols-outlined {
+  transition: color 100ms ease, text-shadow 100ms ease;
+}
+.voqualizer-mic.voqualizer-speech-detected .material-symbols-outlined {
+  color: #ff3b30;
+  text-shadow: 0 0 7px rgba(255, 59, 48, 0.9), 0 0 14px rgba(255, 59, 48, 0.45);
+}
+.voqualizer-mic-vu {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% calc(100% - 8px),
+      rgba(46, 204, 113, calc(0.35 + (0.55 * var(--voqualizer-vu-level, 0)))) 0%,
+      rgba(46, 204, 113, calc(0.24 + (0.42 * var(--voqualizer-vu-level, 0)))) calc(32% + (42% * var(--voqualizer-vu-level, 0))),
+      transparent calc(34% + (42% * var(--voqualizer-vu-level, 0)))),
+    linear-gradient(0deg,
+      rgba(46, 204, 113, 0.92) 0%,
+      rgba(46, 204, 113, 0.58) calc(100% * var(--voqualizer-vu-level, 0)),
+      transparent calc(100% * var(--voqualizer-vu-level, 0)));
+  opacity: var(--voqualizer-vu-opacity, 0);
+  transform: scale(calc(0.84 + (0.18 * var(--voqualizer-vu-level, 0))));
+  transform-origin: center;
+  transition: transform 65ms linear, opacity 100ms ease, filter 65ms linear;
+  filter: drop-shadow(0 0 calc(3px + (8px * var(--voqualizer-vu-level, 0))) rgba(46, 204, 113, 0.95));
+  pointer-events: none;
+  z-index: 1;
+}
+.voqualizer-mic.voqualizer-active {
+  box-shadow:
+    0 0 0 2px rgba(46, 204, 113, 1) inset,
+    0 0 calc(7px + (12px * var(--voqualizer-vu-level, 0))) rgba(46, 204, 113, 0.62);
+}
+.voqualizer-mic.voqualizer-ptt .voqualizer-mic-vu {
+  background:
+    radial-gradient(circle at 50% calc(100% - 8px),
+      rgba(255, 149, 0, calc(0.40 + (0.52 * var(--voqualizer-vu-level, 0)))) 0%,
+      rgba(255, 149, 0, calc(0.28 + (0.42 * var(--voqualizer-vu-level, 0)))) calc(32% + (42% * var(--voqualizer-vu-level, 0))),
+      transparent calc(34% + (42% * var(--voqualizer-vu-level, 0)))),
+    linear-gradient(0deg,
+      rgba(255, 149, 0, 0.95) 0%,
+      rgba(255, 149, 0, 0.62) calc(100% * var(--voqualizer-vu-level, 0)),
+      transparent calc(100% * var(--voqualizer-vu-level, 0)));
+  filter: drop-shadow(0 0 calc(4px + (9px * var(--voqualizer-vu-level, 0))) rgba(255, 149, 0, 0.95));
+}
+.voqualizer-mic.voqualizer-ptt {
+  box-shadow:
+    0 0 0 2px #ff9500 inset,
+    0 0 calc(8px + (13px * var(--voqualizer-vu-level, 0))) rgba(255, 149, 0, 0.68);
+}
+.voqualizer-mic.voqualizer-vu-clipped .voqualizer-mic-vu {
+  background: radial-gradient(circle, rgba(255, 59, 48, 0.96), rgba(255, 59, 48, 0.44), transparent 76%);
+  filter: drop-shadow(0 0 12px rgba(255, 59, 48, 0.95));
+}
+.voqualizer-mic.voqualizer-error .voqualizer-mic-vu {
+  background: radial-gradient(circle, rgba(255, 59, 48, 0.70), rgba(255, 59, 48, 0.28), transparent 76%);
+}
+.voqualizer-idle {
+  border-color: var(--voq-border, rgba(148, 163, 184, 0.32));
+  background: rgba(127,127,127,0.04);
+}
+.voqualizer-tts-off {
+  opacity: 0.45 !important;
+  filter: grayscale(0.6);
+}
+.voqualizer-button.voqualizer-active:not(.voqualizer-mic) {
+  box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.95) inset, 0 0 8px rgba(46, 204, 113, 0.35);
+  background: rgba(46, 204, 113, 0.12);
+}
+.voqualizer-button.voqualizer-ptt:not(.voqualizer-mic) {
+  box-shadow: 0 0 0 2px #ff9500 inset, 0 0 10px rgba(255, 149, 0, 0.40);
+  background: rgba(255, 149, 0, 0.14);
+}
+.voqualizer-connecting { animation: voqualizerPulse 1s infinite ease-in-out; }
+.voqualizer-error {
+  box-shadow: 0 0 0 2px #ff3b30 inset;
+  background: rgba(255, 59, 48, 0.14);
+}
+@keyframes voqualizerPulse { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .voqualizer-connecting { animation: none; }
+  .voqualizer-mic-vu { transition: none; }
+}

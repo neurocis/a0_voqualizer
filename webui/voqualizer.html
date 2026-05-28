@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
-  <link rel="stylesheet" href="/plugins/a0_voqualizer/webui/voqualizer.css?v=m7-send-indicator-2026-05-27-8" />
-  <script type="module" src="/plugins/a0_voqualizer/webui/voqualizer.js?v=m7-send-indicator-2026-05-27-8"></script>
+  <link rel="stylesheet" href="/plugins/a0_voqualizer/webui/voqualizer.css?v=m8-asr-parity-2026-05-27-1" />
+  <script type="module" src="/plugins/a0_voqualizer/webui/voqualizer.js?v=m8-asr-parity-2026-05-27-1"></script>
 </head>
 <body>
   <div class="voq-app" data-voqualizer-page="standalone">
@@ -83,14 +83,33 @@
           <span class="material-symbols-outlined voq-material" aria-hidden="true">send</span>
           <span class="voq-text-fallback">send</span>
         </button>
-        <button id="voq-tts-button" class="voq-action-button" type="button" aria-label="Toggle text to speech" title="TTS">
-          <span class="material-symbols-outlined voq-material" aria-hidden="true">graphic_eq</span>
-          <span class="voq-text-fallback">tts</span>
-        </button>
-        <button id="voq-asr-button" class="voq-action-button" type="button" aria-label="Toggle speech recognition" title="ASR">
-          <span class="material-symbols-outlined voq-material" aria-hidden="true">mic</span>
-          <span class="voq-text-fallback">asr</span>
-        </button>
+        <div class="voqualizer-buttons-row" data-voqualizer-standalone-buttons="1">
+          <button
+            type="button"
+            id="voqualizer-speaker-button"
+            class="voq-action-button voqualizer-button voqualizer-speaker"
+            aria-label="Voqualizer TTS is on. Click to mute TTS for this chat."
+            title="Voqualizer TTS is on. Click to mute TTS for this chat."
+            aria-pressed="true"
+          >
+            <span class="material-symbols-outlined voq-material" aria-hidden="true">graphic_eq</span>
+            <span class="voqualizer-button-badge" aria-hidden="true">V</span>
+            <span class="voq-text-fallback">tts</span>
+          </button>
+          <button
+            type="button"
+            id="voqualizer-mic-button"
+            class="voq-action-button voqualizer-button voqualizer-mic voqualizer-idle"
+            aria-label="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
+            title="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
+            aria-pressed="false"
+          >
+            <span class="voqualizer-mic-vu" aria-hidden="true"></span>
+            <span class="material-symbols-outlined voq-material" aria-hidden="true">mic</span>
+            <span class="voqualizer-button-ring" aria-hidden="true"></span>
+            <span class="voq-text-fallback">asr</span>
+          </button>
+        </div>
       </div>
     </footer>
   </div>

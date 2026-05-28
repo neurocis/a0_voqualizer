@@ -227,6 +227,8 @@ export function createVoqualizerStore(options = {}) {
     _ctxPoll: null,
     _contextHandler: null,
     _pttOverlay: false,
+    _suppressTts: !!options.suppressTts,
+    _onAsrFinal: typeof options.onAsrFinal === 'function' ? options.onAsrFinal : null,
     init() {
       if (this._initialized) return this;
       this._initialized = true;
@@ -248,7 +250,19 @@ export function createVoqualizerStore(options = {}) {
       this._initialized = false;
       this._publishDebug();
     },
-    isTtsEnabled() { return !!this.ttsEnabledByContext[this.contextId]; },
+    isTtsEnabled() {
+      if (this._suppressTts) return false;
+      return !!this.ttsEnabledByContext[this.contextId];
+    },
+    /**
+     * Public method to push a new context id into the store from an external
+     * source (e.g. a standalone page's own context picker), reusing the
+     * existing debounced observe path. Returns the result of the underlying
+     * _observeContextChange call.
+     */
+    setContextId(newId, reason = 'external') {
+      return this._observeContextChange(newId, reason);
+    },
     debugSnapshot() {
       return {
     _asrPromptClearTimer: null,

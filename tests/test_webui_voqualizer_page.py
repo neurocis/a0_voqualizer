@@ -50,17 +50,17 @@ def test_voqualizer_page_required_regions_and_controls():
     assert 'id="voq-prompt-input"' in html
     assert 'aria-label="Prompt input / text window"' in html
     assert 'id="voq-send-button"' in html
-    assert 'id="voq-tts-button"' in html
-    assert 'id="voq-asr-button"' in html
+    assert 'id="voqualizer-speaker-button"' in html
+    assert 'id="voqualizer-mic-button"' in html
 
 
-def test_voqualizer_page_action_order_is_prompt_send_tts_asr():
+def test_voqualizer_page_action_order_is_prompt_send_speaker_mic():
     html = read(HTML)
     prompt_i = html.index('id="voq-prompt-input"')
     send_i = html.index('id="voq-send-button"')
-    tts_i = html.index('id="voq-tts-button"')
-    asr_i = html.index('id="voq-asr-button"')
-    assert prompt_i < send_i < tts_i < asr_i
+    speaker_i = html.index('id="voqualizer-speaker-button"')
+    mic_i = html.index('id="voqualizer-mic-button"')
+    assert prompt_i < send_i < speaker_i < mic_i
 
 
 def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
@@ -174,48 +174,62 @@ def test_voqualizer_tts_wiring():
 
 def test_voqualizer_tts_no_legacy_imports():
     js = read(JS)
+    # M8: conversation-mode.js is now an approved import; only the legacy
+    # main-WebGUI coupling tokens remain forbidden.
     for forbidden in [
         "tester-store.js",
-        "conversation-mode.js",
         "Alpine.store('chats'",
+        "Alpine.store('chatInput'",
         "globalThis.sendMessage",
         "voqualizer-response-observer",
         "set_messages_after_loop",
+        "/js/tts-service.js",
+        "/js/stt-service.js",
     ]:
         assert forbidden not in js, forbidden
 
 
 
-def test_voqualizer_asr_wiring():
+def test_voqualizer_asr_wiring_m8_parity():
     js = read(JS)
+    # M8: ASR is now driven by createVoqualizerStore() from conversation-mode.js.
     for token in [
-        "WORKLET_URL",
-        "WORKLET_PROCESSOR",
-        "voqualizer-mic-processor",
-        "a0_voqualizer.standalone.asr_enabled",
-        "asr_submit_mode",
-        "frontend_prompt",
-        "async function startAsrCapture",
-        "async function stopAsrCapture",
-        "function handleAsrPartial",
-        "async function handleAsrFinal",
-        "async function routeAsrFinal",
-        "function maybeLocalBargeIn",
-        "voqualizer_asr_partial",
+        "createVoqualizerStore",
+        "TAP_HOLD_THRESHOLD_MS",
+        "STATE_CONVERSATIONAL",
+        "STATE_PTT_ACTIVE",
+        "STATE_CONNECTING",
+        "STATE_STOPPING",
+        "STATE_ERROR",
+        "/plugins/a0_voqualizer/webui/conversation-mode.js",
+        "voqualizer-mic-button",
+        "voqualizer-speaker-button",
+        "voqualizer-buttons-row",
+        "voqualizer-active",
+        "voqualizer-ptt",
+        "voqualizer-connecting",
+        "voqualizer-error",
+        "voqualizer-speech-detected",
+        "voqualizer-vu-clipped",
+        "voqualizer-tts-off",
+        "--voqualizer-vu-level",
+        "--voqualizer-vu-opacity",
         "voqualizer_asr_final",
-        "audioChunkPayload",
-        "framePcm16",
         "submitPrompt(pageState)",
+        "setContextId",
+        "onAsrFinal",
     ]:
         assert token in js, token
 
 
 def test_voqualizer_asr_no_legacy_imports():
     js = read(JS)
+    # M8: conversation-mode.js is now an approved import; only the legacy
+    # main-WebGUI coupling tokens and tester-store.js remain forbidden.
     for forbidden in [
         "tester-store.js",
-        "conversation-mode.js",
         "Alpine.store('chats'",
+        "Alpine.store('chatInput'",
         "globalThis.sendMessage",
         "voqualizer-response-observer",
         "set_messages_after_loop",
@@ -365,7 +379,6 @@ def test_voqualizer_cx_stream_no_main_gui_coupling():
         "set_messages_after_loop",
         "voqualizer-response-observer",
         "tester-store.js",
-        "conversation-mode.js",
     ]:
         assert forbidden not in js, forbidden
 

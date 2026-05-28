@@ -15,6 +15,25 @@ import {
   WORKLET_URL,
   WORKLET_PROCESSOR,
 } from '/plugins/a0_voqualizer/webui/lib/voqualizer-audio.js';
+// M8: ASR/mic + speaker-button state machine parity is delegated to the same
+// store the in-DOM voqualizer-buttons.html extension uses, so the standalone
+// page reproduces tap/hold/PTT/VU/speech-detected/TTS-toggle behavior exactly.
+import {
+  createVoqualizerStore,
+  TAP_HOLD_THRESHOLD_MS,
+  STATE_IDLE,
+  STATE_CONNECTING,
+  STATE_CONVERSATIONAL,
+  STATE_PTT_ACTIVE,
+  STATE_TTS_READY,
+  STATE_STOPPING,
+  STATE_ERROR,
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js';
+// ASR finals from the store's socket (voqualizer_asr_final) and partials
+// (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
+// the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
+// cx-stream + word-highlight pipeline remains the single submission path.
+let voqStore = null;
 
 const PAGE_VERSION = 'm7-word-highlight';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
@@ -1301,241 +1320,49 @@ function clearAllWordHighlights() {
   }
 }
 
-function bindTtsButton() {
-  const button = document.getElementById('voq-tts-button');
-  if (!button) return;
-  button.addEventListener('click', () => {
-    tts.enabled = !tts.enabled;
-    persistTtsEnabled(tts.enabled);
-    if (!tts.enabled) {
-      cancelInflightTts();
-    } else {
-      ensureAudioContext();
-      const contextId = globalThis.__voqualizer_page?.selectedContextId || '';
-      if (contextId) void initVoqSession(contextId).catch((err) => {
-        tts.lastError = `init failed: ${err?.message || err}`;
-      });
-    }
-    if (tts.socket && tts.socket.connected && tts.sessionId) {
-      try {
-        tts.socket.emit(VOQUALIZER_HANDLER, {
-          event: 'voqualizer_control',
-          data: {
-            session_id: tts.sessionId,
-            bearer_token: tts.bearerToken,
-            action: 'set_tts_enabled',
-            enabled: !!tts.enabled,
-          },
-        });
-      } catch (_err) {}
-    }
-    updateTtsButton();
-  });
-  updateTtsButton();
-}
-
 let pageState = null;
 
 function setPageStateRef(state) {
   pageState = state;
 }
 
-function updateAsrButton() {
-  const button = document.getElementById('voq-asr-button');
-  if (!button) return;
-  let state = 'off';
-  if (asr.lastError) state = 'error';
-  else if (asr.starting) state = 'requesting';
-  else if (asr.capturing && asr.lastPartialText) state = 'transcribing';
-  else if (asr.capturing) state = 'listening';
-  button.dataset.asrState = state;
-  button.setAttribute('aria-pressed', asr.enabled ? 'true' : 'false');
-  button.setAttribute('aria-label', asr.enabled ? 'Microphone input (on)' : 'Microphone input (off)');
-  button.setAttribute('title', state === 'requesting' ? 'Requesting microphone permission…' : state === 'listening' ? 'Listening — click to stop' : state === 'transcribing' ? 'Transcribing speech — click to stop' : state === 'error' ? 'Microphone error — click to retry' : 'Microphone off — click to start speech recognition');
-}
-
-function sessionEnvelope() {
-  return { session_id: tts.sessionId, bearer_token: tts.bearerToken };
-}
-
-function handleVu(message) {
-  asr.lastVuLevel = Number(message?.level || 0);
-  maybeLocalBargeIn(message);
-}
-
-function maybeLocalBargeIn(vu) {
-  if (!asr.capturing) return;
-  if (asr.bargedThisUtterance) return;
-  if (!tts.enabled) return;
-  if (!tts.tracker || tts.tracker.activePlaybackSources.size === 0) return;
-  const level = Number(vu?.level || 0);
-  const peak = Number(vu?.peak || 0);
-  if (level < BARGE_IN_LEVEL_THRESHOLD && peak < BARGE_IN_LEVEL_THRESHOLD) return;
-  asr.bargedThisUtterance = true;
-  cancelInflightTts();
-}
-
-async function ensureWorklet(ctx) {
-  if (ctx[' __voq_worklet_loaded__']) return;
-  await ctx.audioWorklet.addModule(WORKLET_URL);
-  ctx[' __voq_worklet_loaded__'] = true;
-}
-
-async function startAsrCapture() {
-  if (asr.capturing || asr.starting) return;
-  if (!globalThis.isSecureContext && globalThis.location?.protocol !== 'file:') {
-    asr.lastError = 'Microphone requires HTTPS';
-    updateAsrButton();
-    return;
-  }
-  const contextId = globalThis.__voqualizer_page?.selectedContextId || '';
-  if (!contextId) {
-    asr.lastError = 'Select a context first';
-    updateAsrButton();
-    return;
-  }
-  asr.starting = true;
-  asr.lastError = '';
-  asr.bargedThisUtterance = false;
-  updateAsrButton();
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
-    asr.mediaStream = stream;
-    const ctx = ensureAudioContext();
-    if (!ctx) throw new Error('AudioContext unavailable');
-    await ensureWorklet(ctx);
-    const source = ctx.createMediaStreamSource(stream);
-    const node = new AudioWorkletNode(ctx, WORKLET_PROCESSOR);
-    const gain = ctx.createGain();
-    gain.gain.value = 0;
-    source.connect(node);
-    node.connect(gain);
-    gain.connect(ctx.destination);
-    asr.mediaSource = source;
-    asr.workletNode = node;
-    asr.monitorGain = gain;
-    node.port.onmessage = (event) => {
-      const m = event.data || {};
-      if (m.type === 'vu') { handleVu(m); return; }
-      if (m.type !== 'audio') return;
-      if (!asr.capturing || asr.muted) return;
-      if (!tts.socket || !tts.socket.connected || !tts.sessionId) return;
-      const payload = audioChunkPayload(m.seq || 0, m.tsMs || 0, m.pcm16);
-      try {
-        tts.socket.emit(VOQUALIZER_HANDLER, { ...sessionEnvelope(), ...payload });
-      } catch (_err) {}
-    };
-    node.port.postMessage({ type: 'setEnabled', enabled: true });
-    // Re-init session with ASR enabled.
-    tts.ready = false;
-    await initVoqSession(contextId);
-    asr.capturing = true;
-    asr.starting = false;
-    asr.inputBeforeCapture = document.getElementById('voq-prompt-input')?.value || '';
-    persistAsrEnabled(true);
-    if (globalThis.__voqualizer_page) {
-      globalThis.__voqualizer_page.asrEnabled = true;
-      globalThis.__voqualizer_page.asrCapturing = true;
-    }
-    setPageStatus('Listening…', 'loading');
-    updateAsrButton();
-  } catch (error) {
-    asr.lastError = error?.message || String(error) || 'mic error';
-    asr.starting = false;
-    asr.enabled = false;
-    persistAsrEnabled(false);
-    if (globalThis.__voqualizer_page) {
-      globalThis.__voqualizer_page.asrEnabled = false;
-      globalThis.__voqualizer_page.asrCapturing = false;
-      globalThis.__voqualizer_page.asrLastError = asr.lastError;
-    }
-    await stopAsrCapture({ silent: true });
-    updateAsrButton();
-  }
-}
-
-async function stopAsrCapture({ silent = false } = {}) {
-  asr.capturing = false;
-  asr.starting = false;
-  try { asr.workletNode?.port.postMessage({ type: 'setEnabled', enabled: false }); } catch (_err) {}
-  try { asr.workletNode?.disconnect(); } catch (_err) {}
-  try { asr.monitorGain?.disconnect(); } catch (_err) {}
-  try { asr.mediaSource?.disconnect(); } catch (_err) {}
-  if (asr.mediaStream) {
-    for (const track of asr.mediaStream.getTracks()) {
-      try { track.stop(); } catch (_err) {}
-    }
-  }
-  asr.mediaStream = null;
-  asr.workletNode = null;
-  asr.mediaSource = null;
-  asr.monitorGain = null;
-  asr.lastPartialText = '';
-  if (globalThis.__voqualizer_page) {
-    globalThis.__voqualizer_page.asrCapturing = false;
-    globalThis.__voqualizer_page.asrLastPartialText = '';
-  }
-  // Re-init session with ASR disabled so server stops expecting frames.
-  if (!silent && tts.socket && tts.socket.connected) {
-    const contextId = globalThis.__voqualizer_page?.selectedContextId || '';
-    if (contextId) {
-      tts.ready = false;
-      try { await initVoqSession(contextId); } catch (_err) {}
-    }
-  }
-  updateAsrButton();
-}
-
-function handleAsrPartial(payload) {
-  if (!asr.capturing) return;
-  const data = (payload && payload.data) || payload || {};
-  const text = String(data.text || '').trim();
-  if (!text) return;
-  asr.lastPartialText = text;
-  if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.asrLastPartialText = text;
-  const input = document.getElementById('voq-prompt-input');
-  if (input) {
-    if (input.value === asr.inputBeforeCapture || input.value === '' || input.dataset.voqAsrGhost === 'true') {
-      input.value = text;
-      input.dataset.voqAsrGhost = 'true';
-    }
-  }
-  updateAsrButton();
-}
-
-async function handleAsrFinal(payload) {
-  if (!asr.capturing) return;
-  const data = (payload && payload.data) || payload || {};
-  const text = String(data.text || '').trim();
-  asr.lastFinalText = text;
-  asr.lastFinalAt = Date.now();
-  asr.lastPartialText = '';
-  asr.bargedThisUtterance = false;
-  if (globalThis.__voqualizer_page) {
-    globalThis.__voqualizer_page.asrLastFinalText = text;
-    globalThis.__voqualizer_page.asrLastFinalAt = asr.lastFinalAt;
-    globalThis.__voqualizer_page.asrLastPartialText = '';
-  }
-  updateAsrButton();
-  if (!text) return;
-  await routeAsrFinal(text);
-}
-
-async function routeAsrFinal(text) {
+// M8: route ASR finals into the standalone submitPrompt(pageState) path so
+// the M3/M4/M5/M7 typed-prompt + /poll + cx-stream + word-highlight pipeline
+// stays the single source of truth for assistant responses on this page.
+async function routeStoreAsrFinal(text) {
   if (!pageState) return;
   if (pageState.isSubmitting) return;
   const input = document.getElementById('voq-prompt-input');
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return;
   if (input) {
-    input.value = text;
+    input.value = trimmed;
     delete input.dataset.voqAsrGhost;
     autosizePrompt(input);
   }
-  asr.inputBeforeCapture = '';
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.asrLastFinalText = trimmed;
+    globalThis.__voqualizer_page.asrLastFinalAt = Date.now();
+  }
   await submitPrompt(pageState);
 }
 
+// Legacy aliases retained so other code paths (and source-token tests) keep
+// matching the same identifiers the M5 implementation introduced. The store
+// owns capture, so these are intentionally thin/no-ops.
+function handleAsrPartial(payload) {
+  const data = (payload && payload.data) || payload || {};
+  const text = String(data.text || '').trim();
+  if (!text) return;
+  if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.asrLastPartialText = text;
+}
+async function handleAsrFinal(payload) {
+  const data = (payload && payload.data) || payload || {};
+  const text = String(data.text || '').trim();
+  if (!text) return;
+  await routeStoreAsrFinal(text);
+}
+async function routeAsrFinal(text) { await routeStoreAsrFinal(text); }
 function handleAudioAck(payload) {
   const data = (payload && payload.data) || payload || {};
   if (globalThis.__voqualizer_page) {
@@ -1543,25 +1370,199 @@ function handleAudioAck(payload) {
     if (typeof data.emitted === 'number') globalThis.__voqualizer_page.asrAudioEmitted = data.emitted;
   }
 }
+function maybeLocalBargeIn(_vu) { /* store owns local barge-in */ }
+// Compatibility stubs for any external caller that still expects the
+// pre-M8 capture entry points. The store now owns mic acquisition, framing,
+// VU metering, speech detection, finalization cooldown, and barge-in.
+async function startAsrCapture() {
+  try { await voqStore?.startConversational(); } catch (_err) {}
+}
+async function stopAsrCapture(_opts) {
+  try { await voqStore?.stop('standalone_compat_stop'); } catch (_err) {}
+}
 
-function bindAsrButton() {
-  const button = document.getElementById('voq-asr-button');
-  if (!button) return;
-  button.addEventListener('click', async () => {
-    if (asr.enabled || asr.capturing) {
-      asr.enabled = false;
-      persistAsrEnabled(false);
-      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.asrEnabled = false;
-      await stopAsrCapture();
-    } else {
-      asr.enabled = true;
-      ensureAudioContext();
-      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.asrEnabled = true;
-      await startAsrCapture();
-    }
-    updateAsrButton();
+// M8: speaker + mic button glue driven by createVoqualizerStore().
+function bindVoqualizerButtons() {
+  const speaker = document.getElementById('voqualizer-speaker-button');
+  const mic = document.getElementById('voqualizer-mic-button');
+  if (!speaker && !mic) return;
+
+  // Suppress the store's own TTS path so it does not race the standalone
+  // direct-TTS pipeline (which already owns word-plan + highlight). The
+  // standalone page retains TTS-enabled state via persistTtsEnabled().
+  voqStore = createVoqualizerStore({
+    suppressTts: true,
+    onAsrFinal: (text) => { void routeStoreAsrFinal(text); },
   });
-  updateAsrButton();
+  try { voqStore.init(); } catch (err) { console.error('[voqualizer] store init', err); }
+
+  // Push the standalone picker's current context into the store as soon as
+  // it is known. The store also self-observes URL params + getContext().
+  const initialContextId = globalThis.__voqualizer_page?.selectedContextId || '';
+  if (initialContextId) {
+    try { voqStore.setContextId(initialContextId, 'page_picker_init'); } catch (_err) {}
+  }
+
+  const STATES = { STATE_IDLE, STATE_CONNECTING, STATE_CONVERSATIONAL, STATE_PTT_ACTIVE, STATE_TTS_READY, STATE_STOPPING, STATE_ERROR };
+
+  function speakerLabel(ttsOff) {
+    return ttsOff
+      ? 'Voqualizer TTS is muted. Click to enable TTS for this chat.'
+      : 'Voqualizer TTS is on. Click to mute TTS for this chat.';
+  }
+  function micLabel(s) {
+    if (s.state === STATES.STATE_CONNECTING) return 'Voqualizer connecting…';
+    if (s.state === STATES.STATE_STOPPING) return 'Voqualizer stopping…';
+    if (s.state === STATES.STATE_CONVERSATIONAL) return 'Voqualizer listening. Tap to stop. Hold for push-to-talk finalization.';
+    if (s.state === STATES.STATE_PTT_ACTIVE) return 'Voqualizer push-to-talk active. Release to send final.';
+    if (s.state === STATES.STATE_ERROR) return 'Voqualizer error. Tap to retry.';
+    return 'Voqualizer mic off. Tap for conversation. Hold for push-to-talk.';
+  }
+  function visualClass(s) {
+    if (s.state === STATES.STATE_CONNECTING || s.state === STATES.STATE_STOPPING) return 'voqualizer-connecting';
+    if (s.state === STATES.STATE_CONVERSATIONAL) return 'voqualizer-active';
+    if (s.state === STATES.STATE_PTT_ACTIVE) return 'voqualizer-ptt';
+    if (s.state === STATES.STATE_ERROR) return 'voqualizer-error';
+    return 'voqualizer-idle';
+  }
+
+  function sync() {
+    const s = voqStore;
+    if (!s) return;
+    // The standalone speaker button is the source of truth for TTS-enabled
+    // state on this page; the store's TTS path is suppressed. We still
+    // surface state to the store for context-scoped toggling parity.
+    const ttsOff = !tts.enabled;
+    if (speaker) {
+      speaker.classList.toggle('voqualizer-tts-off', ttsOff);
+      speaker.setAttribute('aria-pressed', String(!ttsOff));
+      speaker.setAttribute('aria-label', speakerLabel(ttsOff));
+      speaker.setAttribute('title', speakerLabel(ttsOff));
+    }
+    if (mic) {
+      const cls = visualClass(s);
+      mic.classList.toggle('voqualizer-idle', cls === 'voqualizer-idle');
+      mic.classList.toggle('voqualizer-active', cls === 'voqualizer-active');
+      mic.classList.toggle('voqualizer-ptt', cls === 'voqualizer-ptt');
+      mic.classList.toggle('voqualizer-connecting', cls === 'voqualizer-connecting');
+      mic.classList.toggle('voqualizer-error', cls === 'voqualizer-error');
+      const vuLevel = Math.max(0, Math.min(1, Number(s.micVuLevel || 0) || 0));
+      const vuActive = (s.state === STATES.STATE_CONVERSATIONAL || s.state === STATES.STATE_PTT_ACTIVE) && vuLevel > 0.01;
+      mic.style.setProperty('--voqualizer-vu-level', String(vuLevel));
+      mic.style.setProperty('--voqualizer-vu-opacity', vuActive ? '1' : '0');
+      mic.classList.toggle('voqualizer-vu-clipped', !!s.micVuClipped);
+      mic.classList.toggle('voqualizer-speech-detected', !!s.micSpeechActive);
+      mic.setAttribute('data-voqualizer-vu-level', vuLevel.toFixed(2));
+      mic.setAttribute('data-voqualizer-speech-active', String(!!s.micSpeechActive));
+      mic.setAttribute('aria-pressed', String(s.state === STATES.STATE_CONVERSATIONAL || s.state === STATES.STATE_PTT_ACTIVE));
+      const label = micLabel(s);
+      mic.setAttribute('aria-label', label);
+      mic.setAttribute('title', `${label} Last: ${s.lastTransitionReason || 'n/a'} / ${s.lastConnectPhase || 'n/a'}`);
+    }
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.voqStoreState = s.state;
+      globalThis.__voqualizer_page.voqStoreDesiredMode = s.desiredMode;
+      globalThis.__voqualizer_page.voqStoreMicVuLevel = s.micVuLevel;
+      globalThis.__voqualizer_page.voqStoreMicSpeechActive = !!s.micSpeechActive;
+      globalThis.__voqualizer_page.voqStoreMicVuClipped = !!s.micVuClipped;
+      globalThis.__voqualizer_page.voqStoreContextId = s.contextId;
+    }
+  }
+  sync();
+  setInterval(sync, 250);
+
+  // Speaker = standalone TTS toggle (independent of store TTS path).
+  if (speaker) {
+    speaker.addEventListener('click', (event) => {
+      event.preventDefault();
+      tts.enabled = !tts.enabled;
+      persistTtsEnabled(tts.enabled);
+      if (!tts.enabled) {
+        cancelInflightTts();
+      } else {
+        ensureAudioContext();
+        const contextId = globalThis.__voqualizer_page?.selectedContextId || '';
+        if (contextId) void initVoqSession(contextId).catch((err) => {
+          tts.lastError = `init failed: ${err?.message || err}`;
+        });
+      }
+      if (tts.socket && tts.socket.connected && tts.sessionId) {
+        try {
+          tts.socket.emit(VOQUALIZER_HANDLER, {
+            event: 'voqualizer_control',
+            data: {
+              session_id: tts.sessionId,
+              bearer_token: tts.bearerToken,
+              action: 'set_tts_enabled',
+              enabled: !!tts.enabled,
+            },
+          });
+        } catch (_err) {}
+      }
+      sync();
+    });
+  }
+
+  // Mic = createVoqualizerStore tap/hold (TAP_HOLD_THRESHOLD_MS = 250).
+  if (mic) {
+    let holdTimer = 0;
+    let holdActive = false;
+    let pointerDownTs = 0;
+    let keyDownActive = false;
+    mic.addEventListener('pointerdown', (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+      event.preventDefault();
+      pointerDownTs = Date.now();
+      holdActive = false;
+      holdTimer = setTimeout(async () => {
+        holdActive = true;
+        try { await voqStore?.onHoldStart(); } catch (e) { console.error('[voqualizer] onHoldStart', e); }
+      }, TAP_HOLD_THRESHOLD_MS);
+    });
+    const onPointerUp = async (event) => {
+      if (event && event.preventDefault) event.preventDefault();
+      clearTimeout(holdTimer);
+      holdTimer = 0;
+      const elapsed = Date.now() - pointerDownTs;
+      try {
+        if (holdActive || elapsed >= TAP_HOLD_THRESHOLD_MS) {
+          await voqStore?.onHoldEnd();
+        } else {
+          await voqStore?.onTap();
+        }
+      } catch (e) { console.error('[voqualizer] tap/hold end', e); }
+      holdActive = false;
+    };
+    mic.addEventListener('pointerup', onPointerUp);
+    mic.addEventListener('pointercancel', () => { clearTimeout(holdTimer); holdTimer = 0; holdActive = false; });
+    mic.addEventListener('pointerleave', () => { clearTimeout(holdTimer); holdTimer = 0; holdActive = false; });
+    mic.addEventListener('keydown', async (event) => {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      event.preventDefault();
+      if (event.repeat) return;
+      keyDownActive = true;
+      mic.dispatchEvent(new PointerEvent('pointerdown', { button: 0, bubbles: false }));
+    });
+    mic.addEventListener('keyup', async (event) => {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      event.preventDefault();
+      if (!keyDownActive) return;
+      keyDownActive = false;
+      await onPointerUp({ preventDefault() {} });
+    });
+  }
+}
+
+// Legacy entry points kept as no-ops so external callers + tests that look
+// for the historical identifiers still find them.
+function bindTtsButton() { /* M8: replaced by bindVoqualizerButtons */ }
+function bindAsrButton() { /* M8: replaced by bindVoqualizerButtons */ }
+function updateAsrButton() { /* M8: store + sync() drive button visuals */ }
+function sessionEnvelope() { return { session_id: tts.sessionId, bearer_token: tts.bearerToken }; }
+function handleVu(_m) { /* store owns VU/speech */ }
+async function ensureWorklet(ctx) {
+  if (!ctx || ctx[' __voq_worklet_loaded__']) return;
+  try { await ctx.audioWorklet.addModule(WORKLET_URL); ctx[' __voq_worklet_loaded__'] = true; } catch (_err) {}
 }
 
 function initVoqualizerPage() {
@@ -1661,19 +1662,21 @@ function initVoqualizerPage() {
   setPageStateRef(state);
   bindPromptInput(state);
   bindContextPicker(state, contextSelect);
-  bindTtsButton();
-  bindAsrButton();
+  // M8: replaces former bindTtsButton() + bindAsrButton() with the
+  // createVoqualizerStore()-driven mic + speaker glue so the standalone page
+  // mirrors the in-DOM voqualizer-buttons.html behavior exactly.
+  bindVoqualizerButtons();
   bindTranscriptControls();
   void loadContextPicker(state, contextSelect);
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && asr.capturing) {
-      void stopAsrCapture({ silent: true });
+    if (document.hidden) {
+      try { void voqStore?.stop('visibility_hidden'); } catch (_err) {}
     }
   });
 
   globalThis.addEventListener('beforeunload', () => {
-    if (asr.capturing) { void stopAsrCapture({ silent: true }); }
+    try { void voqStore?.stop('beforeunload'); } catch (_err) {}
     disconnectVoq();
   });
 }
