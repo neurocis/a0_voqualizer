@@ -954,6 +954,15 @@ function handleTtsChunk(payload) {
   const codec = normalizeTtsCodec(data, payload);
   const sampleRate = ttsSampleRate(data, payload, codec);
   const bytes = bytesFromTtsPayload(payload);
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.ttsChunkCount = (Number(globalThis.__voqualizer_page.ttsChunkCount || 0) + 1);
+    globalThis.__voqualizer_page.lastTtsChunkAt = Date.now();
+    globalThis.__voqualizer_page.lastTtsChunkBytes = bytes && bytes.byteLength ? bytes.byteLength : 0;
+    globalThis.__voqualizer_page.lastTtsChunkCodec = codec;
+    globalThis.__voqualizer_page.lastTtsChunkSampleRate = sampleRate;
+    globalThis.__voqualizer_page.lastTtsChunkUtteranceId = utteranceId;
+    globalThis.__voqualizer_page.audioContextState = tts.audioContext ? tts.audioContext.state : '';
+  }
   if (!bytes || !bytes.byteLength) return;
   if (codec === 'pcm16/16k' || codec === 'pcm16/24k') {
     playPcmChunk(bytes, sampleRate, utteranceId);
@@ -973,6 +982,18 @@ function handleTtsAckFallback(ack, fallbackUtteranceId = '') {
     globalThis.__voqualizer_page.lastAckTtsFallbackReason = ack.delivery_fallback || 'ack_chunks';
     globalThis.__voqualizer_page.lastAckTtsPushedEmitCount = Number(ack.pushed_emit_count || 0);
     globalThis.__voqualizer_page.lastAckTtsSenderPresent = !!ack.sender_present;
+    globalThis.__voqualizer_page.lastDirectTtsAck = {
+      event: safeString(ack.event || ''),
+      utterance_id: safeString(ack.utterance_id || fallbackUtteranceId || ''),
+      chunks: Number(ack.chunks || 0),
+      tts_chunks: chunks.length,
+      delivery_fallback: safeString(ack.delivery_fallback || ''),
+      pushed_emit_count: Number(ack.pushed_emit_count || 0),
+      pushed_done_emit_count: Number(ack.pushed_done_emit_count || 0),
+      sender_present: !!ack.sender_present,
+      has_tts_done: !!ack.tts_done,
+      has_tts_word_plan: !!ack.tts_word_plan,
+    };
   }
   for (const chunk of chunks) {
     const data = chunk && chunk.data ? { ...chunk.data } : { ...(chunk || {}) };
@@ -997,7 +1018,26 @@ function playPcmChunk(bytes, sampleRate, utteranceId) {
   source.buffer = buffer;
   source.connect(ctx.destination);
   const startAt = Math.max(ctx.currentTime + 0.01, tts.playbackTail);
-  source.start(startAt);
+  try {
+    source.start(startAt);
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastPlaybackStartAt = Date.now();
+      globalThis.__voqualizer_page.lastPlaybackStartAudioTime = startAt;
+      globalThis.__voqualizer_page.lastPlaybackDurationMs = Math.round(buffer.duration * 1000);
+      globalThis.__voqualizer_page.lastPlaybackUtteranceId = utteranceId;
+      globalThis.__voqualizer_page.lastPlaybackError = '';
+      globalThis.__voqualizer_page.audioContextState = ctx.state;
+    }
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    tts.lastError = `playback failed: ${message}`;
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastPlaybackError = message;
+      globalThis.__voqualizer_page.audioContextState = ctx.state;
+    }
+    updateTtsButton();
+    return;
+  }
   if (!wordPlan.playbackStartByUtteranceId.has(utteranceId)) {
     wordPlan.playbackStartByUtteranceId.set(utteranceId, startAt);
     ensureWordHighlightLoop();
@@ -1648,6 +1688,19 @@ function initVoqualizerPage() {
     lastAckTtsFallbackReason: '',
     lastAckTtsPushedEmitCount: 0,
     lastAckTtsSenderPresent: false,
+    lastDirectTtsAck: null,
+    ttsChunkCount: 0,
+    lastTtsChunkAt: 0,
+    lastTtsChunkBytes: 0,
+    lastTtsChunkCodec: '',
+    lastTtsChunkSampleRate: 0,
+    lastTtsChunkUtteranceId: '',
+    lastPlaybackStartAt: 0,
+    lastPlaybackStartAudioTime: 0,
+    lastPlaybackDurationMs: 0,
+    lastPlaybackUtteranceId: '',
+    lastPlaybackError: '',
+    audioContextState: '',
     lastStatus: 'Ready',
     lastStatusLevel: 'info',
     asrEnabledStorageKey: ASR_ENABLED_STORAGE_KEY,
