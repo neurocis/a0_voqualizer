@@ -1105,12 +1105,21 @@ export function createVoqualizerStore(options = {}) {
         this.asrFinalCount += 1;
         this.lastAsrFinalText = finalText.slice(0, 160);
         this._clearMicSpeech('asr_final_ack_received');
-        // ACK fallback mirrors text into the visible prompt, but intentionally
-        // does not click Send. The GUI remains in context_bridge mode so the
-        // backend context injection is the canonical prompt submission path;
-        // auto-submitting here would risk duplicate prompts.
         const mirrored = this._mirrorAsrTextToPrompt(finalText, 'final', 'audio_ack_final');
-        if (mirrored) {
+        if (this._onAsrFinal) {
+          // Standalone Voqualizer runs in frontend_prompt mode. If pushed
+          // voqualizer_asr_final events do not reach the page, the reliable
+          // audio ACK transcript markers must still submit through the same
+          // typed-prompt path.
+          try {
+            this._onAsrFinal(finalText, data);
+          } catch (err) {
+            this.lastError = err && err.message ? err.message : String(err);
+            this._setReason('asr_ack_final_callback_error');
+          }
+        } else if (mirrored) {
+          // DOM extension/context_bridge path: backend injection is canonical,
+          // so only mirror/clear the prompt and do not auto-submit.
           this._clearAsrPromptMirror('audio_ack_final_blank_populate');
         }
         this._publishDebug();

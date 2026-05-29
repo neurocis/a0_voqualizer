@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-asr-final-submit" in js
+    assert "m8-asr-ack-submit" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-asr-final-submit-2026-05-28-27" in html
-    assert "m8-asr-final-submit-2026-05-28-27" in css
+    assert "m8-asr-ack-submit-2026-05-28-28" in html
+    assert "m8-asr-ack-submit-2026-05-28-28" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-asr-final-submit" in js
+    assert "m8-asr-ack-submit" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-asr-final-submit-2026-05-28-27" in html
-    assert "m8-asr-final-submit-2026-05-28-27" in css
+    assert "m8-asr-ack-submit-2026-05-28-28" in html
+    assert "m8-asr-ack-submit-2026-05-28-28" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -664,3 +664,12 @@ def test_voqualizer_conversation_store_invokes_asr_final_callback():
     assert "asr_final_callback_error" in conv
     assert "onAsrFinal: (text) => { void routeStoreAsrFinal(text); }" in js
     assert "await submitPrompt(pageState)" in js
+
+
+def test_voqualizer_asr_ack_final_fallback_submits_standalone():
+    conv = read(ROOT / "webui" / "conversation-mode.js")
+    assert "this._onAsrFinal(finalText, data)" in conv
+    assert "asr_ack_final_callback_error" in conv
+    assert "frontend_prompt mode" in conv
+    assert "pushed voqualizer_asr_final events do not reach" in conv
+    assert "DOM extension/context_bridge path" in conv
