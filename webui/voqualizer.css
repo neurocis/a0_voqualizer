@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-topbar-bare-2026-05-28-17 */
+/* voq-mobile-version: m8-brand-row-2026-05-28-18 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -1046,4 +1046,29 @@ body {
 .voq-context-menu-button[aria-expanded="true"] {
   border-color: rgba(139, 92, 246, 0.7);
   box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
+}
+
+/* M8: brand row to the left of top-right icon bar */
+.voq-brand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: 8px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--voq-text);
+  letter-spacing: 0.02em;
+}
+.voq-brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
+  flex: 0 0 auto;
+}
+@media (max-width: 480px) {
+  .voq-brand-text { display: none; }
+  .voq-brand-logo { width: 26px; height: 26px; }
 }
