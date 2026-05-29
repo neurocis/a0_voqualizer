@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-send-icon-circle-2026-05-28-7 */
+/* voq-mobile-version: m8-portrait-thirds-2026-05-28-8 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -339,9 +339,27 @@ body {
 
 .voq-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+.voq-actions > * { flex: 0 0 auto; }
+.voq-actions > .voqualizer-buttons-row { flex-wrap: nowrap; }
+@media (orientation: portrait) {
+  .voq-actions { justify-content: center; }
+}
+.voq-actions[data-wrapped="true"] {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: center;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.voq-actions[data-wrapped="true"] > #voq-send-button { justify-self: center; }
+.voq-actions[data-wrapped="true"] > .voqualizer-buttons-row {
+  display: contents;
 }
 
 .voq-action-button {
@@ -515,8 +533,10 @@ body {
 
 @media (max-width: 480px) {
   .voq-composer { grid-template-columns: 1fr; align-items: stretch; }
-  .voq-actions { justify-content: space-between; gap: 8px; width: 100%; }
-  .voq-action-button { flex: 1 1 0; min-width: 0; width: auto; height: 52px; }
+  .voq-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); justify-items: center; align-items: center; gap: 10px; width: 100%; }
+  .voq-actions > .voqualizer-buttons-row { display: contents; }
+  .voq-action-button { width: 52px; height: 52px; min-width: 52px; }
+  #voq-send-button.voq-action-button { width: 52px; height: 52px; min-width: 52px; border-radius: 50%; }
   .voq-empty-state h1 { font-size: clamp(1.8rem, 8.5vw, 2.6rem); }
   .voq-empty-state p { font-size: 1.05rem; max-width: 22rem; }
 }

@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-send-icon-circle';
+const PAGE_VERSION = 'm8-portrait-thirds';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -398,6 +398,28 @@ function maybeAutoScroll(chat, wasNearBottom) {
   updateJumpLatest();
 }
 
+
+function updateActionsWrapped() {
+  const actions = document.querySelector('[data-voqualizer-page="standalone"] .voq-actions');
+  if (!actions) return;
+  // Measure on a fresh non-grid layout to avoid feedback loops.
+  const prev = actions.getAttribute('data-wrapped') || '';
+  if (prev === 'true') actions.removeAttribute('data-wrapped');
+  const rects = Array.from(actions.children)
+    .filter((el) => el.offsetParent !== null)
+    .map((el) => el.getBoundingClientRect());
+  let wrapped = false;
+  if (rects.length >= 2) {
+    const baseTop = Math.round(rects[0].top);
+    wrapped = rects.some((r) => Math.round(r.top) - baseTop > 4);
+  }
+  if (wrapped) actions.setAttribute('data-wrapped', 'true');
+  else actions.removeAttribute('data-wrapped');
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.actionsWrapped = wrapped;
+    globalThis.__voqualizer_page.actionsWrappedAt = Date.now();
+  }
+}
 function bindTranscriptControls() {
   const chat = transcriptElement();
   const button = document.getElementById('voq-jump-latest');
@@ -1873,6 +1895,16 @@ function initVoqualizerPage() {
   // mirrors the in-DOM voqualizer-buttons.html behavior exactly.
   bindVoqualizerButtons();
   bindTranscriptControls();
+  updateActionsWrapped();
+  if (typeof globalThis.ResizeObserver === 'function') {
+    try {
+      const ro = new ResizeObserver(() => updateActionsWrapped());
+      const target = document.querySelector('[data-voqualizer-page="standalone"] .voq-composer');
+      if (target) ro.observe(target);
+    } catch (_err) {}
+  }
+  globalThis.addEventListener('resize', updateActionsWrapped);
+  globalThis.addEventListener('orientationchange', updateActionsWrapped);
   void loadContextPicker(state, contextSelect);
 
   document.addEventListener('visibilitychange', () => {
