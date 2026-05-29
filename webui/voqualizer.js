@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-socket-routing';
+const PAGE_VERSION = 'm8-tts-reconnect-retry';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -467,7 +467,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-socket-routing-2026-05-29-48'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-reconnect-retry-2026-05-29-49'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -557,7 +557,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-socket-routing-2026-05-29-48'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-reconnect-retry-2026-05-29-49'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -1401,7 +1401,16 @@ async function connectVoq() {
 }
 
 async function initVoqSession(contextId) {
-  if (tts.ready && tts.contextId === contextId && tts.sessionId) return tts;
+  if (tts.ready && tts.contextId === contextId && tts.sessionId && tts.bearerToken && tts.socket && tts.socket.connected) return tts;
+  if (tts.ready && (!tts.socket || !tts.socket.connected || !tts.bearerToken)) {
+    tts.ready = false;
+    tts.sessionId = '';
+    tts.bearerToken = '';
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastTtsInitError = 'stale_session_reconnect';
+      globalThis.__voqualizer_page.ttsReady = false;
+    }
+  }
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.lastTtsInitStartAt = Date.now();
     globalThis.__voqualizer_page.lastTtsInitContextId = contextId;
@@ -1512,16 +1521,16 @@ async function speakText(text, { utteranceId } = {}) {
     globalThis.__voqualizer_page.lastTtsError = '';
     globalThis.__voqualizer_page.lastTtsSpeakSkipReason = '';
   }
-  try {
-    tts.socket.emit('voqualizer_user_text', {
-      session_id: tts.sessionId,
-      bearer_token: tts.bearerToken,
-      utterance_id: id,
-      text: trimmed,
-    }, (ack) => {
+  const emitDirectTts = async (attempt = 1) => new Promise((resolve) => {
+    let settled = false;
+    const finish = (ack) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       if (globalThis.__voqualizer_page) {
         globalThis.__voqualizer_page.lastDirectTtsAckAt = Date.now();
         globalThis.__voqualizer_page.lastDirectTtsAckRawType = typeof ack;
+        globalThis.__voqualizer_page.lastDirectTtsAttempt = attempt;
       }
       handleTtsAckFallback(ack, id);
       if (ack && ack.error) {
@@ -1529,9 +1538,36 @@ async function speakText(text, { utteranceId } = {}) {
         if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastTtsError = tts.lastError;
         updateTtsButton();
       }
-    });
+      resolve(ack);
+    };
+    const timeout = setTimeout(() => finish({ error: { message: 'direct_tts_ack_timeout' }, reason: 'direct_tts_ack_timeout' }), 20000);
+    try {
+      tts.socket.emit('voqualizer_user_text', {
+        session_id: tts.sessionId,
+        bearer_token: tts.bearerToken,
+        utterance_id: id,
+        text: trimmed,
+      }, finish);
+    } catch (error) {
+      finish({ error: { message: `emit_failed: ${error?.message || error}` }, reason: 'emit_failed' });
+    }
+  });
+  try {
+    const ack = await emitDirectTts(1);
+    const reason = safeString(ack?.reason || ack?.error?.message || '');
+    if (/ack_timeout|NO_SESSION|not active|session/i.test(reason) && tts.enabled) {
+      tts.ready = false;
+      try { if (tts.socket) tts.socket.disconnect(); } catch (_err) {}
+      tts.socket = null;
+      tts.sessionId = '';
+      tts.bearerToken = '';
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastDirectTtsRetryAt = Date.now();
+      await initVoqSession(contextId);
+      await emitDirectTts(2);
+    }
   } catch (error) {
     tts.lastError = `speak failed: ${error?.message || error}`;
+    if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastTtsError = tts.lastError;
   }
   updateTtsButton();
 }
