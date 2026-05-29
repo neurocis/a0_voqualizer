@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-asr-vad-normalized';
+const PAGE_VERSION = 'm8-debug-toggle';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -432,7 +432,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-asr-vad-normalized-2026-05-28-34'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-debug-toggle-2026-05-28-35'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -492,6 +492,32 @@ async function copyAsrDebugLines() {
   }
   setPageStatus(copied ? 'ASR debug copied' : 'ASR debug captured', copied ? 'ready' : 'warn');
   return text;
+}
+
+
+function setAsrDebugVisible(visible, reason = 'manual') {
+  const button = document.getElementById('voq-asr-debug-button');
+  const menuButton = document.getElementById('voq-context-menu-button');
+  const isVisible = !!visible;
+  if (button) {
+    button.hidden = !isVisible;
+    button.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+  }
+  if (menuButton) {
+    menuButton.dataset.debugVisible = isVisible ? 'true' : 'false';
+    menuButton.setAttribute('title', isVisible ? 'Select Voqualizer context — long press to hide debug button' : 'Select Voqualizer context — long press to show debug button');
+  }
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.asrDebugVisible = isVisible;
+    globalThis.__voqualizer_page.lastAsrDebugToggleAt = Date.now();
+    globalThis.__voqualizer_page.lastAsrDebugToggleReason = reason;
+  }
+  setPageStatus(isVisible ? 'ASR debug button shown' : 'ASR debug button hidden', 'ready');
+}
+
+function toggleAsrDebugVisible(reason = 'hamburger_long_press') {
+  const button = document.getElementById('voq-asr-debug-button');
+  setAsrDebugVisible(!(button && !button.hidden), reason);
 }
 
 function bindAsrDebugButton() {
@@ -602,8 +628,31 @@ function bindContextMenuButton() {
   const btn = document.getElementById('voq-context-menu-button');
   const menu = document.getElementById('voq-context-menu');
   if (!btn || !menu) return;
+  let longPressTimer = 0;
+  let longPressFired = false;
+  const clearLongPress = () => {
+    if (longPressTimer) clearTimeout(longPressTimer);
+    longPressTimer = 0;
+  };
+  const startLongPress = () => {
+    clearLongPress();
+    longPressFired = false;
+    longPressTimer = setTimeout(() => {
+      longPressTimer = 0;
+      longPressFired = true;
+      toggleAsrDebugVisible('hamburger_long_press');
+    }, 650);
+  };
+  btn.addEventListener('pointerdown', startLongPress);
+  btn.addEventListener('pointerup', clearLongPress);
+  btn.addEventListener('pointercancel', clearLongPress);
+  btn.addEventListener('pointerleave', clearLongPress);
   btn.addEventListener('click', (ev) => {
     ev.stopPropagation();
+    if (longPressFired) {
+      longPressFired = false;
+      return;
+    }
     if (menu.hidden) openContextMenu(); else closeContextMenu();
   });
   document.addEventListener('click', (ev) => {
@@ -612,6 +661,7 @@ function bindContextMenuButton() {
     closeContextMenu();
   });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeContextMenu(); });
+  setAsrDebugVisible(false, 'init_hidden');
 }
 function bindTranscriptControls() {
   const chat = transcriptElement();

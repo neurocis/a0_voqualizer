@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-asr-vad-normalized-2026-05-28-34 */
+/* voq-mobile-version: m8-debug-toggle-2026-05-28-35 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -1082,4 +1082,13 @@ body {
   border-color: rgba(34, 197, 94, 0.82);
   color: rgba(187, 247, 208, 0.98);
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22), 0 0 18px rgba(34, 197, 94, 0.18);
+}
+
+/* M8: ASR debug clipboard icon is hidden until hamburger long-press toggles it */
+.voq-asr-debug-button[hidden] {
+  display: none !important;
+}
+.voq-context-menu-button[data-debug-visible="true"] {
+  border-color: rgba(125, 211, 252, 0.72);
+  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.18);
 }
