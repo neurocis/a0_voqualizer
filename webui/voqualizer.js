@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-reconnect-retry';
+const PAGE_VERSION = 'm8-tts-retry-narrow';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -467,7 +467,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-reconnect-retry-2026-05-29-49'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-retry-narrow-2026-05-29-50'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -557,7 +557,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-reconnect-retry-2026-05-29-49'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-retry-narrow-2026-05-29-50'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -1555,7 +1555,14 @@ async function speakText(text, { utteranceId } = {}) {
   try {
     const ack = await emitDirectTts(1);
     const reason = safeString(ack?.reason || ack?.error?.message || '');
-    if (/ack_timeout|NO_SESSION|not active|session/i.test(reason) && tts.enabled) {
+    const code = safeString(ack?.error?.code || ack?.code || '');
+    const ackHasChunks = !!(ack && Array.isArray(ack.tts_chunks) && ack.tts_chunks.length);
+    const shouldRetry = !ackHasChunks && tts.enabled && (
+      reason === 'direct_tts_ack_timeout' ||
+      /^(NO_SESSION|SESSION_NOT_ACTIVE)$/i.test(code) ||
+      /session .* not active|send voqualizer_init before/i.test(reason)
+    );
+    if (shouldRetry) {
       tts.ready = false;
       try { if (tts.socket) tts.socket.disconnect(); } catch (_err) {}
       tts.socket = null;
