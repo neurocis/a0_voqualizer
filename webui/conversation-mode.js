@@ -709,18 +709,20 @@ export function createVoqualizerStore(options = {}) {
       socket.on('voqualizer_agent_response_final', guard((payload) => this._handleAgentFinal(payload)));
       socket.on('voqualizer_asr_partial', guard((payload) => this._handleAsrPartial(payload)));
       socket.on('voqualizer_asr_final', guard((payload) => this._handleAsrFinal(payload)));
-      socket.on('voqualizer_tts_chunk', guard((payload) => {
-        this._recordRawTtsPush('voqualizer_tts_chunk', payload);
-        this._handleTtsChunk(payload, 'push');
-      }));
-      socket.on('voqualizer_tts_done', guard((payload) => {
-        this._recordRawTtsPush('voqualizer_tts_done', payload);
-        this._handleTtsDone(payload, 'push');
-      }));
-      socket.on('voqualizer_tts_push_probe', guard((payload) => {
-        this._recordRawTtsPush('voqualizer_tts_push_probe', payload);
-        this._handleTtsPushProbe(payload);
-      }));
+      if (!this._suppressTts) {
+        socket.on('voqualizer_tts_chunk', guard((payload) => {
+          this._recordRawTtsPush('voqualizer_tts_chunk', payload);
+          this._handleTtsChunk(payload, 'push');
+        }));
+        socket.on('voqualizer_tts_done', guard((payload) => {
+          this._recordRawTtsPush('voqualizer_tts_done', payload);
+          this._handleTtsDone(payload, 'push');
+        }));
+        socket.on('voqualizer_tts_push_probe', guard((payload) => {
+          this._recordRawTtsPush('voqualizer_tts_push_probe', payload);
+          this._handleTtsPushProbe(payload);
+        }));
+      }
       socket.on('voqualizer_error', guard((payload) => {
         if (this.intentionalDisconnect || this.desiredMode === DESIRED_IDLE) return;
         const data = this._unwrapPayload(payload);
@@ -1258,6 +1260,7 @@ export function createVoqualizerStore(options = {}) {
       this._publishDebug();
     },
     _handleAckTtsFallback(ack) {
+      if (this._suppressTts) { this.lastTtsSkipReason = 'suppressed_store_tts_ack'; this._publishDebug(); return; }
       const data = this._unwrapPayload(ack);
       const chunks = Array.isArray(data.tts_chunks) ? data.tts_chunks : [];
       if (!chunks.length) return;
@@ -1291,6 +1294,7 @@ export function createVoqualizerStore(options = {}) {
       this._publishDebug();
     },
     async _handleTtsChunk(payload, deliverySource = 'unknown') {
+      if (this._suppressTts) { this.lastTtsSkipReason = 'suppressed_store_tts_chunk'; this._publishDebug(); return; }
       const data = this._unwrapPayload(payload);
       const utteranceId = String(data.utterance_id || 'default');
       this.lastTtsChunkAt = Date.now();
@@ -1338,6 +1342,7 @@ export function createVoqualizerStore(options = {}) {
       this._publishDebug();
     },
     _handleTtsDone(payload, deliverySource = 'unknown') {
+      if (this._suppressTts) { this.lastTtsSkipReason = 'suppressed_store_tts_done'; this._publishDebug(); return; }
       const data = this._unwrapPayload(payload);
       const utteranceId = String(data.utterance_id || 'default');
       this.lastTtsDoneAt = Date.now();
