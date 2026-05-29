@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-debug-toggle" in js
+    assert "m8-debug-double-tap" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-debug-toggle-2026-05-28-35" in html
-    assert "m8-debug-toggle-2026-05-28-35" in css
+    assert "m8-debug-double-tap-2026-05-28-36" in html
+    assert "m8-debug-double-tap-2026-05-28-36" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-debug-toggle" in js
+    assert "m8-debug-double-tap" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-debug-toggle-2026-05-28-35" in html
-    assert "m8-debug-toggle-2026-05-28-35" in css
+    assert "m8-debug-double-tap-2026-05-28-36" in html
+    assert "m8-debug-double-tap-2026-05-28-36" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -739,7 +739,15 @@ def test_voqualizer_asr_debug_hidden_and_hamburger_long_press_toggle():
     css = read(CSS)
     assert 'id="voq-asr-debug-button"' in html
     assert 'hidden' in html
-    for token in ['function setAsrDebugVisible', 'function toggleAsrDebugVisible', 'hamburger_long_press', 'pointerdown', 'longPressTimer', 'asrDebugVisible', 'lastAsrDebugToggleAt']:
+    for token in ['function setAsrDebugVisible', 'function toggleAsrDebugVisible', 'hamburger_double_tap', 'doubleTapFired', 'DOUBLE_TAP_MS', 'asrDebugVisible', 'lastAsrDebugToggleAt']:
         assert token in js, token
     for token in ['.voq-asr-debug-button[hidden]', 'data-debug-visible']:
         assert token in css, token
+
+
+def test_voqualizer_asr_debug_double_tap_toggle():
+    js = read(JS)
+    for token in ['hamburger_double_tap', 'doubleTapFired', 'DOUBLE_TAP_MS', 'double tap to show debug button', 'double tap to hide debug button']:
+        assert token in js, token
+    assert 'hamburger_long_press' not in js
+    assert 'longPressTimer' not in js

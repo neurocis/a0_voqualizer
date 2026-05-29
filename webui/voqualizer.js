@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-debug-toggle';
+const PAGE_VERSION = 'm8-debug-double-tap';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -432,7 +432,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-debug-toggle-2026-05-28-35'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-debug-double-tap-2026-05-28-36'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -505,7 +505,7 @@ function setAsrDebugVisible(visible, reason = 'manual') {
   }
   if (menuButton) {
     menuButton.dataset.debugVisible = isVisible ? 'true' : 'false';
-    menuButton.setAttribute('title', isVisible ? 'Select Voqualizer context — long press to hide debug button' : 'Select Voqualizer context — long press to show debug button');
+    menuButton.setAttribute('title', isVisible ? 'Select Voqualizer context — double tap to hide debug button' : 'Select Voqualizer context — double tap to show debug button');
   }
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.asrDebugVisible = isVisible;
@@ -515,7 +515,7 @@ function setAsrDebugVisible(visible, reason = 'manual') {
   setPageStatus(isVisible ? 'ASR debug button shown' : 'ASR debug button hidden', 'ready');
 }
 
-function toggleAsrDebugVisible(reason = 'hamburger_long_press') {
+function toggleAsrDebugVisible(reason = 'hamburger_double_tap') {
   const button = document.getElementById('voq-asr-debug-button');
   setAsrDebugVisible(!(button && !button.hidden), reason);
 }
@@ -628,31 +628,24 @@ function bindContextMenuButton() {
   const btn = document.getElementById('voq-context-menu-button');
   const menu = document.getElementById('voq-context-menu');
   if (!btn || !menu) return;
-  let longPressTimer = 0;
-  let longPressFired = false;
-  const clearLongPress = () => {
-    if (longPressTimer) clearTimeout(longPressTimer);
-    longPressTimer = 0;
-  };
-  const startLongPress = () => {
-    clearLongPress();
-    longPressFired = false;
-    longPressTimer = setTimeout(() => {
-      longPressTimer = 0;
-      longPressFired = true;
-      toggleAsrDebugVisible('hamburger_long_press');
-    }, 650);
-  };
-  btn.addEventListener('pointerdown', startLongPress);
-  btn.addEventListener('pointerup', clearLongPress);
-  btn.addEventListener('pointercancel', clearLongPress);
-  btn.addEventListener('pointerleave', clearLongPress);
+  let lastTapAt = 0;
+  let doubleTapFired = false;
+  const DOUBLE_TAP_MS = 320;
   btn.addEventListener('click', (ev) => {
     ev.stopPropagation();
-    if (longPressFired) {
-      longPressFired = false;
+    if (doubleTapFired) {
+      doubleTapFired = false;
       return;
     }
+    const now = Date.now();
+    if (now - lastTapAt <= DOUBLE_TAP_MS) {
+      lastTapAt = 0;
+      doubleTapFired = true;
+      toggleAsrDebugVisible('hamburger_double_tap');
+      if (!menu.hidden) closeContextMenu();
+      return;
+    }
+    lastTapAt = now;
     if (menu.hidden) openContextMenu(); else closeContextMenu();
   });
   document.addEventListener('click', (ev) => {
