@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-tts-init-diagnostics" in js
+    assert "m8-tts-socket-routing" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-tts-init-diagnostics-2026-05-29-47" in html
-    assert "m8-tts-init-diagnostics-2026-05-29-47" in css
+    assert "m8-tts-socket-routing-2026-05-29-48" in html
+    assert "m8-tts-socket-routing-2026-05-29-48" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-tts-init-diagnostics" in js
+    assert "m8-tts-socket-routing" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-tts-init-diagnostics-2026-05-29-47" in html
-    assert "m8-tts-init-diagnostics-2026-05-29-47" in css
+    assert "m8-tts-socket-routing-2026-05-29-48" in html
+    assert "m8-tts-socket-routing-2026-05-29-48" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -819,3 +819,14 @@ def test_voqualizer_tts_init_diagnostics():
         assert token in js, token
     for token in ['init_start=', 'speak_entry=', 'ack_at=', 'init_failed', 'connect failed:']:
         assert token in js, token
+
+
+def test_voqualizer_tts_uses_ws_namespace_direct_events():
+    js = read(JS)
+    assert "io('/ws'" in js
+    assert "socket.emit('voqualizer_init', payload" in js
+    assert "tts.socket.emit('voqualizer_user_text'" in js
+    assert "tts.socket.emit('voqualizer_control'" in js
+    assert "socket.emit(VOQUALIZER_HANDLER, { event: 'voqualizer_init'" not in js
+    assert "tts.socket.emit(VOQUALIZER_HANDLER, {" not in js
+    assert "m8-tts-socket-routing" in js

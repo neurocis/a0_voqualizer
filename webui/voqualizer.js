@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-init-diagnostics';
+const PAGE_VERSION = 'm8-tts-socket-routing';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -467,7 +467,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-init-diagnostics-2026-05-29-47'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-socket-routing-2026-05-29-48'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -557,7 +557,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-init-diagnostics-2026-05-29-47'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-socket-routing-2026-05-29-48'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -1358,7 +1358,7 @@ async function connectVoq() {
   tts.connecting = (async () => {
     const io = await loadSocketIo();
     const csrf = await fetchCsrfTokenSafe();
-    const socket = io('/', {
+    const socket = io('/ws', {
       transports: ['websocket', 'polling'],
       withCredentials: true,
       auth: (cb) => cb({ csrf_token: csrf, handlers: [VOQUALIZER_HANDLER] }),
@@ -1438,7 +1438,7 @@ async function initVoqSession(contextId) {
         settled = true;
         reject(new Error('voqualizer_init timeout'));
       }, 10000);
-      socket.emit(VOQUALIZER_HANDLER, { event: 'voqualizer_init', data: payload }, (ack) => {
+      socket.emit('voqualizer_init', payload, (ack) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
@@ -1513,14 +1513,11 @@ async function speakText(text, { utteranceId } = {}) {
     globalThis.__voqualizer_page.lastTtsSpeakSkipReason = '';
   }
   try {
-    tts.socket.emit(VOQUALIZER_HANDLER, {
-      event: 'voqualizer_user_text',
-      data: {
-        session_id: tts.sessionId,
-        bearer_token: tts.bearerToken,
-        utterance_id: id,
-        text: trimmed,
-      },
+    tts.socket.emit('voqualizer_user_text', {
+      session_id: tts.sessionId,
+      bearer_token: tts.bearerToken,
+      utterance_id: id,
+      text: trimmed,
     }, (ack) => {
       if (globalThis.__voqualizer_page) {
         globalThis.__voqualizer_page.lastDirectTtsAckAt = Date.now();
@@ -1543,13 +1540,10 @@ function cancelInflightTts() {
   if (tts.tracker) tts.tracker.stopAllPlayback();
   if (tts.socket && tts.socket.connected && tts.sessionId) {
     try {
-      tts.socket.emit(VOQUALIZER_HANDLER, {
-        event: 'voqualizer_control',
-        data: {
-          session_id: tts.sessionId,
-          bearer_token: tts.bearerToken,
-          action: 'cancel_tts',
-        },
+      tts.socket.emit('voqualizer_control', {
+        session_id: tts.sessionId,
+        bearer_token: tts.bearerToken,
+        action: 'cancel_tts',
       });
     } catch (_err) {}
   }
@@ -1560,13 +1554,10 @@ function disconnectVoq() {
   cancelInflightTts();
   if (tts.socket) {
     try {
-      tts.socket.emit(VOQUALIZER_HANDLER, {
-        event: 'voqualizer_control',
-        data: {
-          session_id: tts.sessionId,
-          bearer_token: tts.bearerToken,
-          action: 'end_session',
-        },
+      tts.socket.emit('voqualizer_control', {
+        session_id: tts.sessionId,
+        bearer_token: tts.bearerToken,
+        action: 'end_session',
       });
     } catch (_err) {}
     try { tts.socket.disconnect(); } catch (_err) {}
@@ -2218,14 +2209,11 @@ function bindVoqualizerButtons() {
       }
       if (tts.socket && tts.socket.connected && tts.sessionId) {
         try {
-          tts.socket.emit(VOQUALIZER_HANDLER, {
-            event: 'voqualizer_control',
-            data: {
-              session_id: tts.sessionId,
-              bearer_token: tts.bearerToken,
-              action: 'set_tts_enabled',
-              enabled: !!tts.enabled,
-            },
+          tts.socket.emit('voqualizer_control', {
+            session_id: tts.sessionId,
+            bearer_token: tts.bearerToken,
+            action: 'set_tts_enabled',
+            enabled: !!tts.enabled,
           });
         } catch (_err) {}
       }
