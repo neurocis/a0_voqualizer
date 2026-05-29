@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-send-solid-green';
+const PAGE_VERSION = 'm8-send-clear-on-interaction';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -621,7 +621,17 @@ function setSendIndicatorState(next) {
 }
 
 function resetSendIndicatorOnInteraction() {
-  if (sendIndicator.state === 'success') setSendIndicatorState('idle');
+  // Always clear the success cue + wasBusy latch on any prompt interaction so
+  // the send button returns to its normal idle / enabled-if-text state.
+  if (sendIndicator.state === 'success' || sendIndicator.wasBusy) {
+    setSendIndicatorState('idle');
+    sendIndicator.wasBusy = false;
+    const button = document.getElementById('voq-send-button');
+    if (button) {
+      button.classList.remove('voq-send-success');
+      button.dataset.sendState = 'idle';
+    }
+  }
 }
 
 function updateSendButton(state) {
@@ -786,7 +796,8 @@ function bindPromptInput(state) {
     autosizePrompt(prompt);
     updateSendButton(state);
   });
-  prompt.addEventListener('focus', () => resetSendIndicatorOnInteraction());
+  prompt.addEventListener('focus', () => { resetSendIndicatorOnInteraction(); updateSendButton(state); });
+  prompt.addEventListener('click', () => { resetSendIndicatorOnInteraction(); updateSendButton(state); });
   prompt.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     if (event.shiftKey) return;
