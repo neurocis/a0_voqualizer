@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-asr-debug-copy" in js
+    assert "m8-send-clear-after-response" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-asr-debug-copy-2026-05-28-30" in html
-    assert "m8-asr-debug-copy-2026-05-28-30" in css
+    assert "m8-send-clear-after-response-2026-05-28-31" in html
+    assert "m8-send-clear-after-response-2026-05-28-31" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-asr-debug-copy" in js
+    assert "m8-send-clear-after-response" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-asr-debug-copy-2026-05-28-30" in html
-    assert "m8-asr-debug-copy-2026-05-28-30" in css
+    assert "m8-send-clear-after-response-2026-05-28-31" in html
+    assert "m8-send-clear-after-response-2026-05-28-31" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -694,3 +694,11 @@ def test_voqualizer_mobile_asr_debug_copy_button():
         assert token in js, token
     for token in ['.voq-asr-debug-button', 'data-copied']:
         assert token in css, token
+
+
+def test_voqualizer_send_response_clears_submitting_latch():
+    js = read(JS)
+    assert "Once the final response has arrived" in js
+    assert "state.isSubmitting = false;" in js
+    assert "globalThis.__voqualizer_page.isSubmitting = false;" in js
+    assert "incorrectly flip the send icon back to processing" in js

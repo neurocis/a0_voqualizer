@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-asr-debug-copy';
+const PAGE_VERSION = 'm8-send-clear-after-response';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -432,7 +432,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-asr-debug-copy-2026-05-28-30'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-send-clear-after-response-2026-05-28-31'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -902,6 +902,14 @@ async function runPollLoop(state, contextId, submissionId) {
             if (sendIndicator.wasBusy) {
               setSendIndicatorState('success');
               sendIndicator.wasBusy = false;
+            }
+            // Once the final response has arrived, the visible submit lifecycle
+            // is complete even if /poll keeps reconciling backend progress.
+            // Otherwise the first prompt interaction can see stale isSubmitting
+            // and incorrectly flip the send icon back to processing.
+            state.isSubmitting = false;
+            if (globalThis.__voqualizer_page) {
+              globalThis.__voqualizer_page.isSubmitting = false;
             }
             setPageStatus('Response complete', 'ready');
           }
