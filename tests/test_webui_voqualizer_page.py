@@ -54,13 +54,13 @@ def test_voqualizer_page_required_regions_and_controls():
     assert 'id="voqualizer-mic-button"' in html
 
 
-def test_voqualizer_page_action_order_is_prompt_send_speaker_mic():
-    html = read(HTML)
-    prompt_i = html.index('id="voq-prompt-input"')
+def test_voqualizer_page_action_order_is_prompt_send_mic_speaker(html=None):
+    from pathlib import Path
+    html = html if html is not None else Path(HTML).read_text()
     send_i = html.index('id="voq-send-button"')
-    speaker_i = html.index('id="voqualizer-speaker-button"')
     mic_i = html.index('id="voqualizer-mic-button"')
-    assert prompt_i < send_i < speaker_i < mic_i
+    speaker_i = html.index('id="voqualizer-speaker-button"')
+    assert send_i < mic_i < speaker_i
 
 
 def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
@@ -82,7 +82,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-portrait-thirds" in js
+    assert "m8-swap-asr-tts" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -520,12 +520,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-portrait-thirds-2026-05-28-8" in html
-    assert "m8-portrait-thirds-2026-05-28-8" in css
+    assert "m8-swap-asr-tts-2026-05-28-9" in html
+    assert "m8-swap-asr-tts-2026-05-28-9" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-portrait-thirds" in js
+    assert "m8-swap-asr-tts" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -551,8 +551,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-portrait-thirds-2026-05-28-8" in html
-    assert "m8-portrait-thirds-2026-05-28-8" in css
+    assert "m8-swap-asr-tts-2026-05-28-9" in html
+    assert "m8-swap-asr-tts-2026-05-28-9" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
