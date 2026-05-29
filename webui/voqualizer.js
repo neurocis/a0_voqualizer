@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-filter-push';
+const PAGE_VERSION = 'm8-tts-live-push-final-suppress';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -67,6 +67,9 @@ const tts = {
   lastSpeakAt: 0,
   activeDirectUtteranceId: '',
   acceptedTtsUtteranceIds: new Set(),
+  livePushSinceSubmit: false,
+  lastLivePushAt: 0,
+  lastLivePushUtteranceId: '',
 };
 
 const asr = {
@@ -469,7 +472,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-filter-push-2026-05-29-51'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-live-push-final-suppress-2026-05-29-52'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -559,7 +562,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-filter-push-2026-05-29-51'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-live-push-final-suppress-2026-05-29-52'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -1129,6 +1132,9 @@ async function submitPrompt(state) {
   }
   ensureAudioContext();
   const messageId = generateMessageId();
+  tts.livePushSinceSubmit = false;
+  tts.lastLivePushAt = 0;
+  tts.lastLivePushUtteranceId = '';
   state.isSubmitting = true;
   state.activeSubmissionId = messageId;
   cx.streamsBySubmitId.set(messageId, { contextId, started: Date.now(), streamId: '' });
@@ -1624,20 +1630,22 @@ function handleVoqError(payload) {
 function shouldAcceptTtsUtterance(utteranceId, source = 'chunk') {
   const id = safeString(utteranceId || '');
   const page = globalThis.__voqualizer_page;
-  const active = safeString(tts.activeDirectUtteranceId || page?.lastTtsSpeakQueuedUtteranceId || '');
-  const accepted = !!id && (id === active || tts.acceptedTtsUtteranceIds.has(id) || id.startsWith('voq-resp-'));
-  if (!accepted && /^agent-sentence-/i.test(id)) {
+  if (/^agent-sentence-/i.test(id)) {
+    tts.livePushSinceSubmit = true;
+    tts.lastLivePushAt = Date.now();
+    tts.lastLivePushUtteranceId = id;
+    tts.acceptedTtsUtteranceIds.add(id);
     if (page) {
-      page.lastTtsIgnoredUtteranceId = id;
-      page.lastTtsIgnoredAt = Date.now();
-      page.lastTtsIgnoredSource = source;
-      page.lastTtsIgnoredReason = 'agent_sentence_push_not_standalone_direct';
+      page.lastLivePushedTtsAt = tts.lastLivePushAt;
+      page.lastLivePushedTtsUtteranceId = id;
+      page.lastLivePushedTtsSource = source;
+      page.lastTtsIgnoredUtteranceId = '';
+      page.lastTtsIgnoredReason = '';
+      page.lastTtsIgnoredSource = '';
     }
-    return false;
   }
   return true;
 }
-
 function handleTtsChunk(payload) {
   if (!tts.enabled) return;
   const data = (payload && payload.data) || payload || {};
@@ -1795,6 +1803,10 @@ function maybeSpeakResponse(item) {
   if (!item) { recordSkip('missing_item'); return; }
   if (type !== 'response') { recordSkip(`not_response:${type || 'empty'}`); return; }
   if (!content.trim()) { recordSkip('missing_content'); return; }
+  if (tts.livePushSinceSubmit || (page?.lastLivePushedTtsAt && page?.lastSubmitUiEchoAt && page.lastLivePushedTtsAt >= page.lastSubmitUiEchoAt)) {
+    recordSkip('live_push_already_streamed');
+    return;
+  }
   if (tts.spokenResponseIds.has(fallbackId)) { recordSkip('duplicate'); return; }
   tts.spokenResponseIds.add(fallbackId);
   const utteranceId = `voq-resp-${fallbackId}`;
