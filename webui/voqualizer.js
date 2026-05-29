@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-last-monologue-preload';
+const PAGE_VERSION = 'm8-fast-submit-feedback';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -680,18 +680,29 @@ async function submitPrompt(state) {
   state.isSubmitting = true;
   state.activeSubmissionId = messageId;
   cx.streamsBySubmitId.set(messageId, { contextId, started: Date.now(), streamId: '' });
-  try { await initVoqSession(contextId); } catch (_err) { /* cx stream optional */ }
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.isSubmitting = true;
     globalThis.__voqualizer_page.lastSubmitId = messageId;
+    globalThis.__voqualizer_page.lastSubmitUiEchoAt = Date.now();
+    globalThis.__voqualizer_page.lastSubmitVoqInitError = '';
   }
   setPageStatus('Sending…', 'loading');
   updateSendButton(state);
   renderUserBubble(state, { id: messageId, text });
   prompt.value = '';
   autosizePrompt(prompt);
+  // Do not block visible submit feedback on optional realtime/TTS socket setup.
+  // Socket.IO load/connect/init can take a noticeable moment on mobile; the
+  // typed prompt submit path is authoritative, so show the echo immediately
+  // and attach realtime cx/TTS in parallel when available.
+  const voqInitPromise = initVoqSession(contextId).catch((err) => {
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastSubmitVoqInitError = err?.message || String(err);
+    }
+  });
   try {
     const result = await callJsonApiWithDiagnostics(MESSAGE_ENDPOINT, { text, context: contextId, message_id: messageId }, 'message_async');
+    void voqInitPromise;
     if (!result) throw new Error('empty response from message_async');
     setPageStatus('Awaiting response…', 'loading');
     await runPollLoop(state, contextId, messageId);
