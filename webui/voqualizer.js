@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-debug-copy';
+const PAGE_VERSION = 'm8-tts-trigger-diagnostics';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -171,6 +171,16 @@ function persistAsrEnabled(value) {
   try {
     globalThis.localStorage?.setItem(ASR_ENABLED_STORAGE_KEY, value ? 'true' : 'false');
   } catch (_err) {}
+}
+
+function stableTextHash(text) {
+  const value = safeString(text);
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function safeString(value) {
@@ -457,7 +467,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-debug-copy-2026-05-28-45'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-trigger-diagnostics-2026-05-29-46'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -547,11 +557,13 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-debug-copy-2026-05-28-45'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-trigger-diagnostics-2026-05-29-46'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
     `socket_ready=${p.ttsReady} session=${p.ttsSessionId || ''} context=${p.selectedContextId || ''}`,
+    `last_trigger_at=${p.lastTtsTriggerAt || 0} trigger_type=${p.lastTtsTriggerType || ''} trigger_id=${p.lastTtsTriggerItemId || ''} trigger_fallback=${p.lastTtsTriggerFallbackId || ''} trigger_len=${p.lastTtsTriggerTextLength || 0} skip=${p.lastTtsSkipReason || ''}`,
+    `queued_at=${p.lastTtsSpeakQueuedAt || 0} queued_utt=${p.lastTtsSpeakQueuedUtteranceId || ''}`,
     `last_speak_at=${p.lastTtsSpeakAt || p.lastDirectTtsAt || 0} last_error=${p.lastTtsError || p.lastError || ''}`,
     `ack_fallback_at=${p.lastAckTtsFallbackAt || 0} ack_chunks=${p.lastAckTtsFallbackChunks || 0} ack_reason=${p.lastAckTtsFallbackReason || ''}`,
     `ack_pushed=${p.lastAckTtsPushedEmitCount || 0} ack_sender=${p.lastAckTtsSenderPresent}`,
@@ -1655,13 +1667,41 @@ function handleTtsDone(payload) {
 }
 
 function maybeSpeakResponse(item) {
-  if (!tts.enabled) return;
-  if (!item || item.type !== 'response' || !item.id) return;
-  if (tts.spokenResponseIds.has(item.id)) return;
-  tts.spokenResponseIds.add(item.id);
-  const utteranceId = `voq-resp-${item.id}`;
-  registerWordPlanBubble(utteranceId, item.id);
-  void speakText(String(item.content || ''), { utteranceId });
+  const page = globalThis.__voqualizer_page;
+  const now = Date.now();
+  const type = safeString(item?.type || '');
+  const content = safeString(item?.content || item?.message || item?.text || '');
+  const id = safeString(item?.id || item?.message_id || item?.log_id || '');
+  const fallbackId = id || `fallback-${type}-${content.length}-${stableTextHash(content)}`;
+  const recordSkip = (reason) => {
+    if (page) {
+      page.lastTtsTriggerAt = now;
+      page.lastTtsTriggerType = type;
+      page.lastTtsTriggerItemId = id;
+      page.lastTtsTriggerFallbackId = fallbackId;
+      page.lastTtsTriggerTextLength = content.length;
+      page.lastTtsSkipReason = reason;
+    }
+  };
+  if (!tts.enabled) { recordSkip('tts_disabled'); return; }
+  if (!item) { recordSkip('missing_item'); return; }
+  if (type !== 'response') { recordSkip(`not_response:${type || 'empty'}`); return; }
+  if (!content.trim()) { recordSkip('missing_content'); return; }
+  if (tts.spokenResponseIds.has(fallbackId)) { recordSkip('duplicate'); return; }
+  tts.spokenResponseIds.add(fallbackId);
+  const utteranceId = `voq-resp-${fallbackId}`;
+  if (page) {
+    page.lastTtsTriggerAt = now;
+    page.lastTtsTriggerType = type;
+    page.lastTtsTriggerItemId = id;
+    page.lastTtsTriggerFallbackId = fallbackId;
+    page.lastTtsTriggerTextLength = content.length;
+    page.lastTtsSkipReason = '';
+    page.lastTtsSpeakQueuedAt = now;
+    page.lastTtsSpeakQueuedUtteranceId = utteranceId;
+  }
+  registerWordPlanBubble(utteranceId, id || fallbackId);
+  void speakText(content, { utteranceId });
 }
 
 function findOrCreateCxBubble(streamId, messageId) {
