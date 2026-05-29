@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-send-clear-on-interaction-2026-05-28-12 */
+/* voq-mobile-version: m8-topbar-fullscreen-refresh-2026-05-28-13 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -187,7 +187,9 @@ body {
 }
 
 .voq-settings-button,
-.voq-logout-button {
+.voq-logout-button,
+.voq-fullscreen-button,
+.voq-refresh-button {
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
@@ -504,7 +506,9 @@ body {
     padding-right: 32px;
   }
   .voq-settings-button,
-  .voq-logout-button { width: 44px; height: 44px; }
+  .voq-logout-button,
+  .voq-fullscreen-button,
+  .voq-refresh-button { width: 44px; height: 44px; }
   .voq-status { font-size: 1rem; line-height: 1.35; }
   .voq-chat { border-radius: 14px; padding: 12px; font-size: 1.05rem; line-height: 1.55; }
   .voq-empty-state h1 { font-size: clamp(2rem, 9vw, 3rem); letter-spacing: -0.055em; }

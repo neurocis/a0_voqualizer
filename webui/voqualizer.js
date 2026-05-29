@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-send-clear-on-interaction';
+const PAGE_VERSION = 'm8-topbar-fullscreen-refresh';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -419,6 +419,58 @@ function updateActionsWrapped() {
     globalThis.__voqualizer_page.actionsWrapped = wrapped;
     globalThis.__voqualizer_page.actionsWrappedAt = Date.now();
   }
+}
+
+function bindFullscreenButton() {
+  const btn = document.getElementById('voq-fullscreen-button');
+  if (!btn) return;
+  const sync = () => {
+    const active = !!document.fullscreenElement;
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.setAttribute('title', active ? 'Exit fullscreen' : 'Toggle fullscreen');
+    btn.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Toggle fullscreen');
+    const icon = btn.querySelector('.voq-material');
+    if (icon) icon.textContent = active ? 'fullscreen_exit' : 'fullscreen';
+    if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.fullscreenActive = active;
+  };
+  btn.addEventListener('click', async () => {
+    try {
+      if (!document.fullscreenElement) {
+        const root = document.documentElement;
+        if (root.requestFullscreen) await root.requestFullscreen();
+      } else if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.fullscreenError = err?.message || String(err);
+    }
+    sync();
+  });
+  document.addEventListener('fullscreenchange', sync);
+  sync();
+}
+
+function bindRefreshButton(state) {
+  const btn = document.getElementById('voq-refresh-button');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const contextId = globalThis.__voqualizer_page?.selectedContextId || '';
+    if (!contextId) return;
+    btn.dataset.busy = 'true';
+    try {
+      const chat = transcriptElement();
+      if (chat) chat.innerHTML = '<div class="voq-empty-state">Reloading latest monologue result\u2026</div>';
+      if (state?.transcriptIds) state.transcriptIds.clear();
+      state.lastLogVersion = 0;
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastLogVersion = 0;
+      await preloadLastMonologueResult(state, contextId);
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastRefreshAt = Date.now();
+    } catch (err) {
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastRefreshError = err?.message || String(err);
+    } finally {
+      btn.dataset.busy = 'false';
+    }
+  });
 }
 function bindTranscriptControls() {
   const chat = transcriptElement();
@@ -1920,6 +1972,8 @@ function initVoqualizerPage() {
   // mirrors the in-DOM voqualizer-buttons.html behavior exactly.
   bindVoqualizerButtons();
   bindTranscriptControls();
+  bindFullscreenButton();
+  bindRefreshButton(state);
   updateActionsWrapped();
   if (typeof globalThis.ResizeObserver === 'function') {
     try {
