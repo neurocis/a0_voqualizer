@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-brand-text-2026-05-28-24 */
+/* voq-mobile-version: m8-brand-gap-2026-05-28-25 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -1053,10 +1053,10 @@ body {
 .voq-brand-row {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   margin-right: auto;
   font-weight: 700;
-  font-size: 1.13rem;
+  font-size: 1.21rem;
   color: var(--voq-text);
   letter-spacing: 0.02em;
 }
@@ -1069,6 +1069,6 @@ body {
   flex: 0 0 auto;
 }
 @media (max-width: 480px) {
-  .voq-brand-row { font-size: 1.03rem; gap: 6px; }
+  .voq-brand-row { font-size: 1.11rem; gap: 10px; }
   .voq-brand-logo { width: 43px; height: 43px; }
 }
