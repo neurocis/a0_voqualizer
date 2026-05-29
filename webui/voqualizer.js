@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-live-push-final-suppress';
+const PAGE_VERSION = 'm8-tts-drop-ack-after-push';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -472,7 +472,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-live-push-final-suppress-2026-05-29-52'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-drop-ack-after-push-2026-05-29-53'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -562,7 +562,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-live-push-final-suppress-2026-05-29-52'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-drop-ack-after-push-2026-05-29-53'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -573,6 +573,7 @@ function buildTtsDebugLines() {
     `queued_at=${p.lastTtsSpeakQueuedAt || 0} queued_utt=${p.lastTtsSpeakQueuedUtteranceId || ''}`,
     `last_speak_at=${p.lastTtsSpeakAt || p.lastDirectTtsAt || 0} ack_at=${p.lastDirectTtsAckAt || 0} ack_type=${p.lastDirectTtsAckRawType || ''} last_error=${p.lastTtsError || p.lastError || ''}`,
     `ack_fallback_at=${p.lastAckTtsFallbackAt || 0} ack_chunks=${p.lastAckTtsFallbackChunks || 0} ack_reason=${p.lastAckTtsFallbackReason || ''}`,
+    `ack_suppressed_at=${p.lastAckTtsFallbackSuppressedAt || 0} ack_suppressed_chunks=${p.lastAckTtsFallbackSuppressedChunks || 0} ack_suppressed_reason=${p.lastAckTtsFallbackSuppressedReason || ''}`,
     `ack_pushed=${p.lastAckTtsPushedEmitCount || 0} ack_sender=${p.lastAckTtsSenderPresent}`,
     `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
     `playback_at=${p.lastPlaybackStartAt || 0} playback_ms=${p.lastPlaybackDurationMs || 0} playback_utt=${p.lastPlaybackUtteranceId || ''} playback_error=${p.lastPlaybackError || ''}`,
@@ -1678,6 +1679,26 @@ function handleTtsAckFallback(ack, fallbackUtteranceId = '') {
   const chunks = Array.isArray(ack.tts_chunks) ? ack.tts_chunks : [];
   if (!chunks.length) return;
   const utteranceId = safeString(ack.utterance_id || fallbackUtteranceId || 'default');
+  if (tts.livePushSinceSubmit || (globalThis.__voqualizer_page?.lastLivePushedTtsAt && globalThis.__voqualizer_page?.lastSubmitUiEchoAt && globalThis.__voqualizer_page.lastLivePushedTtsAt >= globalThis.__voqualizer_page.lastSubmitUiEchoAt)) {
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastAckTtsFallbackSuppressedAt = Date.now();
+      globalThis.__voqualizer_page.lastAckTtsFallbackSuppressedChunks = chunks.length;
+      globalThis.__voqualizer_page.lastAckTtsFallbackSuppressedUtteranceId = utteranceId;
+      globalThis.__voqualizer_page.lastAckTtsFallbackSuppressedReason = 'live_push_already_streamed';
+      globalThis.__voqualizer_page.lastDirectTtsAck = {
+        event: safeString(ack.event || ''),
+        utterance_id: safeString(ack.utterance_id || fallbackUtteranceId || ''),
+        chunks: Number(ack.chunks || 0),
+        tts_chunks: chunks.length,
+        suppressed: true,
+        suppress_reason: 'live_push_already_streamed',
+        pushed_emit_count: Number(ack.pushed_emit_count || 0),
+        sender_present: !!ack.sender_present,
+      };
+    }
+    updateTtsButton();
+    return;
+  }
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.lastAckTtsFallbackAt = Date.now();
     globalThis.__voqualizer_page.lastAckTtsFallbackChunks = chunks.length;
