@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-swap-send-tts" in js
+    assert "m8-context-menu-wide" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-swap-send-tts-2026-05-28-38" in html
-    assert "m8-swap-send-tts-2026-05-28-38" in css
+    assert "m8-context-menu-wide-2026-05-28-39" in html
+    assert "m8-context-menu-wide-2026-05-28-39" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-swap-send-tts" in js
+    assert "m8-context-menu-wide" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-swap-send-tts-2026-05-28-38" in html
-    assert "m8-swap-send-tts-2026-05-28-38" in css
+    assert "m8-context-menu-wide-2026-05-28-39" in html
+    assert "m8-context-menu-wide-2026-05-28-39" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -769,3 +769,10 @@ def test_voqualizer_bottom_actions_order_tts_mic_send():
     mic_i = html.index('id="voqualizer-mic-button"')
     send_i = html.index('id="voq-send-button"')
     assert speaker_i < mic_i < send_i
+
+
+def test_voqualizer_context_menu_is_wider():
+    css = read(CSS)
+    assert 'min-width: 340px;' in css
+    assert 'width: max-content;' in css
+    assert 'max-width: min(92vw, 520px);' in css
