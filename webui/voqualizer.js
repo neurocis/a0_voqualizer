@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-retry-narrow';
+const PAGE_VERSION = 'm8-tts-filter-push';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -65,6 +65,8 @@ const tts = {
   spokenResponseIds: new Set(),
   lastError: '',
   lastSpeakAt: 0,
+  activeDirectUtteranceId: '',
+  acceptedTtsUtteranceIds: new Set(),
 };
 
 const asr = {
@@ -467,7 +469,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-retry-narrow-2026-05-29-50'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-filter-push-2026-05-29-51'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -557,7 +559,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-retry-narrow-2026-05-29-50'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-filter-push-2026-05-29-51'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -1512,6 +1514,8 @@ async function speakText(text, { utteranceId } = {}) {
     return;
   }
   const id = utteranceId || `voq-utt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  tts.activeDirectUtteranceId = id;
+  tts.acceptedTtsUtteranceIds.add(id);
   tts.lastSpeakAt = Date.now();
   tts.lastError = '';
   if (globalThis.__voqualizer_page) {
@@ -1617,10 +1621,28 @@ function handleVoqError(payload) {
   updateTtsButton();
 }
 
+function shouldAcceptTtsUtterance(utteranceId, source = 'chunk') {
+  const id = safeString(utteranceId || '');
+  const page = globalThis.__voqualizer_page;
+  const active = safeString(tts.activeDirectUtteranceId || page?.lastTtsSpeakQueuedUtteranceId || '');
+  const accepted = !!id && (id === active || tts.acceptedTtsUtteranceIds.has(id) || id.startsWith('voq-resp-'));
+  if (!accepted && /^agent-sentence-/i.test(id)) {
+    if (page) {
+      page.lastTtsIgnoredUtteranceId = id;
+      page.lastTtsIgnoredAt = Date.now();
+      page.lastTtsIgnoredSource = source;
+      page.lastTtsIgnoredReason = 'agent_sentence_push_not_standalone_direct';
+    }
+    return false;
+  }
+  return true;
+}
+
 function handleTtsChunk(payload) {
   if (!tts.enabled) return;
   const data = (payload && payload.data) || payload || {};
   const utteranceId = safeString(data.utterance_id || data.utteranceId || 'default');
+  if (!shouldAcceptTtsUtterance(utteranceId, 'chunk')) return;
   if (tts.tracker.cancelledTtsUtterances.has(utteranceId)) return;
   const codec = normalizeTtsCodec(data, payload);
   const sampleRate = ttsSampleRate(data, payload, codec);
@@ -1643,6 +1665,7 @@ function handleTtsChunk(payload) {
 }
 
 function handleTtsAckFallback(ack, fallbackUtteranceId = '') {
+  if (fallbackUtteranceId) tts.acceptedTtsUtteranceIds.add(safeString(fallbackUtteranceId));
   if (!ack || ack.error || !tts.enabled) return;
   const chunks = Array.isArray(ack.tts_chunks) ? ack.tts_chunks : [];
   if (!chunks.length) return;
@@ -1739,6 +1762,7 @@ function bufferEncodedChunk(bytes, codec, utteranceId, isFinal) {
 function handleTtsDone(payload) {
   const data = (payload && payload.data) || payload || {};
   const utteranceId = safeString(data.utterance_id || data.utteranceId || 'default');
+  if (!shouldAcceptTtsUtterance(utteranceId, 'done')) return;
   if (data.cancelled || data.reason === 'barge_in') {
     tts.tracker.stopPlaybackForUtterance(utteranceId);
     finalizeWordHighlight(utteranceId, { cancelled: true });
