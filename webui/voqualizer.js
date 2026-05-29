@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-trigger-diagnostics';
+const PAGE_VERSION = 'm8-tts-init-diagnostics';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -467,7 +467,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-trigger-diagnostics-2026-05-29-46'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-init-diagnostics-2026-05-29-47'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -557,14 +557,16 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-trigger-diagnostics-2026-05-29-46'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-init-diagnostics-2026-05-29-47'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
     `socket_ready=${p.ttsReady} session=${p.ttsSessionId || ''} context=${p.selectedContextId || ''}`,
+    `init_start=${p.lastTtsInitStartAt || 0} init_ready=${p.lastTtsInitReadyAt || 0} init_context=${p.lastTtsInitContextId || ''} init_error=${p.lastTtsInitError || ''}`,
+    `speak_entry=${p.lastTtsSpeakEntryAt || 0} speak_entry_len=${p.lastTtsSpeakEntryTextLength || 0} speak_skip=${p.lastTtsSpeakSkipReason || ''}`,
     `last_trigger_at=${p.lastTtsTriggerAt || 0} trigger_type=${p.lastTtsTriggerType || ''} trigger_id=${p.lastTtsTriggerItemId || ''} trigger_fallback=${p.lastTtsTriggerFallbackId || ''} trigger_len=${p.lastTtsTriggerTextLength || 0} skip=${p.lastTtsSkipReason || ''}`,
     `queued_at=${p.lastTtsSpeakQueuedAt || 0} queued_utt=${p.lastTtsSpeakQueuedUtteranceId || ''}`,
-    `last_speak_at=${p.lastTtsSpeakAt || p.lastDirectTtsAt || 0} last_error=${p.lastTtsError || p.lastError || ''}`,
+    `last_speak_at=${p.lastTtsSpeakAt || p.lastDirectTtsAt || 0} ack_at=${p.lastDirectTtsAckAt || 0} ack_type=${p.lastDirectTtsAckRawType || ''} last_error=${p.lastTtsError || p.lastError || ''}`,
     `ack_fallback_at=${p.lastAckTtsFallbackAt || 0} ack_chunks=${p.lastAckTtsFallbackChunks || 0} ack_reason=${p.lastAckTtsFallbackReason || ''}`,
     `ack_pushed=${p.lastAckTtsPushedEmitCount || 0} ack_sender=${p.lastAckTtsSenderPresent}`,
     `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
@@ -1400,7 +1402,24 @@ async function connectVoq() {
 
 async function initVoqSession(contextId) {
   if (tts.ready && tts.contextId === contextId && tts.sessionId) return tts;
-  const socket = await connectVoq();
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastTtsInitStartAt = Date.now();
+    globalThis.__voqualizer_page.lastTtsInitContextId = contextId;
+    globalThis.__voqualizer_page.lastTtsInitError = '';
+    globalThis.__voqualizer_page.ttsReady = false;
+  }
+  let socket;
+  try {
+    socket = await connectVoq();
+  } catch (error) {
+    const message = error?.message || String(error);
+    tts.lastError = `connect failed: ${message}`;
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastTtsInitError = tts.lastError;
+      globalThis.__voqualizer_page.lastTtsError = tts.lastError;
+    }
+    throw error;
+  }
   const sessionId = generateMessageId();
   const payload = {
     session_id: sessionId,
@@ -1410,22 +1429,34 @@ async function initVoqSession(contextId) {
     tts: { enabled: !!tts.enabled },
     asr_submit_mode: ASR_SUBMIT_MODE,
   };
-  const ready = await new Promise((resolve, reject) => {
-    let settled = false;
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(new Error('voqualizer_init timeout'));
-    }, 10000);
-    socket.emit(VOQUALIZER_HANDLER, { event: 'voqualizer_init', data: payload }, (ack) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (ack && ack.event === 'voqualizer_ready') resolve(ack);
-      else if (ack && ack.error) reject(new Error(ack.error.message || 'voqualizer_init failed'));
-      else resolve(ack || {});
+  let ready;
+  try {
+    ready = await new Promise((resolve, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('voqualizer_init timeout'));
+      }, 10000);
+      socket.emit(VOQUALIZER_HANDLER, { event: 'voqualizer_init', data: payload }, (ack) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        if (ack && ack.event === 'voqualizer_ready') resolve(ack);
+        else if (ack && ack.error) reject(new Error(ack.error.message || 'voqualizer_init failed'));
+        else resolve(ack || {});
+      });
     });
-  });
+  } catch (error) {
+    const message = error?.message || String(error);
+    tts.lastError = `init failed: ${message}`;
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastTtsInitError = tts.lastError;
+      globalThis.__voqualizer_page.lastTtsError = tts.lastError;
+      globalThis.__voqualizer_page.ttsReady = false;
+    }
+    throw error;
+  }
   tts.sessionId = ready.session_id || sessionId;
   tts.bearerToken = ready.bearer_token || '';
   tts.contextId = contextId;
@@ -1433,6 +1464,8 @@ async function initVoqSession(contextId) {
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.ttsReady = true;
     globalThis.__voqualizer_page.ttsSessionId = tts.sessionId;
+    globalThis.__voqualizer_page.lastTtsInitReadyAt = Date.now();
+    globalThis.__voqualizer_page.lastTtsInitError = '';
   }
   cx.enabledByCapability = !!(ready.capabilities && ready.capabilities.cx_stream);
   const wordPlanCap = !!(ready.capabilities && ready.capabilities.tts_word_plan);
@@ -1446,15 +1479,26 @@ async function initVoqSession(contextId) {
 
 async function speakText(text, { utteranceId } = {}) {
   const trimmed = safeString(text).trim();
-  if (!trimmed) return;
-  if (!tts.enabled) return;
+  const page = globalThis.__voqualizer_page;
+  if (page) {
+    page.lastTtsSpeakEntryAt = Date.now();
+    page.lastTtsSpeakEntryTextLength = trimmed.length;
+    page.lastTtsSpeakEntryUtteranceId = utteranceId || '';
+    page.lastTtsSpeakSkipReason = '';
+  }
+  if (!trimmed) { if (page) page.lastTtsSpeakSkipReason = 'empty_text'; return; }
+  if (!tts.enabled) { if (page) page.lastTtsSpeakSkipReason = 'tts_disabled'; return; }
   const contextId = tts.contextId || (globalThis.__voqualizer_page?.selectedContextId || '');
-  if (!contextId) return;
+  if (!contextId) { if (page) page.lastTtsSpeakSkipReason = 'missing_context'; return; }
   await resumeAudioContext('speakText');
   try {
     await initVoqSession(contextId);
   } catch (error) {
     tts.lastError = `init failed: ${error?.message || error}`;
+    if (page) {
+      page.lastTtsError = tts.lastError;
+      page.lastTtsSpeakSkipReason = 'init_failed';
+    }
     updateTtsButton();
     return;
   }
@@ -1466,6 +1510,7 @@ async function speakText(text, { utteranceId } = {}) {
     globalThis.__voqualizer_page.lastDirectTtsAt = tts.lastSpeakAt;
     globalThis.__voqualizer_page.lastDirectTtsTextLength = trimmed.length;
     globalThis.__voqualizer_page.lastTtsError = '';
+    globalThis.__voqualizer_page.lastTtsSpeakSkipReason = '';
   }
   try {
     tts.socket.emit(VOQUALIZER_HANDLER, {
@@ -1477,9 +1522,14 @@ async function speakText(text, { utteranceId } = {}) {
         text: trimmed,
       },
     }, (ack) => {
+      if (globalThis.__voqualizer_page) {
+        globalThis.__voqualizer_page.lastDirectTtsAckAt = Date.now();
+        globalThis.__voqualizer_page.lastDirectTtsAckRawType = typeof ack;
+      }
       handleTtsAckFallback(ack, id);
       if (ack && ack.error) {
         tts.lastError = ack.error.message || 'speak failed';
+        if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastTtsError = tts.lastError;
         updateTtsButton();
       }
     });
