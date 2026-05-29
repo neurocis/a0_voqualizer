@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-brand-gap" in js
+    assert "m8-send-never-disabled" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-brand-gap-2026-05-28-25" in html
-    assert "m8-brand-gap-2026-05-28-25" in css
+    assert "m8-send-never-disabled-2026-05-28-26" in html
+    assert "m8-send-never-disabled-2026-05-28-26" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-brand-gap" in js
+    assert "m8-send-never-disabled" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-brand-gap-2026-05-28-25" in html
-    assert "m8-brand-gap-2026-05-28-25" in css
+    assert "m8-send-never-disabled-2026-05-28-26" in html
+    assert "m8-send-never-disabled-2026-05-28-26" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -643,3 +643,14 @@ def test_voqualizer_topbar_order_fullscreen_before_burger():
     fs = html.index('id="voq-fullscreen-button"')
     bg = html.index('id="voq-context-menu-button"')
     assert fs < bg
+
+
+def test_voqualizer_send_button_never_disabled():
+    js = read(JS)
+    assert "button.disabled = false" in js
+    assert "button.setAttribute('aria-disabled', 'false')" in js
+    assert "Processing — click to send another prompt" in js
+    assert "A stale busy/submitting latch should not" in js
+    assert "if (state.isSubmitting) {" in js
+    assert "resetSendIndicatorOnInteraction();" in js
+    assert "select.disabled = false" in js

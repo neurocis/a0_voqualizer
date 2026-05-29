@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-brand-gap';
+const PAGE_VERSION = 'm8-send-never-disabled';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -756,7 +756,10 @@ function updateSendButton(state) {
   const hasContext = !!(globalThis.__voqualizer_page?.selectedContextId);
   const hasText = !!prompt?.value.trim();
   const busy = !!state.isSubmitting;
-  button.disabled = busy || !hasContext || !hasText;
+  // M8: never disable the send button. A stale busy/submitting latch should not
+  // trap the UI; clicks remain available and submitPrompt decides whether there
+  // is enough input/context to send.
+  button.disabled = false;
   button.dataset.busy = busy ? 'true' : 'false';
   if (busy) {
     setSendIndicatorState('processing');
@@ -771,10 +774,10 @@ function updateSendButton(state) {
   // the prompt has been cleared after submit) so the user still sees the
   // green completion cue until they next interact with the prompt.
   button.classList.toggle('voq-send-success', sendIndicator.state === 'success');
-  button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
-  button.setAttribute('title', busy ? 'Processing — waiting for assistant response' : sendIndicator.state === 'success' ? 'Response complete' : !hasContext ? 'Select a context before sending' : !hasText ? 'Type a prompt or use ASR' : 'Send prompt');
+  button.setAttribute('aria-disabled', 'false');
+  button.setAttribute('title', busy ? 'Processing — click to send another prompt' : sendIndicator.state === 'success' ? 'Response complete — type or click to send again' : !hasContext ? 'Select a context before sending' : !hasText ? 'Type a prompt or use ASR' : 'Send prompt');
   if (select) {
-    select.disabled = busy || (select.disabled === true && !hasContext);
+    select.disabled = false;
     const selected = select.selectedOptions && select.selectedOptions[0];
     select.setAttribute('title', selected ? selected.textContent || 'Select Voqualizer context' : 'Select Voqualizer context');
   }
@@ -859,7 +862,9 @@ async function submitPrompt(state) {
     renderErrorRow(state, 'Select a context before sending.');
     return;
   }
-  if (state.isSubmitting) return;
+  if (state.isSubmitting) {
+    resetSendIndicatorOnInteraction();
+  }
   ensureAudioContext();
   const messageId = generateMessageId();
   state.isSubmitting = true;
@@ -1668,7 +1673,6 @@ function setPageStateRef(state) {
 // stays the single source of truth for assistant responses on this page.
 async function routeStoreAsrFinal(text) {
   if (!pageState) return;
-  if (pageState.isSubmitting) return;
   const input = document.getElementById('voq-prompt-input');
   const trimmed = String(text || '').trim();
   if (!trimmed) return;
