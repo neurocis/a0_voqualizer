@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-tts-stale-socket-guard-2026-05-29-48" in html
-    assert "m8-tts-stale-socket-guard-2026-05-29-48" in css
+    assert "m8-tts-cache-bust-store-2026-05-29-48" in html
+    assert "m8-tts-cache-bust-store-2026-05-29-48" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-tts-stale-socket-guard-2026-05-29-48" in html
-    assert "m8-tts-stale-socket-guard-2026-05-29-48" in css
+    assert "m8-tts-cache-bust-store-2026-05-29-48" in html
+    assert "m8-tts-cache-bust-store-2026-05-29-48" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -829,12 +829,12 @@ def test_voqualizer_tts_uses_ws_namespace_direct_events():
     assert "tts.socket.emit('voqualizer_control'" in js
     assert "socket.emit(VOQUALIZER_HANDLER, { event: 'voqualizer_init'" not in js
     assert "tts.socket.emit(VOQUALIZER_HANDLER, {" not in js
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
 
 
 def test_voqualizer_tts_reconnects_stale_session_and_retries():
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "tts.socket && tts.socket.connected" in js
     assert "stale_session_reconnect" in js
     assert "direct_tts_ack_timeout" in js
@@ -845,7 +845,7 @@ def test_voqualizer_tts_reconnects_stale_session_and_retries():
 
 def test_voqualizer_tts_retry_does_not_double_speak():
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "ackHasChunks" in js
     assert "shouldRetry" in js
     assert "direct_tts_ack_timeout" in js
@@ -854,7 +854,7 @@ def test_voqualizer_tts_retry_does_not_double_speak():
 
 def test_voqualizer_tts_accepts_live_push_and_suppresses_final_duplicate():
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "shouldAcceptTtsUtterance" in js
     assert "live_push_already_streamed" in js
     assert "lastLivePushedTtsUtteranceId" in js
@@ -865,7 +865,7 @@ def test_voqualizer_tts_accepts_live_push_and_suppresses_final_duplicate():
 
 def test_voqualizer_tts_live_push_suppresses_final_direct_tts():
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "livePushSinceSubmit" in js
     assert "lastLivePushedTtsAt" in js
     assert "lastLivePushedTtsUtteranceId" in js
@@ -876,7 +876,7 @@ def test_voqualizer_tts_live_push_suppresses_final_direct_tts():
 
 def test_voqualizer_tts_suppresses_ack_fallback_after_live_push():
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "lastAckTtsFallbackSuppressedAt" in js
     assert "lastAckTtsFallbackSuppressedChunks" in js
     assert "lastAckTtsFallbackSuppressedReason" in js
@@ -887,7 +887,7 @@ def test_voqualizer_tts_suppresses_ack_fallback_after_live_push():
 def test_voqualizer_store_suppresses_tts_listeners_for_standalone():
     conv = read(CONVERSATION_MODE)
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "suppressTts: true" in js
     assert "if (!this._suppressTts)" in conv
     assert "suppressed_store_tts_chunk" in conv
@@ -897,8 +897,18 @@ def test_voqualizer_store_suppresses_tts_listeners_for_standalone():
 
 def test_voqualizer_tts_ignores_stale_socket_events():
     js = read(JS)
-    assert "m8-tts-stale-socket-guard" in js
+    assert "m8-tts-cache-bust-store" in js
     assert "activeSocketOnly" in js
     assert "socket !== tts.socket" in js
     assert "lastStaleTtsSocketEvent" in js
     assert "stale_socket_event=" in js
+
+
+def test_voqualizer_cache_busts_conversation_mode_import():
+    js = read(JS)
+    assert "m8-tts-cache-bust-store" in js
+    assert "conversation-mode.js?v=m8-tts-cache-bust-store-2026-05-29-56" in js
+    assert "store_import_cache=m8-tts-cache-bust-store-2026-05-29-56" in js
+    conv = read(CONVERSATION_MODE)
+    assert "if (!this._suppressTts)" in conv
+    assert "suppressed_store_tts_chunk" in conv
