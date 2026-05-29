@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-send-success-on-response-2026-05-28-10 */
+/* voq-mobile-version: m8-send-solid-green-2026-05-28-11 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -444,9 +444,11 @@ body {
   animation: voq-send-pulse 1.05s ease-in-out infinite;
 }
 .voq-action-button[data-send-state="success"] {
-  border-color: rgba(34, 197, 94, 0.95);
+  border-color: rgba(34, 197, 94, 1) !important;
   color: rgba(187, 247, 208, 1);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.45);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.6) !important;
+  background: rgba(34, 197, 94, 0.18);
+  animation: none !important;
 }
 @keyframes voq-send-pulse {
   0%, 100% { box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.45); }
@@ -979,5 +981,16 @@ body {
 }
 .voq-action-button.voq-send-success[disabled] {
   opacity: 1 !important;
+  cursor: default;
+}
+
+.voq-action-button.voq-send-success,
+.voq-action-button.voq-send-success[disabled] {
+  border-color: rgba(34, 197, 94, 1) !important;
+  color: rgba(187, 247, 208, 1) !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.6) !important;
+  background: rgba(34, 197, 94, 0.18) !important;
+  opacity: 1 !important;
+  animation: none !important;
   cursor: default;
 }
