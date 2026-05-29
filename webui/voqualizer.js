@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-asr-session-guard';
+const PAGE_VERSION = 'm8-asr-debug-copy';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -419,6 +419,84 @@ function updateActionsWrapped() {
     globalThis.__voqualizer_page.actionsWrapped = wrapped;
     globalThis.__voqualizer_page.actionsWrappedAt = Date.now();
   }
+}
+
+
+function buildAsrDebugLines() {
+  const c = globalThis.__voqualizer_conversation || {};
+  const p = globalThis.__voqualizer_page || {};
+  const ack = c.lastAudioAck || {};
+  const input = document.getElementById('voq-prompt-input');
+  const assets = Array.from(document.querySelectorAll('script[src],link[href]'))
+    .map((element) => element.src || element.href)
+    .filter((url) => /voqualizer|conversation-mode/.test(url));
+  const lines = [
+    '===VOQ_ASR_LINES===',
+    `cache_ok=${assets.some((url) => url.includes('m8-asr-debug-copy-2026-05-28-30'))}`,
+    `page_version=${p.version}`,
+    `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
+    `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
+    `vu=${c.micVuLevel} peak=${c.micVuPeak} rms=${c.micVuRms} speech=${c.micSpeechActive}`,
+    `frames_sent=${c.audioFramesSent} frames_dropped=${c.audioFramesDropped} drop_reason=${c.lastAudioFrameDropReason}`,
+    `ack_at=${c.lastAudioAckAt} ack_error=${c.lastAudioAckError}`,
+    `ack_event=${ack.event} ack_code=${ack.code} ack_msg=${ack.message}`,
+    `ack_emitted=${ack.emitted} ack_queued=${ack.queued}`,
+    `ack_partial=${JSON.stringify(ack.asr_last_partial_text || '')}`,
+    `ack_final=${JSON.stringify(ack.asr_last_final_text || '')}`,
+    `store_partial=${JSON.stringify(c.lastAsrPartialText || '')}`,
+    `store_final=${JSON.stringify(c.lastAsrFinalText || '')}`,
+    `ack_store_final=${JSON.stringify(c.lastAckAsrFinalText || '')}`,
+    `submit_at=${c.lastPromptSubmitAt} submit_skip=${c.lastPromptSubmitSkipReason}`,
+    `page_final=${JSON.stringify(p.asrLastFinalText || '')}`,
+    `prompt=${JSON.stringify(input?.value || '')}`,
+  ];
+  return lines.join('\n');
+}
+
+async function copyAsrDebugLines() {
+  const text = buildAsrDebugLines();
+  const button = document.getElementById('voq-asr-debug-button');
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    }
+  } catch (_error) {}
+  if (!copied) {
+    try {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', 'readonly');
+      area.style.position = 'fixed';
+      area.style.left = '-9999px';
+      document.body.appendChild(area);
+      area.select();
+      copied = document.execCommand('copy');
+      area.remove();
+    } catch (_error) {}
+  }
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastAsrDebugCopyAt = Date.now();
+    globalThis.__voqualizer_page.lastAsrDebugCopyOk = copied;
+    globalThis.__voqualizer_page.lastAsrDebugLines = text;
+  }
+  if (button) {
+    button.dataset.copied = copied ? 'true' : 'false';
+    button.setAttribute('title', copied ? 'ASR debug copied' : 'ASR debug ready — copy failed, long-press/select from console if needed');
+    setTimeout(() => {
+      button.dataset.copied = 'false';
+      button.setAttribute('title', 'Copy ASR debug state');
+    }, 1800);
+  }
+  setPageStatus(copied ? 'ASR debug copied' : 'ASR debug captured', copied ? 'ready' : 'warn');
+  return text;
+}
+
+function bindAsrDebugButton() {
+  const button = document.getElementById('voq-asr-debug-button');
+  if (!button) return;
+  button.addEventListener('click', () => { void copyAsrDebugLines(); });
 }
 
 function bindFullscreenButton() {
@@ -2043,6 +2121,7 @@ function initVoqualizerPage() {
   bindTranscriptControls();
   bindFullscreenButton();
   bindContextMenuButton();
+  bindAsrDebugButton();
   updateActionsWrapped();
   if (typeof globalThis.ResizeObserver === 'function') {
     try {

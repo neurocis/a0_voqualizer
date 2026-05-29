@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-asr-session-guard-2026-05-28-29 */
+/* voq-mobile-version: m8-asr-debug-copy-2026-05-28-30 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -190,7 +190,8 @@ body {
 .voq-logout-button,
 .voq-fullscreen-button,
 .voq-refresh-button,
-.voq-context-menu-button {
+.voq-context-menu-button,
+.voq-asr-debug-button {
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
@@ -1071,4 +1072,14 @@ body {
 @media (max-width: 480px) {
   .voq-brand-row { font-size: 1.11rem; gap: 10px; }
   .voq-brand-logo { width: 43px; height: 43px; }
+}
+
+/* M8: mobile-friendly ASR diagnostic copy button */
+.voq-asr-debug-button {
+  color: rgba(125, 211, 252, 0.92);
+}
+.voq-asr-debug-button[data-copied="true"] {
+  border-color: rgba(34, 197, 94, 0.82);
+  color: rgba(187, 247, 208, 0.98);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22), 0 0 18px rgba(34, 197, 94, 0.18);
 }

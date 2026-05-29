@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-asr-session-guard" in js
+    assert "m8-asr-debug-copy" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-asr-session-guard-2026-05-28-29" in html
-    assert "m8-asr-session-guard-2026-05-28-29" in css
+    assert "m8-asr-debug-copy-2026-05-28-30" in html
+    assert "m8-asr-debug-copy-2026-05-28-30" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-asr-session-guard" in js
+    assert "m8-asr-debug-copy" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-asr-session-guard-2026-05-28-29" in html
-    assert "m8-asr-session-guard-2026-05-28-29" in css
+    assert "m8-asr-debug-copy-2026-05-28-30" in html
+    assert "m8-asr-debug-copy-2026-05-28-30" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -682,3 +682,15 @@ def test_voqualizer_asr_mic_requires_session_before_capture():
     assert "lastAudioFrameDropReason" in conv
     assert "audioFramesDropped" in conv
     assert "bearer_token_missing" in conv
+
+
+def test_voqualizer_mobile_asr_debug_copy_button():
+    html = read(HTML)
+    js = read(JS)
+    css = read(CSS)
+    for token in ['id="voq-asr-debug-button"', 'bug_report', 'Copy ASR debug state']:
+        assert token in html, token
+    for token in ['function buildAsrDebugLines', 'function copyAsrDebugLines', 'function bindAsrDebugButton', '===VOQ_ASR_LINES===', 'lastAsrDebugCopyAt', 'frames_sent=', 'ack_final=']:
+        assert token in js, token
+    for token in ['.voq-asr-debug-button', 'data-copied']:
+        assert token in css, token
