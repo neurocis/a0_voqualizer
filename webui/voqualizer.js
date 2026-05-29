@@ -28,14 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-cache-bust-store-2026-05-29-56';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-processing-heartbeat-2026-05-29-57';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-cache-bust-store';
+const PAGE_VERSION = 'm8-tts-processing-heartbeat';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-processing-heartbeat-2026-05-29-57';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -70,6 +71,11 @@ const tts = {
   livePushSinceSubmit: false,
   lastLivePushAt: 0,
   lastLivePushUtteranceId: '',
+  processingHeartbeatTimer: 0,
+  processingHeartbeatSubmissionId: '',
+  processingHeartbeatStartedAt: 0,
+  processingHeartbeatLastAt: 0,
+  processingHeartbeatCount: 0,
 };
 
 const asr = {
@@ -112,6 +118,68 @@ const wordPlan = {
   endedByUtteranceId: new Set(),
   rafId: 0,
 };
+
+
+function setProcessingHeartbeatDebug(fields = {}) {
+  const page = globalThis.__voqualizer_page;
+  if (!page) return;
+  Object.assign(page, fields);
+}
+
+function stopProcessingHeartbeat(reason = 'stopped') {
+  if (tts.processingHeartbeatTimer) {
+    clearInterval(tts.processingHeartbeatTimer);
+    tts.processingHeartbeatTimer = 0;
+  }
+  if (tts.processingHeartbeatSubmissionId || tts.processingHeartbeatStartedAt) {
+    setProcessingHeartbeatDebug({
+      processingHeartbeatActive: false,
+      processingHeartbeatStoppedAt: Date.now(),
+      processingHeartbeatStopReason: reason,
+      processingHeartbeatSubmissionId: tts.processingHeartbeatSubmissionId,
+      processingHeartbeatCount: tts.processingHeartbeatCount,
+    });
+  }
+  tts.processingHeartbeatSubmissionId = '';
+}
+
+function startProcessingHeartbeat(submissionId) {
+  stopProcessingHeartbeat('restart');
+  if (!tts.enabled || !submissionId) {
+    setProcessingHeartbeatDebug({
+      processingHeartbeatActive: false,
+      processingHeartbeatSkipReason: !tts.enabled ? 'tts_disabled' : 'missing_submission',
+    });
+    return;
+  }
+  tts.processingHeartbeatSubmissionId = submissionId;
+  tts.processingHeartbeatStartedAt = Date.now();
+  tts.processingHeartbeatLastAt = 0;
+  tts.processingHeartbeatCount = 0;
+  setProcessingHeartbeatDebug({
+    processingHeartbeatActive: true,
+    processingHeartbeatStartedAt: tts.processingHeartbeatStartedAt,
+    processingHeartbeatStoppedAt: 0,
+    processingHeartbeatStopReason: '',
+    processingHeartbeatSubmissionId: submissionId,
+    processingHeartbeatCount: 0,
+    processingHeartbeatSkipReason: '',
+  });
+  tts.processingHeartbeatTimer = setInterval(() => {
+    if (!tts.enabled || tts.livePushSinceSubmit || tts.processingHeartbeatSubmissionId !== submissionId) {
+      stopProcessingHeartbeat(tts.livePushSinceSubmit ? 'streaming_response_started' : 'inactive');
+      return;
+    }
+    tts.processingHeartbeatLastAt = Date.now();
+    tts.processingHeartbeatCount += 1;
+    setProcessingHeartbeatDebug({
+      processingHeartbeatActive: true,
+      processingHeartbeatLastAt: tts.processingHeartbeatLastAt,
+      processingHeartbeatCount: tts.processingHeartbeatCount,
+    });
+    void speakText('processing', { utteranceId: `voq-processing-${submissionId}-${tts.processingHeartbeatCount}` });
+  }, 3000);
+}
 
 function cxActiveStreamCount() {
   let count = 0;
@@ -472,7 +540,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-suppress-store-listeners-2026-05-29-53'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-processing-heartbeat-2026-05-29-57'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -562,7 +630,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-suppress-store-listeners-2026-05-29-53'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-processing-heartbeat-2026-05-29-57'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -571,14 +639,17 @@ function buildTtsDebugLines() {
     `speak_entry=${p.lastTtsSpeakEntryAt || 0} speak_entry_len=${p.lastTtsSpeakEntryTextLength || 0} speak_skip=${p.lastTtsSpeakSkipReason || ''}`,
     `last_trigger_at=${p.lastTtsTriggerAt || 0} trigger_type=${p.lastTtsTriggerType || ''} trigger_id=${p.lastTtsTriggerItemId || ''} trigger_fallback=${p.lastTtsTriggerFallbackId || ''} trigger_len=${p.lastTtsTriggerTextLength || 0} skip=${p.lastTtsSkipReason || ''}`,
     `queued_at=${p.lastTtsSpeakQueuedAt || 0} queued_utt=${p.lastTtsSpeakQueuedUtteranceId || ''}`,
+    `processing_heartbeat=${!!p.processingHeartbeatActive} processing_count=${p.processingHeartbeatCount || 0} processing_stop=${p.processingHeartbeatStopReason || ''}`,
     `last_speak_at=${p.lastTtsSpeakAt || p.lastDirectTtsAt || 0} ack_at=${p.lastDirectTtsAckAt || 0} ack_type=${p.lastDirectTtsAckRawType || ''} last_error=${p.lastTtsError || p.lastError || ''}`,
     `ack_fallback_at=${p.lastAckTtsFallbackAt || 0} ack_chunks=${p.lastAckTtsFallbackChunks || 0} ack_reason=${p.lastAckTtsFallbackReason || ''}`,
     `ack_suppressed_at=${p.lastAckTtsFallbackSuppressedAt || 0} ack_suppressed_chunks=${p.lastAckTtsFallbackSuppressedChunks || 0} ack_suppressed_reason=${p.lastAckTtsFallbackSuppressedReason || ''}`,
     `ack_pushed=${p.lastAckTtsPushedEmitCount || 0} ack_sender=${p.lastAckTtsSenderPresent}`,
+    `live_push_utt=${p.lastLivePushedTtsUtteranceId || ''} live_push_at=${p.lastLivePushedTtsAt || 0} live_push_source=${p.lastLivePushedTtsSource || ''}`,
     `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
     `playback_at=${p.lastPlaybackStartAt || 0} playback_ms=${p.lastPlaybackDurationMs || 0} playback_utt=${p.lastPlaybackUtteranceId || ''} playback_error=${p.lastPlaybackError || ''}`,
     `audio_state=${p.audioContextState || ''} audio_create=${p.lastAudioContextCreateAt || 0} audio_create_reason=${p.lastAudioContextCreateReason || ''} audio_create_error=${p.lastAudioContextError || ''}`,
     `audio_resume=${p.lastAudioResumeAt || 0} audio_resume_reason=${p.lastAudioResumeReason || ''} audio_resume_error=${p.lastAudioResumeError || ''}`,
+    `stale_socket_event=${p.lastStaleTtsSocketEvent || ''} stale_socket_at=${p.lastStaleTtsSocketEventAt || 0}`,
     `last_ack=${summarizeTtsAckForDebug(ack)}`,
   ];
   return lines.join('\n');
@@ -1113,6 +1184,7 @@ async function runPollLoop(state, contextId, submissionId) {
       globalThis.__voqualizer_page.isSubmitting = false;
       globalThis.__voqualizer_page.lastLogVersion = state.lastLogVersion;
     }
+    stopProcessingHeartbeat(sawResponse ? 'response_complete' : 'poll_idle');
     updateSendButton(state);
     setPageStatus(sawResponse ? 'Response complete' : 'Idle', sawResponse ? 'ready' : 'empty');
   }
@@ -1132,10 +1204,12 @@ async function submitPrompt(state) {
     resetSendIndicatorOnInteraction();
   }
   ensureAudioContext();
+  cancelInflightTts('new_prompt');
   const messageId = generateMessageId();
   tts.livePushSinceSubmit = false;
   tts.lastLivePushAt = 0;
   tts.lastLivePushUtteranceId = '';
+  startProcessingHeartbeat(messageId);
   state.isSubmitting = true;
   state.activeSubmissionId = messageId;
   cx.streamsBySubmitId.set(messageId, { contextId, started: Date.now(), streamId: '' });
@@ -1166,6 +1240,7 @@ async function submitPrompt(state) {
     setPageStatus('Awaiting response…', 'loading');
     await runPollLoop(state, contextId, messageId);
   } catch (error) {
+    stopProcessingHeartbeat('send_failed');
     renderErrorRow(state, `Send failed: ${error?.message || error}`);
     state.isSubmitting = false;
     state.activeSubmissionId = '';
@@ -1605,7 +1680,8 @@ async function speakText(text, { utteranceId } = {}) {
   updateTtsButton();
 }
 
-function cancelInflightTts() {
+function cancelInflightTts(reason = 'cancel') {
+  if (reason !== 'processing_heartbeat') stopProcessingHeartbeat(`cancel:${reason}`);
   if (tts.tracker) tts.tracker.stopAllPlayback();
   if (tts.socket && tts.socket.connected && tts.sessionId) {
     try {
@@ -1888,6 +1964,7 @@ function handleCxStreamStart(payload) {
   cx.lastSeqByStreamId.set(streamId, 0);
   cx.lastEvent = 'voqualizer_cx_stream_start';
   cx.lastEventAt = Date.now();
+  stopProcessingHeartbeat('cx_stream_start');
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.cxLastEvent = cx.lastEvent;
     globalThis.__voqualizer_page.cxLastStreamId = streamId;
@@ -1905,6 +1982,7 @@ function handleCxToken(payload) {
   if (seq && seq <= lastSeq) return;
   if (seq) cx.lastSeqByStreamId.set(streamId, seq);
   const messageId = safeString(data.message_id);
+  stopProcessingHeartbeat('cx_token');
   const bubble = findOrCreateCxBubble(streamId, messageId);
   if (!bubble) return;
   const chat = transcriptElement();
