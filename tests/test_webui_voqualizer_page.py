@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-asr-standalone-context" in js
+    assert "m8-asr-vad-sensitive" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-asr-standalone-context-2026-05-28-32" in html
-    assert "m8-asr-standalone-context-2026-05-28-32" in css
+    assert "m8-asr-vad-sensitive-2026-05-28-33" in html
+    assert "m8-asr-vad-sensitive-2026-05-28-33" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-asr-standalone-context" in js
+    assert "m8-asr-vad-sensitive" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-asr-standalone-context-2026-05-28-32" in html
-    assert "m8-asr-standalone-context-2026-05-28-32" in css
+    assert "m8-asr-vad-sensitive-2026-05-28-33" in html
+    assert "m8-asr-vad-sensitive-2026-05-28-33" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -712,3 +712,15 @@ def test_voqualizer_standalone_suppresses_main_context_polling():
     assert "suppressContextPolling: true" in js
     assert "suppressTts: true" in js
     assert "onAsrFinal: (text) => { void routeStoreAsrFinal(text); }" in js
+
+
+def test_voqualizer_asr_vad_sensitivity_and_debug_ack():
+    ws = read(ROOT / "api" / "ws_voqualizer.py")
+    js = read(JS)
+    assert 'asr_speech_rms", 35.0' in ws
+    assert 'asr_vad_last_rms' in ws
+    assert 'asr_vad_peak_rms' in ws
+    assert 'asr_vad_speech_rms' in ws
+    assert 'asr_vad_buffered_chunks' in ws
+    assert 'vad_rms=' in js
+    assert 'vad_threshold=' in js

@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-asr-standalone-context';
+const PAGE_VERSION = 'm8-asr-vad-sensitive';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -432,7 +432,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-asr-standalone-context-2026-05-28-32'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-asr-vad-sensitive-2026-05-28-33'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -441,6 +441,7 @@ function buildAsrDebugLines() {
     `ack_at=${c.lastAudioAckAt} ack_error=${c.lastAudioAckError}`,
     `ack_event=${ack.event} ack_code=${ack.code} ack_msg=${ack.message}`,
     `ack_emitted=${ack.emitted} ack_queued=${ack.queued}`,
+    `vad_rms=${ack.asr_vad_last_rms} vad_peak=${ack.asr_vad_peak_rms} vad_threshold=${ack.asr_vad_speech_rms} vad_speech=${ack.asr_vad_has_speech} vad_ms=${ack.asr_vad_speech_ms} vad_chunks=${ack.asr_vad_buffered_chunks}`,
     `ack_partial=${JSON.stringify(ack.asr_last_partial_text || '')}`,
     `ack_final=${JSON.stringify(ack.asr_last_final_text || '')}`,
     `store_partial=${JSON.stringify(c.lastAsrPartialText || '')}`,
