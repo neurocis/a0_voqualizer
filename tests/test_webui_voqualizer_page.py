@@ -520,8 +520,8 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-context-burger-2026-05-28-14" in html
-    assert "m8-context-burger-2026-05-28-14" in css
+    assert "m8-burger-circle-2026-05-28-15" in html
+    assert "m8-burger-circle-2026-05-28-15" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
@@ -551,8 +551,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-context-burger-2026-05-28-14" in html
-    assert "m8-context-burger-2026-05-28-14" in css
+    assert "m8-burger-circle-2026-05-28-15" in html
+    assert "m8-burger-circle-2026-05-28-15" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():

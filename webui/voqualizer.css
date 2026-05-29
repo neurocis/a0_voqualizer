@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-context-burger-2026-05-28-14 */
+/* voq-mobile-version: m8-burger-circle-2026-05-28-15 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -189,7 +189,8 @@ body {
 .voq-settings-button,
 .voq-logout-button,
 .voq-fullscreen-button,
-.voq-refresh-button {
+.voq-refresh-button,
+.voq-context-menu-button {
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
