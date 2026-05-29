@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-swap-asr-tts-2026-05-28-9 */
+/* voq-mobile-version: m8-send-success-on-response-2026-05-28-10 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -969,4 +969,15 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .voqualizer-connecting { animation: none; }
   .voqualizer-mic-vu { transition: none; }
+}
+
+.voq-action-button.voq-send-success {
+  opacity: 1 !important;
+  border-color: rgba(34, 197, 94, 0.95);
+  color: rgba(187, 247, 208, 1);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.55);
+}
+.voq-action-button.voq-send-success[disabled] {
+  opacity: 1 !important;
+  cursor: default;
 }

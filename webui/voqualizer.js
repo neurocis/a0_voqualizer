@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-swap-asr-tts';
+const PAGE_VERSION = 'm8-send-success-on-response';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -643,6 +643,10 @@ function updateSendButton(state) {
   } else {
     button.dataset.sendState = sendIndicator.state;
   }
+  // Keep success styling visible even when the button is disabled (e.g. when
+  // the prompt has been cleared after submit) so the user still sees the
+  // green completion cue until they next interact with the prompt.
+  button.classList.toggle('voq-send-success', sendIndicator.state === 'success');
   button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
   button.setAttribute('title', busy ? 'Processing — waiting for assistant response' : sendIndicator.state === 'success' ? 'Response complete' : !hasContext ? 'Select a context before sending' : !hasText ? 'Type a prompt or use ASR' : 'Send prompt');
   if (select) {
@@ -685,7 +689,17 @@ async function runPollLoop(state, contextId, submissionId) {
         if (item.type === 'user') continue;
         if (item.type === 'agent' || item.type === 'response') {
           renderOrUpdateLogBubble(state, item);
-          if (item.type === 'response') sawResponse = true;
+          if (item.type === 'response') {
+            sawResponse = true;
+            // M8: response seen — flip the send indicator to success right
+            // away so the green state appears at completion, independent of
+            // whether log_progress_active has had time to transition to false.
+            if (sendIndicator.wasBusy) {
+              setSendIndicatorState('success');
+              sendIndicator.wasBusy = false;
+            }
+            setPageStatus('Response complete', 'ready');
+          }
         }
       }
       if (typeof snapshot.log_version === 'number') {
