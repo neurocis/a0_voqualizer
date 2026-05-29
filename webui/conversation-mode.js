@@ -187,6 +187,9 @@ export function createVoqualizerStore(options = {}) {
     lastFinalFrameSentAt: 0,
     lastFinalFrameReason: '',
     lastAudioSeqSent: 0,
+    lastAudioFrameDropAt: 0,
+    lastAudioFrameDropReason: '',
+    audioFramesDropped: 0,
     lastAudioAckAt: 0,
     lastAudioAck: null,
     lastAudioAckError: '',
@@ -341,6 +344,9 @@ export function createVoqualizerStore(options = {}) {
         lastFinalFrameSentAt: this.lastFinalFrameSentAt,
         lastFinalFrameReason: this.lastFinalFrameReason,
         lastAudioSeqSent: this.lastAudioSeqSent,
+        lastAudioFrameDropAt: this.lastAudioFrameDropAt,
+        lastAudioFrameDropReason: this.lastAudioFrameDropReason,
+        audioFramesDropped: this.audioFramesDropped,
         lastAudioAckAt: this.lastAudioAckAt,
         lastAudioAck: this.lastAudioAck,
         lastAudioAckError: this.lastAudioAckError,
@@ -742,6 +748,20 @@ export function createVoqualizerStore(options = {}) {
     async _startMic(generation = this.connectionGeneration) {
       if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) return;
       if (this.capturing) return;
+      if (!this._socket || !this.bearerToken || !this.sessionId) {
+        this.lastConnectPhase = 'mic_wait_for_session';
+        this._setReason('mic_wait_for_voqualizer_session');
+        await this._ensureConnected(generation);
+      }
+      if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) return;
+      if (!this._socket || !this.bearerToken || !this.sessionId) {
+        this.lastAudioFrameDropAt = Date.now();
+        this.lastAudioFrameDropReason = 'mic_start_without_session_token';
+        this.lastAudioAckError = 'mic_start_without_session_token';
+        this.state = STATE_ERROR;
+        this._setReason('mic_start_without_session_token', 'mic_init');
+        return;
+      }
       this.lastConnectPhase = 'mic_init';
       this.startTs = Date.now();
       this.seq = 0;
@@ -1135,7 +1155,14 @@ export function createVoqualizerStore(options = {}) {
     },
     _sendAudio(pcm16, seq, tsMs, generation = this.connectionGeneration) {
       if (!this._isGenerationCurrent(generation)) return;
-      if (!this._socket || !this.bearerToken || this.desiredMode === DESIRED_IDLE) return;
+      if (!this._socket || !this.bearerToken || this.desiredMode === DESIRED_IDLE) {
+        this.audioFramesDropped += 1;
+        this.lastAudioFrameDropAt = Date.now();
+        this.lastAudioFrameDropReason = this.desiredMode === DESIRED_IDLE ? 'desired_idle' : (!this._socket ? 'socket_missing' : 'bearer_token_missing');
+        this.lastAudioAckError = this.lastAudioFrameDropReason;
+        this._publishDebug();
+        return;
+      }
       this.seq = ((seq | 0) || (this.seq + 1)) & 0xffff;
       const tsRel = ((tsMs | 0) || (Date.now() - this.startTs)) & 0xffff;
       const payload = audioChunkPayload(this.seq, tsRel, pcm16, { bearer_token: this.bearerToken });
