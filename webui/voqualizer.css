@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-tts-audio-unlock-2026-05-28-44 */
+/* voq-mobile-version: m8-tts-debug-copy-2026-05-28-45 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -1076,17 +1076,20 @@ body {
 }
 
 /* M8: mobile-friendly ASR diagnostic copy button */
-.voq-asr-debug-button {
+.voq-asr-debug-button,
+.voq-tts-debug-button {
   color: rgba(125, 211, 252, 0.92);
 }
-.voq-asr-debug-button[data-copied="true"] {
+.voq-asr-debug-button[data-copied="true"],
+.voq-tts-debug-button[data-copied="true"] {
   border-color: rgba(34, 197, 94, 0.82);
   color: rgba(187, 247, 208, 0.98);
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22), 0 0 18px rgba(34, 197, 94, 0.18);
 }
 
-/* M8: ASR debug clipboard icon is hidden until hamburger long-press toggles it */
-.voq-asr-debug-button[hidden] {
+/* M8: debug clipboard icons are hidden until hamburger double-tap toggles them */
+.voq-asr-debug-button[hidden],
+.voq-tts-debug-button[hidden] {
   display: none !important;
 }
 .voq-context-menu-button[data-debug-visible="true"] {

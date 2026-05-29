@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-tts-audio-unlock" in js
+    assert "m8-tts-debug-copy" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-tts-audio-unlock-2026-05-28-44" in html
-    assert "m8-tts-audio-unlock-2026-05-28-44" in css
+    assert "m8-tts-debug-copy-2026-05-28-45" in html
+    assert "m8-tts-debug-copy-2026-05-28-45" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-tts-audio-unlock" in js
+    assert "m8-tts-debug-copy" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-tts-audio-unlock-2026-05-28-44" in html
-    assert "m8-tts-audio-unlock-2026-05-28-44" in css
+    assert "m8-tts-debug-copy-2026-05-28-45" in html
+    assert "m8-tts-debug-copy-2026-05-28-45" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -790,3 +790,15 @@ def test_voqualizer_tts_audio_unlock_handlers():
         assert token in js, token
     for token in ["resumeAudioContext('speakText')", "ensureAudioContext('playPcmChunk')", "document.addEventListener('pointerdown'", "document.addEventListener('touchstart'", "document.addEventListener('keydown'"]:
         assert token in js, token
+
+
+def test_voqualizer_tts_debug_clipboard_button():
+    html = read(HTML)
+    js = read(JS)
+    css = read(CSS)
+    for token in ['id="voq-tts-debug-button"', 'Copy TTS debug state', 'copy tts debug']:
+        assert token in html, token
+    for token in ['function buildTtsDebugLines', 'function copyTtsDebugLines', '===VOQ_TTS_LINES===', 'lastTtsDebugCopyAt', 'lastDirectTtsAck', 'lastAckTtsFallbackChunks', 'lastPlaybackStartAt', 'lastAudioResumeAt']:
+        assert token in js, token
+    for token in ['.voq-tts-debug-button', '.voq-tts-debug-button[hidden]', 'double tap to show debug buttons']:
+        assert token in (css + js), token

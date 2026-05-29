@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-audio-unlock';
+const PAGE_VERSION = 'm8-tts-debug-copy';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -457,7 +457,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-audio-unlock-2026-05-28-44'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-debug-copy-2026-05-28-45'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -519,25 +519,115 @@ async function copyAsrDebugLines() {
   return text;
 }
 
+function summarizeTtsAckForDebug(ack) {
+  if (!ack || typeof ack !== 'object') return 'null';
+  const summary = {
+    event: ack.event || '',
+    ok: ack.ok,
+    error: ack.error ? (ack.error.message || ack.error.code || String(ack.error)) : '',
+    delivery_fallback: ack.delivery_fallback || '',
+    chunks: ack.chunks,
+    tts_chunks: Array.isArray(ack.tts_chunks) ? ack.tts_chunks.length : ack.tts_chunks,
+    pushed_emit_count: ack.pushed_emit_count,
+    pushed_done_emit_count: ack.pushed_done_emit_count,
+    sender_present: ack.sender_present,
+    has_tts_done: !!ack.tts_done,
+    has_tts_word_plan: !!ack.tts_word_plan,
+    utterance_id: ack.utterance_id || '',
+  };
+  return JSON.stringify(summary);
+}
+
+function buildTtsDebugLines() {
+  const p = globalThis.__voqualizer_page || {};
+  const speaker = document.getElementById('voqualizer-speaker-button');
+  const assets = Array.from(document.querySelectorAll('script[src],link[href]'))
+    .map((element) => element.src || element.href)
+    .filter((url) => /voqualizer|conversation-mode/.test(url));
+  const ack = p.lastDirectTtsAck || null;
+  const lines = [
+    '===VOQ_TTS_LINES===',
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-debug-copy-2026-05-28-45'))}`,
+    `page_version=${p.version}`,
+    `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
+    `button_class=${JSON.stringify(speaker?.className || '')}`,
+    `socket_ready=${p.ttsReady} session=${p.ttsSessionId || ''} context=${p.selectedContextId || ''}`,
+    `last_speak_at=${p.lastTtsSpeakAt || p.lastDirectTtsAt || 0} last_error=${p.lastTtsError || p.lastError || ''}`,
+    `ack_fallback_at=${p.lastAckTtsFallbackAt || 0} ack_chunks=${p.lastAckTtsFallbackChunks || 0} ack_reason=${p.lastAckTtsFallbackReason || ''}`,
+    `ack_pushed=${p.lastAckTtsPushedEmitCount || 0} ack_sender=${p.lastAckTtsSenderPresent}`,
+    `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
+    `playback_at=${p.lastPlaybackStartAt || 0} playback_ms=${p.lastPlaybackDurationMs || 0} playback_utt=${p.lastPlaybackUtteranceId || ''} playback_error=${p.lastPlaybackError || ''}`,
+    `audio_state=${p.audioContextState || ''} audio_create=${p.lastAudioContextCreateAt || 0} audio_create_reason=${p.lastAudioContextCreateReason || ''} audio_create_error=${p.lastAudioContextError || ''}`,
+    `audio_resume=${p.lastAudioResumeAt || 0} audio_resume_reason=${p.lastAudioResumeReason || ''} audio_resume_error=${p.lastAudioResumeError || ''}`,
+    `last_ack=${summarizeTtsAckForDebug(ack)}`,
+  ];
+  return lines.join('\n');
+}
+
+async function copyTtsDebugLines() {
+  const text = buildTtsDebugLines();
+  const button = document.getElementById('voq-tts-debug-button');
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    }
+  } catch (_error) {}
+  if (!copied) {
+    try {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', 'readonly');
+      area.style.position = 'fixed';
+      area.style.left = '-9999px';
+      document.body.appendChild(area);
+      area.select();
+      copied = document.execCommand('copy');
+      area.remove();
+    } catch (_error) {}
+  }
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastTtsDebugCopyAt = Date.now();
+    globalThis.__voqualizer_page.lastTtsDebugCopyOk = copied;
+    globalThis.__voqualizer_page.lastTtsDebugLines = text;
+  }
+  if (button) {
+    button.dataset.copied = copied ? 'true' : 'false';
+    button.setAttribute('title', copied ? 'TTS debug copied' : 'TTS debug ready — copy failed, long-press/select from console if needed');
+    setTimeout(() => {
+      button.dataset.copied = 'false';
+      button.setAttribute('title', 'Copy TTS debug state');
+    }, 1800);
+  }
+  setPageStatus(copied ? 'TTS debug copied' : 'TTS debug captured', copied ? 'ready' : 'warn');
+  return text;
+}
+
 
 function setAsrDebugVisible(visible, reason = 'manual') {
   const button = document.getElementById('voq-asr-debug-button');
+  const ttsButton = document.getElementById('voq-tts-debug-button');
   const menuButton = document.getElementById('voq-context-menu-button');
   const isVisible = !!visible;
   if (button) {
     button.hidden = !isVisible;
     button.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
   }
+  if (ttsButton) {
+    ttsButton.hidden = !isVisible;
+    ttsButton.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+  }
   if (menuButton) {
     menuButton.dataset.debugVisible = isVisible ? 'true' : 'false';
-    menuButton.setAttribute('title', isVisible ? 'Select Voqualizer context — double tap to hide debug button' : 'Select Voqualizer context — double tap to show debug button');
+    menuButton.setAttribute('title', isVisible ? 'Select Voqualizer context — double tap to hide debug buttons' : 'Select Voqualizer context — double tap to show debug buttons');
   }
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.asrDebugVisible = isVisible;
     globalThis.__voqualizer_page.lastAsrDebugToggleAt = Date.now();
     globalThis.__voqualizer_page.lastAsrDebugToggleReason = reason;
   }
-  setPageStatus(isVisible ? 'ASR debug button shown' : 'ASR debug button hidden', 'ready');
+  setPageStatus(isVisible ? 'Debug buttons shown' : 'Debug buttons hidden', 'ready');
 }
 
 function toggleAsrDebugVisible(reason = 'hamburger_double_tap') {
@@ -547,8 +637,9 @@ function toggleAsrDebugVisible(reason = 'hamburger_double_tap') {
 
 function bindAsrDebugButton() {
   const button = document.getElementById('voq-asr-debug-button');
-  if (!button) return;
-  button.addEventListener('click', () => { void copyAsrDebugLines(); });
+  const ttsButton = document.getElementById('voq-tts-debug-button');
+  if (button) button.addEventListener('click', () => { void copyAsrDebugLines(); });
+  if (ttsButton) ttsButton.addEventListener('click', () => { void copyTtsDebugLines(); });
 }
 
 function bindFullscreenButton() {
@@ -1327,6 +1418,10 @@ async function initVoqSession(contextId) {
   tts.bearerToken = ready.bearer_token || '';
   tts.contextId = contextId;
   tts.ready = true;
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.ttsReady = true;
+    globalThis.__voqualizer_page.ttsSessionId = tts.sessionId;
+  }
   cx.enabledByCapability = !!(ready.capabilities && ready.capabilities.cx_stream);
   const wordPlanCap = !!(ready.capabilities && ready.capabilities.tts_word_plan);
   if (globalThis.__voqualizer_page) {
@@ -1354,6 +1449,12 @@ async function speakText(text, { utteranceId } = {}) {
   const id = utteranceId || `voq-utt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   tts.lastSpeakAt = Date.now();
   tts.lastError = '';
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastTtsSpeakAt = tts.lastSpeakAt;
+    globalThis.__voqualizer_page.lastDirectTtsAt = tts.lastSpeakAt;
+    globalThis.__voqualizer_page.lastDirectTtsTextLength = trimmed.length;
+    globalThis.__voqualizer_page.lastTtsError = '';
+  }
   try {
     tts.socket.emit(VOQUALIZER_HANDLER, {
       event: 'voqualizer_user_text',
