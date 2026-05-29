@@ -649,7 +649,7 @@ def test_voqualizer_context_burger_menu_present():
     css = read(CSS)
     for token in ['id="voq-context-menu-button"', 'id="voq-context-menu"', 'class="voq-context-menu-wrap"', 'hidden aria-hidden="true"']:
         assert token in html, token
-    for token in ['function renderContextMenu', 'function openContextMenu', 'function closeContextMenu', 'function bindContextMenuButton', 'data-active']:
+    for token in ['function renderContextMenu', 'function openContextMenu', 'function closeContextMenu', 'function bindContextMenuButton', 'li.dataset.active']:
         assert token in js, token
     for token in ['.voq-context-menu-wrap', '.voq-context-menu', '.voq-context-menu-button[aria-expanded="true"]']:
         assert token in css, token
