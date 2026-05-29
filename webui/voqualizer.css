@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-brand-left-2026-05-28-21 */
+/* voq-mobile-version: m8-icons-bigger-2026-05-28-22 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -111,7 +111,7 @@ body {
 }
 
 .voq-topbar {
-  min-height: 60px;
+  min-height: 96px;
   border-radius: var(--voq-radius);
   display: flex;
   align-items: center;
@@ -192,8 +192,8 @@ body {
 .voq-refresh-button,
 .voq-context-menu-button {
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
+  width: 80px;
+  height: 80px;
   border-radius: 999px;
   color: var(--voq-muted);
   text-decoration: none;
@@ -380,7 +380,7 @@ body {
   font-family: "Material Symbols Outlined";
   font-weight: normal;
   font-style: normal;
-  font-size: 26px;
+  font-size: 47px;
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
@@ -491,7 +491,7 @@ body {
     gap: 8px;
   }
   .voq-topbar {
-    min-height: 52px;
+    min-height: 84px;
     padding: 8px 8px 8px 12px;
     gap: 8px;
     border-radius: 14px;
@@ -509,7 +509,9 @@ body {
   .voq-settings-button,
   .voq-logout-button,
   .voq-fullscreen-button,
-  .voq-refresh-button { width: 44px; height: 44px; }
+  .voq-fullscreen-button,
+  .voq-context-menu-button,
+  .voq-logout-button { width: 72px; height: 72px; }
   .voq-status { font-size: 1rem; line-height: 1.35; }
   .voq-chat { border-radius: 14px; padding: 12px; font-size: 1.05rem; line-height: 1.55; }
   .voq-empty-state h1 { font-size: clamp(2rem, 9vw, 3rem); letter-spacing: -0.055em; }
@@ -1061,8 +1063,8 @@ body {
   letter-spacing: 0.02em;
 }
 .voq-brand-logo {
-  width: 28px;
-  height: 28px;
+  width: 50px;
+  height: 50px;
   border-radius: 6px;
   object-fit: cover;
   display: block;
@@ -1070,5 +1072,5 @@ body {
 }
 @media (max-width: 480px) {
   .voq-brand-row { font-size: 0.95rem; gap: 6px; }
-  .voq-brand-logo { width: 24px; height: 24px; }
+  .voq-brand-logo { width: 43px; height: 43px; }
 }
