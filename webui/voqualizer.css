@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-brand-right-2026-05-28-19 */
+/* voq-mobile-version: m8-brand-line-2026-05-28-20 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -756,19 +756,20 @@ body {
   }
 
   .voq-topbar {
-    display: grid;
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-
-  .voq-context-wrap,
-  .voq-topbar-actions,
-  .voq-actions {
-    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
   }
 
   .voq-topbar-actions {
     justify-content: flex-end;
+    flex: 0 0 auto;
+  }
+
+  .voq-actions {
+    width: 100%;
   }
 
   .voq-composer {
@@ -1068,6 +1069,6 @@ body {
   flex: 0 0 auto;
 }
 @media (max-width: 480px) {
-  .voq-brand-text { display: none; }
-  .voq-brand-logo { width: 26px; height: 26px; }
+  .voq-brand-row { font-size: 0.95rem; gap: 6px; }
+  .voq-brand-logo { width: 24px; height: 24px; }
 }
