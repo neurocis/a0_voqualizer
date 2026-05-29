@@ -605,7 +605,7 @@ export function createVoqualizerStore(options = {}) {
               input_codec: INPUT_CODEC,
               output_codec: OUTPUT_CODEC,
               tts: { enabled: this.isTtsEnabled() },
-              asr_submit_mode: 'context_bridge',
+              asr_submit_mode: this._onAsrFinal ? 'frontend_prompt' : 'context_bridge',
             }, (response) => {
               if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) { finish(); return; }
               const data = this._unwrapPayload(response);
@@ -1195,6 +1195,14 @@ export function createVoqualizerStore(options = {}) {
         const mirrored = this._mirrorAsrTextToPrompt(text, 'final', 'asr_final_event');
         if (mirrored) {
           this._clearAsrPromptMirror('asr_final_event_blank_populate');
+        }
+        if (this._onAsrFinal) {
+          try {
+            this._onAsrFinal(text, data);
+          } catch (err) {
+            this.lastError = err && err.message ? err.message : String(err);
+            this._setReason('asr_final_callback_error');
+          }
         }
       }
       this._publishDebug();
