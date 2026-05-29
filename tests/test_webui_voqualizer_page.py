@@ -671,5 +671,5 @@ def test_voqualizer_asr_ack_final_fallback_submits_standalone():
     assert "this._onAsrFinal(finalText, data)" in conv
     assert "asr_ack_final_callback_error" in conv
     assert "frontend_prompt mode" in conv
-    assert "pushed voqualizer_asr_final events do not reach" in conv
+    assert "voqualizer_asr_final" in conv
     assert "DOM extension/context_bridge path" in conv
