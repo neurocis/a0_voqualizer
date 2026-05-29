@@ -239,9 +239,11 @@ export function createVoqualizerStore(options = {}) {
       this._setReason('init');
       this.contextId = normalizeContextCandidate(this.contextId) || currentContextId();
       this.ttsEnabledByContext[this.contextId] = readTtsEnabled(this.contextId);
-      this._contextHandler = () => this._observeContextChange(currentContextId(), 'event');
-      try { globalThis.addEventListener && globalThis.addEventListener('a0:context-changed', this._contextHandler); } catch (_e) {}
-      this._ctxPoll = setInterval(() => this._observeContextChange(currentContextId(), 'poll'), 500);
+      if (!this._suppressContextPolling) {
+        this._contextHandler = () => this._observeContextChange(currentContextId(), 'event');
+        try { globalThis.addEventListener && globalThis.addEventListener('a0:context-changed', this._contextHandler); } catch (_e) {}
+        this._ctxPoll = setInterval(() => this._observeContextChange(currentContextId(), 'poll'), 500);
+      }
       this._publishDebug();
       if (this.isTtsEnabled()) this._ensurePassiveTtsSession('init_tts_passive_connect');
       return this;
