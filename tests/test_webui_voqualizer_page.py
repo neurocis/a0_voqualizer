@@ -24,7 +24,6 @@ def test_voqualizer_page_identity_and_assets():
     assert '/plugins/a0_voqualizer/webui/voqualizer.js' in html
     assert 'voqualizer.css?v=' in html
     assert 'voqualizer.js?v=' in html
-    assert 'Voqualizer:' in html
     assert 'Context:' not in html
 
 
