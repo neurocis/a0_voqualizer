@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-topbar-fullscreen-refresh-2026-05-28-13 */
+/* voq-mobile-version: m8-context-burger-2026-05-28-14 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -997,4 +997,52 @@ body {
   opacity: 1 !important;
   animation: none !important;
   cursor: default;
+}
+
+/* M8: context burger menu */
+.voq-brand-line {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 1.1rem;
+  color: var(--voq-text);
+  padding: 0 4px;
+  align-self: center;
+}
+.voq-context-menu-wrap { position: relative; display: inline-flex; }
+.voq-context-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  max-width: min(86vw, 360px);
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: rgba(8, 12, 22, 0.98);
+  border: 1px solid var(--voq-border, rgba(148, 163, 184, 0.32));
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+}
+.voq-context-menu[hidden] { display: none; }
+.voq-context-menu li {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--voq-text);
+}
+.voq-context-menu li:hover,
+.voq-context-menu li[data-active="true"] {
+  background: rgba(139, 92, 246, 0.18);
+}
+.voq-context-menu li[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+.voq-context-menu-button[aria-expanded="true"] {
+  border-color: rgba(139, 92, 246, 0.7);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
 }

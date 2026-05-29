@@ -82,7 +82,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-topbar-fullscreen-refresh" in js
+    assert "m8-context-burger" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -520,12 +520,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-topbar-fullscreen-refresh-2026-05-28-13" in html
-    assert "m8-topbar-fullscreen-refresh-2026-05-28-13" in css
+    assert "m8-context-burger-2026-05-28-14" in html
+    assert "m8-context-burger-2026-05-28-14" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-topbar-fullscreen-refresh" in js
+    assert "m8-context-burger" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -551,8 +551,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-topbar-fullscreen-refresh-2026-05-28-13" in html
-    assert "m8-topbar-fullscreen-refresh-2026-05-28-13" in css
+    assert "m8-context-burger-2026-05-28-14" in html
+    assert "m8-context-burger-2026-05-28-14" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -640,4 +640,16 @@ def test_voqualizer_topbar_has_fullscreen_and_refresh_buttons():
             continue
         assert token in js, token
     for token in ['.voq-fullscreen-button', '.voq-refresh-button']:
+        assert token in css, token
+
+
+def test_voqualizer_context_burger_menu_present():
+    html = read(HTML)
+    js = read(JS)
+    css = read(CSS)
+    for token in ['id="voq-context-menu-button"', 'id="voq-context-menu"', 'class="voq-context-menu-wrap"', 'hidden aria-hidden="true"']:
+        assert token in html, token
+    for token in ['function renderContextMenu', 'function openContextMenu', 'function closeContextMenu', 'function bindContextMenuButton', 'data-active']:
+        assert token in js, token
+    for token in ['.voq-context-menu-wrap', '.voq-context-menu', '.voq-context-menu-button[aria-expanded="true"]']:
         assert token in css, token

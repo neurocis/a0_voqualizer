@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-topbar-fullscreen-refresh';
+const PAGE_VERSION = 'm8-context-burger';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -472,6 +472,68 @@ function bindRefreshButton(state) {
     }
   });
 }
+
+function renderContextMenu(contexts, selectedContextId) {
+  const menu = document.getElementById('voq-context-menu');
+  if (!menu) return;
+  menu.innerHTML = '';
+  if (!contexts || contexts.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = 'No contexts available';
+    li.setAttribute('aria-disabled', 'true');
+    menu.appendChild(li);
+    return;
+  }
+  for (const ctx of contexts) {
+    const li = document.createElement('li');
+    li.textContent = ctx.label || ctx.name || ctx.id;
+    li.setAttribute('role', 'option');
+    li.dataset.contextId = ctx.id;
+    li.dataset.active = ctx.id === selectedContextId ? 'true' : 'false';
+    li.setAttribute('aria-selected', ctx.id === selectedContextId ? 'true' : 'false');
+    li.tabIndex = 0;
+    const handle = () => {
+      const sel = document.getElementById('voq-context-select');
+      if (sel) {
+        sel.value = ctx.id;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      closeContextMenu();
+    };
+    li.addEventListener('click', handle);
+    li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); handle(); } });
+    menu.appendChild(li);
+  }
+}
+function openContextMenu() {
+  const menu = document.getElementById('voq-context-menu');
+  const btn = document.getElementById('voq-context-menu-button');
+  if (!menu || !btn) return;
+  menu.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+}
+function closeContextMenu() {
+  const menu = document.getElementById('voq-context-menu');
+  const btn = document.getElementById('voq-context-menu-button');
+  if (!menu || !btn) return;
+  menu.hidden = true;
+  btn.setAttribute('aria-expanded', 'false');
+}
+function bindContextMenuButton() {
+  const btn = document.getElementById('voq-context-menu-button');
+  const menu = document.getElementById('voq-context-menu');
+  if (!btn || !menu) return;
+  btn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    if (menu.hidden) openContextMenu(); else closeContextMenu();
+  });
+  document.addEventListener('click', (ev) => {
+    if (menu.hidden) return;
+    if (ev.target === btn || btn.contains(ev.target) || menu.contains(ev.target)) return;
+    closeContextMenu();
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeContextMenu(); });
+}
 function bindTranscriptControls() {
   const chat = transcriptElement();
   const button = document.getElementById('voq-jump-latest');
@@ -894,6 +956,7 @@ async function loadContextPicker(state, select) {
     state.lastLogVersion = 0;
     tts.contextId = selectedContextId;
     if (selectedContextId) void preloadLastMonologueResult(state, selectedContextId);
+    renderContextMenu(contexts, selectedContextId);
     setPageStatus(contexts.length ? `Selected ${selectedContextId}` : 'No contexts found', contexts.length ? 'ready' : 'empty');
     updateSendButton(state);
     return contexts;
@@ -925,6 +988,8 @@ function bindContextPicker(state, select) {
       for (const ctx of contexts) ctx.active = ctx.id === selectedContextId;
     }
     handleContextChange(selectedContextId);
+    const page = globalThis.__voqualizer_page;
+    if (page && Array.isArray(page.contexts)) renderContextMenu(page.contexts, selectedContextId);
     const chat = transcriptElement();
     if (chat) chat.innerHTML = '<div class="voq-empty-state">Loading latest monologue result…</div>';
     if (state.transcriptIds) state.transcriptIds.clear();
@@ -1974,6 +2039,7 @@ function initVoqualizerPage() {
   bindTranscriptControls();
   bindFullscreenButton();
   bindRefreshButton(state);
+  bindContextMenuButton();
   updateActionsWrapped();
   if (typeof globalThis.ResizeObserver === 'function') {
     try {
