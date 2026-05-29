@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-header-no-ctxid';
+const PAGE_VERSION = 'm8-tts-audio-unlock';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -457,7 +457,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-header-no-ctxid-2026-05-28-43'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-audio-unlock-2026-05-28-44'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -1178,17 +1178,54 @@ function handleContextChange(newContextId) {
   tts.contextId = newContextId;
 }
 
-function ensureAudioContext() {
+function ensureAudioContext(reason = 'ensure') {
   if (!tts.audioContext) {
     try {
       const Ctx = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (Ctx) tts.audioContext = new Ctx();
-    } catch (_err) {}
+      if (globalThis.__voqualizer_page) {
+        globalThis.__voqualizer_page.lastAudioContextCreateAt = Date.now();
+        globalThis.__voqualizer_page.lastAudioContextCreateReason = reason;
+      }
+    } catch (error) {
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastAudioContextError = error?.message || String(error);
+    }
   }
-  if (tts.audioContext && tts.audioContext.state === 'suspended') {
-    try { tts.audioContext.resume(); } catch (_err) {}
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.audioContextState = tts.audioContext ? tts.audioContext.state : '';
   }
   return tts.audioContext;
+}
+
+async function resumeAudioContext(reason = 'resume') {
+  const ctx = ensureAudioContext(reason);
+  if (!ctx) return null;
+  try {
+    if (ctx.state === 'suspended') await ctx.resume();
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastAudioResumeAt = Date.now();
+      globalThis.__voqualizer_page.lastAudioResumeReason = reason;
+      globalThis.__voqualizer_page.lastAudioResumeError = '';
+      globalThis.__voqualizer_page.audioContextState = ctx.state;
+    }
+  } catch (error) {
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastAudioResumeAt = Date.now();
+      globalThis.__voqualizer_page.lastAudioResumeReason = reason;
+      globalThis.__voqualizer_page.lastAudioResumeError = error?.message || String(error);
+      globalThis.__voqualizer_page.audioContextState = ctx.state;
+    }
+  }
+  return ctx;
+}
+
+function installTtsAudioUnlockHandlers() {
+  if (globalThis.__voqualizerTtsAudioUnlockInstalled) return;
+  globalThis.__voqualizerTtsAudioUnlockInstalled = true;
+  const unlock = (reason) => { void resumeAudioContext(reason); };
+  document.addEventListener('pointerdown', () => unlock('pointerdown'), { passive: true, capture: true });
+  document.addEventListener('touchstart', () => unlock('touchstart'), { passive: true, capture: true });
+  document.addEventListener('keydown', () => unlock('keydown'), { passive: true, capture: true });
 }
 
 async function loadSocketIo() {
@@ -1306,7 +1343,7 @@ async function speakText(text, { utteranceId } = {}) {
   if (!tts.enabled) return;
   const contextId = tts.contextId || (globalThis.__voqualizer_page?.selectedContextId || '');
   if (!contextId) return;
-  ensureAudioContext();
+  await resumeAudioContext('speakText');
   try {
     await initVoqSession(contextId);
   } catch (error) {
@@ -1443,7 +1480,7 @@ function handleTtsAckFallback(ack, fallbackUtteranceId = '') {
 }
 
 function playPcmChunk(bytes, sampleRate, utteranceId) {
-  const ctx = ensureAudioContext();
+  const ctx = ensureAudioContext('playPcmChunk');
   if (!ctx) return;
   const aligned = alignPcm16Bytes(bytes, tts.pcm16CarryMap, utteranceId);
   if (!aligned.byteLength) return;
@@ -2200,6 +2237,7 @@ function initVoqualizerPage() {
   // M8: replaces former bindTtsButton() + bindAsrButton() with the
   // createVoqualizerStore()-driven mic + speaker glue so the standalone page
   // mirrors the in-DOM voqualizer-buttons.html behavior exactly.
+  installTtsAudioUnlockHandlers();
   bindVoqualizerButtons();
   bindTranscriptControls();
   bindFullscreenButton();
