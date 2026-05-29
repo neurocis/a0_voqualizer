@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-preload-warm-voq';
+const PAGE_VERSION = 'm8-send-icon-circle';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -47,7 +47,6 @@ const ASR_SUBMIT_MODE = 'frontend_prompt';
 // Uses the shared voqualizer-mic-processor AudioWorklet from voqualizer-audio.js
 const BARGE_IN_LEVEL_THRESHOLD = 0.05;
 const POLL_INTERVAL_MS = 700;
-const POLL_HARD_TIMEOUT_MS = 120000;
 const PRELOAD_MONOLOGUE_LOG_FROM = 0;
 
 const tts = {
@@ -649,7 +648,6 @@ async function pollOnce(contextId, logFrom) {
 }
 
 async function runPollLoop(state, contextId, submissionId) {
-  const started = Date.now();
   let sawResponse = false;
   while (state.activeSubmissionId === submissionId) {
     let snapshot;
@@ -676,10 +674,6 @@ async function runPollLoop(state, contextId, submissionId) {
         break;
       }
       if (sawResponse && snapshot.log_progress_active === false) break;
-    }
-    if (Date.now() - started > POLL_HARD_TIMEOUT_MS) {
-      renderErrorRow(state, 'Agent did not respond within the timeout window.');
-      break;
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
