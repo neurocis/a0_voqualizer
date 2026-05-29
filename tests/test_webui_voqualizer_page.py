@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-debug-double-tap" in js
+    assert "m8-header-context-name" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-debug-double-tap-2026-05-28-36" in html
-    assert "m8-debug-double-tap-2026-05-28-36" in css
+    assert "m8-header-context-name-2026-05-28-37" in html
+    assert "m8-header-context-name-2026-05-28-37" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-debug-double-tap" in js
+    assert "m8-header-context-name" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-debug-double-tap-2026-05-28-36" in html
-    assert "m8-debug-double-tap-2026-05-28-36" in css
+    assert "m8-header-context-name-2026-05-28-37" in html
+    assert "m8-header-context-name-2026-05-28-37" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -751,3 +751,13 @@ def test_voqualizer_asr_debug_double_tap_toggle():
         assert token in js, token
     assert 'hamburger_long_press' not in js
     assert 'longPressTimer' not in js
+
+
+def test_voqualizer_header_uses_context_friendly_name():
+    html = read(HTML)
+    js = read(JS)
+    assert 'id="voq-header-context-name"' in html
+    for token in ['function contextLabelForId', 'function updateHeaderContextName', 'headerContextName', 'lastHeaderContextNameAt']:
+        assert token in js, token
+    assert "ctx.label || ctx.name || ctx.id" in js
+    assert 'updateHeaderContextName(selectedContextId)' in js

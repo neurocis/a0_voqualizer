@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-debug-double-tap';
+const PAGE_VERSION = 'm8-header-context-name';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -300,6 +300,31 @@ function setSelectPlaceholder(select, label, { disabled = true } = {}) {
   select.disabled = disabled;
 }
 
+
+function contextLabelForId(contextId) {
+  const page = globalThis.__voqualizer_page;
+  const contexts = Array.isArray(page?.contexts) ? page.contexts : [];
+  const match = contexts.find((ctx) => ctx.id === contextId);
+  if (match) return match.label || match.name || match.id || 'Voqualizer';
+  const select = document.getElementById('voq-context-select');
+  const option = select ? [...select.options].find((opt) => opt.value === contextId) : null;
+  return option?.textContent || contextId || 'Voqualizer';
+}
+
+function updateHeaderContextName(contextId = '') {
+  const label = document.getElementById('voq-header-context-name');
+  if (!label) return;
+  const page = globalThis.__voqualizer_page;
+  const selected = contextId || page?.selectedContextId || document.getElementById('voq-context-select')?.value || '';
+  const friendlyName = contextLabelForId(selected);
+  label.textContent = friendlyName || 'Voqualizer';
+  label.setAttribute('title', friendlyName || 'Voqualizer');
+  if (page) {
+    page.headerContextName = friendlyName || 'Voqualizer';
+    page.lastHeaderContextNameAt = Date.now();
+  }
+}
+
 function renderContexts(select, contexts, selectedContextId) {
   if (!select) return '';
   select.innerHTML = '';
@@ -432,7 +457,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-debug-double-tap-2026-05-28-36'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-header-context-name-2026-05-28-37'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -1092,6 +1117,7 @@ async function loadContextPicker(state, select) {
     tts.contextId = selectedContextId;
     if (selectedContextId) void preloadLastMonologueResult(state, selectedContextId);
     renderContextMenu(contexts, selectedContextId);
+    updateHeaderContextName(selectedContextId);
     setPageStatus(contexts.length ? `Selected ${selectedContextId}` : 'No contexts found', contexts.length ? 'ready' : 'empty');
     updateSendButton(state);
     return contexts;
@@ -1103,6 +1129,7 @@ async function loadContextPicker(state, select) {
     page.contextsLoading = false;
     page.contextError = message;
     page.contextCount = 0;
+    updateHeaderContextName('');
     setPageStatus('Voqualizer backend unavailable or plugin disabled.', 'error');
     updateSendButton(state);
     return [];
@@ -1125,6 +1152,7 @@ function bindContextPicker(state, select) {
     handleContextChange(selectedContextId);
     const page = globalThis.__voqualizer_page;
     if (page && Array.isArray(page.contexts)) renderContextMenu(page.contexts, selectedContextId);
+    updateHeaderContextName(selectedContextId);
     const chat = transcriptElement();
     if (chat) chat.innerHTML = '<div class="voq-empty-state">Loading latest monologue result…</div>';
     if (state.transcriptIds) state.transcriptIds.clear();
@@ -2084,6 +2112,8 @@ function initVoqualizerPage() {
     ttsEnabledStorageKey: TTS_ENABLED_STORAGE_KEY,
     contexts: [],
     selectedContextId: '',
+    headerContextName: 'Voqualizer',
+    lastHeaderContextNameAt: 0,
     contextsLoading: false,
     contextError: '',
     contextCount: 0,
