@@ -82,7 +82,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-fast-submit-feedback" in js
+    assert "m8-preload-warm-voq" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -520,15 +520,37 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-fast-submit-feedback-2026-05-28-5" in html
-    assert "m8-fast-submit-feedback-2026-05-28-5" in css
+    assert "m8-preload-warm-voq-2026-05-28-6" in html
+    assert "m8-preload-warm-voq-2026-05-28-6" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-fast-submit-feedback" in js
+    assert "m8-preload-warm-voq" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
-    assert "const voqInitPromise = initVoqSession(contextId).catch" in js
+    assert "const voqInitPromise = (warmVoqSessionForContext(contextId, 'submit')" in js
     assert "renderUserBubble(state, { id: messageId, text });" in js
-    assert js.index("renderUserBubble(state, { id: messageId, text });") < js.index("const voqInitPromise = initVoqSession(contextId).catch")
+    assert js.index("renderUserBubble(state, { id: messageId, text });") < js.index("const voqInitPromise = (warmVoqSessionForContext(contextId, 'submit')")
+
+def test_voqualizer_preload_warms_realtime_tts_session():
+    js = read(JS)
+    html = read(HTML)
+    css = read(CSS)
+    for token in [
+        "m8-preload-warm-voq",
+        "function warmVoqSessionForContext",
+        "warmVoqSessionForContext(contextId, 'monologue_preload')",
+        "warmVoqSessionForContext(contextId, 'submit')",
+        "lastVoqWarmupAt",
+        "lastVoqWarmupReadyAt",
+        "lastVoqWarmupContextId",
+        "lastVoqWarmupReason",
+        "lastVoqWarmupSessionId",
+        "lastVoqWarmupReady",
+        "lastVoqWarmupError",
+        "removes the cold-start cost",
+    ]:
+        assert token in js, token
+    assert "m8-preload-warm-voq-2026-05-28-6" in html
+    assert "m8-preload-warm-voq-2026-05-28-6" in css

@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-fast-submit-feedback';
+const PAGE_VERSION = 'm8-preload-warm-voq';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -500,6 +500,33 @@ function renderPreloadedResponseBubble(state, item) {
   scrollTranscriptToBottom();
 }
 
+
+function warmVoqSessionForContext(contextId, reason = 'preload') {
+  const page = globalThis.__voqualizer_page;
+  if (!contextId) return null;
+  if (page) {
+    page.lastVoqWarmupAt = Date.now();
+    page.lastVoqWarmupContextId = contextId;
+    page.lastVoqWarmupReason = reason;
+    page.lastVoqWarmupError = '';
+  }
+  const promise = initVoqSession(contextId).then((result) => {
+    if (page) {
+      page.lastVoqWarmupReadyAt = Date.now();
+      page.lastVoqWarmupSessionId = tts.sessionId || result?.sessionId || '';
+      page.lastVoqWarmupReady = true;
+    }
+    return result;
+  }).catch((error) => {
+    if (page) {
+      page.lastVoqWarmupReady = false;
+      page.lastVoqWarmupError = error?.message || String(error);
+    }
+    return null;
+  });
+  return promise;
+}
+
 async function preloadLastMonologueResult(state, contextId) {
   const page = globalThis.__voqualizer_page;
   if (!state || !contextId) return;
@@ -511,6 +538,10 @@ async function preloadLastMonologueResult(state, contextId) {
     page.lastMonologuePreloadFound = false;
     page.lastMonologuePreloadError = '';
   }
+  // Warm the optional realtime/TTS Socket.IO session while the previous
+  // monologue result is being fetched. This removes the cold-start cost from
+  // the next prompt without blocking the transcript preload.
+  void warmVoqSessionForContext(contextId, 'monologue_preload');
   try {
     const snapshot = await pollOnce(contextId, PRELOAD_MONOLOGUE_LOG_FROM);
     if (state.lastPreloadRequestId !== requestId) return;
@@ -695,7 +726,7 @@ async function submitPrompt(state) {
   // Socket.IO load/connect/init can take a noticeable moment on mobile; the
   // typed prompt submit path is authoritative, so show the echo immediately
   // and attach realtime cx/TTS in parallel when available.
-  const voqInitPromise = initVoqSession(contextId).catch((err) => {
+  const voqInitPromise = (warmVoqSessionForContext(contextId, 'submit') || Promise.resolve(null)).catch((err) => {
     if (globalThis.__voqualizer_page) {
       globalThis.__voqualizer_page.lastSubmitVoqInitError = err?.message || String(err);
     }
@@ -1772,6 +1803,13 @@ function initVoqualizerPage() {
     lastMonologuePreloadLogId: '',
     lastMonologuePreloadTextLength: 0,
     lastMonologuePreloadError: '',
+    lastVoqWarmupAt: 0,
+    lastVoqWarmupReadyAt: 0,
+    lastVoqWarmupContextId: '',
+    lastVoqWarmupReason: '',
+    lastVoqWarmupSessionId: '',
+    lastVoqWarmupReady: false,
+    lastVoqWarmupError: '',
     ttsEnabled: tts.enabled,
     sessionId: '',
     lastTtsAt: 0,
