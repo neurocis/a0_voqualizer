@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm7-word-highlight';
+const PAGE_VERSION = 'm8-last-monologue-preload';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -48,6 +48,7 @@ const ASR_SUBMIT_MODE = 'frontend_prompt';
 const BARGE_IN_LEVEL_THRESHOLD = 0.05;
 const POLL_INTERVAL_MS = 700;
 const POLL_HARD_TIMEOUT_MS = 120000;
+const PRELOAD_MONOLOGUE_LOG_FROM = 0;
 
 const tts = {
   socket: null,
@@ -476,6 +477,74 @@ function renderOrUpdateLogBubble(state, item) {
   }
 }
 
+
+function renderPreloadedResponseBubble(state, item) {
+  const chat = transcriptElement();
+  if (!chat || !item) return;
+  chat.innerHTML = '';
+  const key = `preload-${item.id || 'last-response'}`;
+  const bubble = createBubble({
+    id: key,
+    role: 'assistant',
+    content: item.content ?? '',
+    kind: item.type || 'response',
+  });
+  bubble.dataset.final = 'true';
+  bubble.dataset.preloaded = 'true';
+  chat.appendChild(bubble);
+  if (state?.transcriptIds) {
+    state.transcriptIds.clear();
+    state.transcriptIds.set(key, bubble);
+    if (item.id) state.transcriptIds.set(`log-${item.id}`, bubble);
+  }
+  scrollTranscriptToBottom();
+}
+
+async function preloadLastMonologueResult(state, contextId) {
+  const page = globalThis.__voqualizer_page;
+  if (!state || !contextId) return;
+  const requestId = generateMessageId();
+  state.lastPreloadRequestId = requestId;
+  if (page) {
+    page.lastMonologuePreloadAt = Date.now();
+    page.lastMonologuePreloadContextId = contextId;
+    page.lastMonologuePreloadFound = false;
+    page.lastMonologuePreloadError = '';
+  }
+  try {
+    const snapshot = await pollOnce(contextId, PRELOAD_MONOLOGUE_LOG_FROM);
+    if (state.lastPreloadRequestId !== requestId) return;
+    const logs = Array.isArray(snapshot?.logs) ? snapshot.logs : [];
+    const lastResponse = [...logs].reverse().find((item) => item && item.type === 'response' && safeString(item.content).trim());
+    if (typeof snapshot?.log_version === 'number') {
+      state.lastLogVersion = snapshot.log_version;
+      if (page) page.lastLogVersion = snapshot.log_version;
+    }
+    if (lastResponse) {
+      renderPreloadedResponseBubble(state, lastResponse);
+      if (page) {
+        page.lastMonologuePreloadFound = true;
+        page.lastMonologuePreloadLogId = lastResponse.id || '';
+        page.lastMonologuePreloadTextLength = safeString(lastResponse.content).length;
+      }
+    } else {
+      const chat = transcriptElement();
+      if (chat) {
+        chat.innerHTML = '<div class="voq-empty-state">No previous monologue result for this context yet.</div>';
+      }
+      if (state.transcriptIds) state.transcriptIds.clear();
+      if (page) {
+        page.lastMonologuePreloadFound = false;
+        page.lastMonologuePreloadLogId = '';
+        page.lastMonologuePreloadTextLength = 0;
+      }
+    }
+  } catch (error) {
+    if (state.lastPreloadRequestId !== requestId) return;
+    if (page) page.lastMonologuePreloadError = error?.message || String(error);
+  }
+}
+
 function renderErrorRow(state, message) {
   const chat = transcriptElement();
   if (!chat) return;
@@ -689,6 +758,7 @@ async function loadContextPicker(state, select) {
     page.contextCount = contexts.length;
     state.lastLogVersion = 0;
     tts.contextId = selectedContextId;
+    if (selectedContextId) void preloadLastMonologueResult(state, selectedContextId);
     setPageStatus(contexts.length ? `Selected ${selectedContextId}` : 'No contexts found', contexts.length ? 'ready' : 'empty');
     updateSendButton(state);
     return contexts;
@@ -720,6 +790,10 @@ function bindContextPicker(state, select) {
       for (const ctx of contexts) ctx.active = ctx.id === selectedContextId;
     }
     handleContextChange(selectedContextId);
+    const chat = transcriptElement();
+    if (chat) chat.innerHTML = '<div class="voq-empty-state">Loading latest monologue result…</div>';
+    if (state.transcriptIds) state.transcriptIds.clear();
+    if (selectedContextId) void preloadLastMonologueResult(state, selectedContextId);
     setPageStatus(selectedContextId ? `Selected ${selectedContextId}` : 'No context selected', selectedContextId ? 'ready' : 'empty');
     updateSendButton(state);
   });
@@ -1681,6 +1755,12 @@ function initVoqualizerPage() {
     isSubmitting: false,
     lastSubmitId: '',
     lastLogVersion: 0,
+    lastMonologuePreloadAt: 0,
+    lastMonologuePreloadContextId: '',
+    lastMonologuePreloadFound: false,
+    lastMonologuePreloadLogId: '',
+    lastMonologuePreloadTextLength: 0,
+    lastMonologuePreloadError: '',
     ttsEnabled: tts.enabled,
     sessionId: '',
     lastTtsAt: 0,
@@ -1776,6 +1856,7 @@ export {
   PAGE_VERSION,
   POLL_ENDPOINT,
   POLL_INTERVAL_MS,
+  PRELOAD_MONOLOGUE_LOG_FROM,
   SELECTED_CONTEXT_STORAGE_KEY,
   TTS_ENABLED_STORAGE_KEY,
   VOQUALIZER_HANDLER,
@@ -1788,6 +1869,8 @@ export {
   initVoqSession,
   initVoqualizerPage,
   maybeSpeakResponse,
+  preloadLastMonologueResult,
+  renderPreloadedResponseBubble,
   handleCxStreamStart,
   handleCxToken,
   handleCxStreamFinal,

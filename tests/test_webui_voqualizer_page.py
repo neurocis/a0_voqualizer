@@ -82,7 +82,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m7-word-highlight" in js
+    assert "m8-last-monologue-preload" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -499,3 +499,27 @@ def test_voqualizer_tts_enabled_ring_present():
         'rgba(34, 197, 94',
     ]:
         assert token in css, token
+
+def test_voqualizer_preloads_last_monologue_result():
+    js = read(JS)
+    html = read(HTML)
+    css = read(CSS)
+    for token in [
+        "m8-last-monologue-preload",
+        "PRELOAD_MONOLOGUE_LOG_FROM",
+        "function renderPreloadedResponseBubble",
+        "async function preloadLastMonologueResult",
+        "pollOnce(contextId, PRELOAD_MONOLOGUE_LOG_FROM)",
+        "item.type === 'response'",
+        "lastMonologuePreloadAt",
+        "lastMonologuePreloadFound",
+        "lastMonologuePreloadLogId",
+        "lastMonologuePreloadTextLength",
+        "lastMonologuePreloadError",
+        "dataset.preloaded = 'true'",
+        "No previous monologue result for this context yet.",
+        "Loading latest monologue result…",
+    ]:
+        assert token in js, token
+    assert "m8-last-monologue-preload-2026-05-28-4" in html
+    assert "m8-last-monologue-preload-2026-05-28-4" in css
