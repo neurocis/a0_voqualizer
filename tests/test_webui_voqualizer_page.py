@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-context-menu-medium" in js
+    assert "m8-context-menu-5pct-less" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-context-menu-medium-2026-05-28-40" in html
-    assert "m8-context-menu-medium-2026-05-28-40" in css
+    assert "m8-context-menu-5pct-less-2026-05-28-41" in html
+    assert "m8-context-menu-5pct-less-2026-05-28-41" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-context-menu-medium" in js
+    assert "m8-context-menu-5pct-less" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-context-menu-medium-2026-05-28-40" in html
-    assert "m8-context-menu-medium-2026-05-28-40" in css
+    assert "m8-context-menu-5pct-less-2026-05-28-41" in html
+    assert "m8-context-menu-5pct-less-2026-05-28-41" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -771,8 +771,8 @@ def test_voqualizer_bottom_actions_order_tts_mic_send():
     assert speaker_i < mic_i < send_i
 
 
-def test_voqualizer_context_menu_is_medium_width():
+def test_voqualizer_context_menu_is_five_percent_less_width():
     css = read(CSS)
-    assert 'min-width: 300px;' in css
+    assert 'min-width: 285px;' in css
     assert 'width: max-content;' in css
-    assert 'max-width: min(90vw, 440px);' in css
+    assert 'max-width: min(86vw, 418px);' in css
