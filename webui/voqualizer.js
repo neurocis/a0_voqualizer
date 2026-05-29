@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-suppress-store-listeners';
+const PAGE_VERSION = 'm8-tts-stale-socket-guard';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -1372,19 +1372,34 @@ async function connectVoq() {
       withCredentials: true,
       auth: (cb) => cb({ csrf_token: csrf, handlers: [VOQUALIZER_HANDLER] }),
     });
+    if (tts.socket && tts.socket !== socket) {
+      try { tts.socket.removeAllListeners && tts.socket.removeAllListeners(); } catch (_err) {}
+      try { tts.socket.disconnect && tts.socket.disconnect(); } catch (_err) {}
+    }
     tts.socket = socket;
-    socket.on('voqualizer_tts_chunk', handleTtsChunk);
-    socket.on('voqualizer_tts_done', handleTtsDone);
-    socket.on('voqualizer_asr_partial', handleAsrPartial);
-    socket.on('voqualizer_asr_final', handleAsrFinal);
-    socket.on('voqualizer_audio_ack', handleAudioAck);
-    socket.on('voqualizer_error', handleVoqError);
-    socket.on('voqualizer_cx_stream_start', handleCxStreamStart);
-    socket.on('voqualizer_cx_token', handleCxToken);
-    socket.on('voqualizer_cx_stream_final', handleCxStreamFinal);
-    socket.on('voqualizer_cx_stream_error', handleCxStreamError);
-    socket.on('voqualizer_tts_word_plan', handleTtsWordPlan);
+    const activeSocketOnly = (handler, eventName) => (payload) => {
+      if (socket !== tts.socket) {
+        if (globalThis.__voqualizer_page) {
+          globalThis.__voqualizer_page.lastStaleTtsSocketEventAt = Date.now();
+          globalThis.__voqualizer_page.lastStaleTtsSocketEvent = eventName;
+        }
+        return;
+      }
+      handler(payload);
+    };
+    socket.on('voqualizer_tts_chunk', activeSocketOnly(handleTtsChunk, 'voqualizer_tts_chunk'));
+    socket.on('voqualizer_tts_done', activeSocketOnly(handleTtsDone, 'voqualizer_tts_done'));
+    socket.on('voqualizer_asr_partial', activeSocketOnly(handleAsrPartial, 'voqualizer_asr_partial'));
+    socket.on('voqualizer_asr_final', activeSocketOnly(handleAsrFinal, 'voqualizer_asr_final'));
+    socket.on('voqualizer_audio_ack', activeSocketOnly(handleAudioAck, 'voqualizer_audio_ack'));
+    socket.on('voqualizer_error', activeSocketOnly(handleVoqError, 'voqualizer_error'));
+    socket.on('voqualizer_cx_stream_start', activeSocketOnly(handleCxStreamStart, 'voqualizer_cx_stream_start'));
+    socket.on('voqualizer_cx_token', activeSocketOnly(handleCxToken, 'voqualizer_cx_token'));
+    socket.on('voqualizer_cx_stream_final', activeSocketOnly(handleCxStreamFinal, 'voqualizer_cx_stream_final'));
+    socket.on('voqualizer_cx_stream_error', activeSocketOnly(handleCxStreamError, 'voqualizer_cx_stream_error'));
+    socket.on('voqualizer_tts_word_plan', activeSocketOnly(handleTtsWordPlan, 'voqualizer_tts_word_plan'));
     socket.on('disconnect', () => {
+      if (socket !== tts.socket) return;
       tts.ready = false;
       clearAllWordHighlights();
       clearCxStreamState({ keepCapability: true });
