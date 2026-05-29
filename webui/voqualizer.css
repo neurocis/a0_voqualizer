@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-context-menu-5pct-less-2026-05-28-41 */
+/* voq-mobile-version: m8-context-menu-10pct-less-2026-05-28-42 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -1016,9 +1016,9 @@ body {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  min-width: 285px;
+  min-width: 271px;
   width: max-content;
-  max-width: min(86vw, 418px);
+  max-width: min(82vw, 397px);
   max-height: 60vh;
   overflow-y: auto;
   margin: 0;
