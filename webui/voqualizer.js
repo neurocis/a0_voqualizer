@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-context-burger';
+const PAGE_VERSION = 'm8-topbar-trim';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -2038,7 +2038,6 @@ function initVoqualizerPage() {
   bindVoqualizerButtons();
   bindTranscriptControls();
   bindFullscreenButton();
-  bindRefreshButton(state);
   bindContextMenuButton();
   updateActionsWrapped();
   if (typeof globalThis.ResizeObserver === 'function') {

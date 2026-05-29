@@ -42,9 +42,7 @@ def test_voqualizer_mobile_viewport_meta():
 def test_voqualizer_page_required_regions_and_controls():
     html = read(HTML)
     assert 'id="voq-context-select"' in html
-    assert 'id="voq-settings-button"' in html
     assert 'id="voq-logout-button"' in html
-    assert 'aria-label="Open Voqualizer provider settings"' in html
     assert 'id="voq-chat"' in html
     assert 'aria-label="Voqualizer chat transcript"' in html
     assert 'id="voq-prompt-input"' in html
@@ -82,7 +80,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-context-burger" in js
+    assert "m8-topbar-trim" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -310,13 +308,9 @@ def test_voqualizer_responsive_polish_css():
 
 
 def test_voqualizer_settings_link_and_debug():
-    html = read(HTML)
     js = read(JS)
-    assert '/plugins/a0_voqualizer/webui/providers.html' in html
-    assert "Open Voqualizer provider settings" in html
     assert "lastSettingsClickAt" in js
     assert "lastLogoutClickAt" in js
-    assert "Opening Voqualizer provider settings" in js
 
 
 def test_voqualizer_api_diagnostics():
@@ -520,12 +514,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-burger-circle-2026-05-28-15" in html
-    assert "m8-burger-circle-2026-05-28-15" in css
+    assert "m8-topbar-trim-2026-05-28-16" in html
+    assert "m8-topbar-trim-2026-05-28-16" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-context-burger" in js
+    assert "m8-topbar-trim" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -551,8 +545,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-burger-circle-2026-05-28-15" in html
-    assert "m8-burger-circle-2026-05-28-15" in css
+    assert "m8-topbar-trim-2026-05-28-16" in html
+    assert "m8-topbar-trim-2026-05-28-16" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -621,26 +615,16 @@ def test_voqualizer_send_resets_on_prompt_interaction():
         assert token in js, token
 
 
-def test_voqualizer_topbar_has_fullscreen_and_refresh_buttons():
+def test_voqualizer_topbar_has_fullscreen_button():
     html = read(HTML)
     js = read(JS)
     css = read(CSS)
-    for token in [
-        'id="voq-fullscreen-button"',
-        'id="voq-refresh-button"',
-    ]:
-        assert token in html, token
-    for token in [
-        'function bindFullscreenButton',
-        'function bindRefreshButton',
-        'document.fullscreenElement',
-        "id === 'voq-refresh-button'".replace("id === ", ""),
-    ]:
-        if "id === " in token:
-            continue
-        assert token in js, token
-    for token in ['.voq-fullscreen-button', '.voq-refresh-button']:
-        assert token in css, token
+    assert 'id="voq-fullscreen-button"' in html
+    assert 'id="voq-refresh-button"' not in html
+    assert 'id="voq-settings-button"' not in html
+    assert 'function bindFullscreenButton' in js
+    assert 'document.fullscreenElement' in js
+    assert '.voq-fullscreen-button' in css
 
 
 def test_voqualizer_context_burger_menu_present():
@@ -653,3 +637,10 @@ def test_voqualizer_context_burger_menu_present():
         assert token in js, token
     for token in ['.voq-context-menu-wrap', '.voq-context-menu', '.voq-context-menu-button[aria-expanded="true"]']:
         assert token in css, token
+
+
+def test_voqualizer_topbar_order_fullscreen_before_burger():
+    html = read(HTML)
+    fs = html.index('id="voq-fullscreen-button"')
+    bg = html.index('id="voq-context-menu-button"')
+    assert fs < bg
