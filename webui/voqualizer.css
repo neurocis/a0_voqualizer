@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-brand-line-2026-05-28-20 */
+/* voq-mobile-version: m8-brand-left-2026-05-28-21 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -115,7 +115,7 @@ body {
   border-radius: var(--voq-radius);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
   padding: 10px 12px 10px 16px;
 }
@@ -1054,7 +1054,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-right: 4px;
+  margin-right: auto;
   font-weight: 700;
   font-size: 1.05rem;
   color: var(--voq-text);
