@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-context-menu-10pct-less';
+const PAGE_VERSION = 'm8-header-no-ctxid';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -305,7 +305,7 @@ function contextLabelForId(contextId) {
   const page = globalThis.__voqualizer_page;
   const contexts = Array.isArray(page?.contexts) ? page.contexts : [];
   const match = contexts.find((ctx) => ctx.id === contextId);
-  if (match) return match.label || match.name || match.id || 'Voqualizer';
+  if (match) return match.name || match.label || match.id || 'Voqualizer';
   const select = document.getElementById('voq-context-select');
   const option = select ? [...select.options].find((opt) => opt.value === contextId) : null;
   return option?.textContent || contextId || 'Voqualizer';
@@ -457,7 +457,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-context-menu-10pct-less-2026-05-28-42'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-header-no-ctxid-2026-05-28-43'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
