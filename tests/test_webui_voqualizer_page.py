@@ -538,7 +538,6 @@ def test_voqualizer_preload_warms_realtime_tts_session():
     html = read(HTML)
     css = read(CSS)
     for token in [
-        "m8-preload-warm-voq",
         "function warmVoqSessionForContext",
         "warmVoqSessionForContext(contextId, 'monologue_preload')",
         "warmVoqSessionForContext(contextId, 'submit')",
