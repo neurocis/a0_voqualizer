@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-brand-left-2026-05-28-21 */
+/* voq-mobile-version: m8-logo-bigger-2026-05-28-23 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -1061,8 +1061,8 @@ body {
   letter-spacing: 0.02em;
 }
 .voq-brand-logo {
-  width: 28px;
-  height: 28px;
+  width: 50px;
+  height: 50px;
   border-radius: 6px;
   object-fit: cover;
   display: block;
@@ -1070,5 +1070,5 @@ body {
 }
 @media (max-width: 480px) {
   .voq-brand-row { font-size: 0.95rem; gap: 6px; }
-  .voq-brand-logo { width: 24px; height: 24px; }
+  .voq-brand-logo { width: 43px; height: 43px; }
 }
