@@ -79,7 +79,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-send-clear-after-response" in js
+    assert "m8-asr-standalone-context" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -513,12 +513,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-send-clear-after-response-2026-05-28-31" in html
-    assert "m8-send-clear-after-response-2026-05-28-31" in css
+    assert "m8-asr-standalone-context-2026-05-28-32" in html
+    assert "m8-asr-standalone-context-2026-05-28-32" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-send-clear-after-response" in js
+    assert "m8-asr-standalone-context" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -544,8 +544,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-send-clear-after-response-2026-05-28-31" in html
-    assert "m8-send-clear-after-response-2026-05-28-31" in css
+    assert "m8-asr-standalone-context-2026-05-28-32" in html
+    assert "m8-asr-standalone-context-2026-05-28-32" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -702,3 +702,13 @@ def test_voqualizer_send_response_clears_submitting_latch():
     assert "state.isSubmitting = false;" in js
     assert "globalThis.__voqualizer_page.isSubmitting = false;" in js
     assert "incorrectly flip the send icon back to processing" in js
+
+
+def test_voqualizer_standalone_suppresses_main_context_polling():
+    conv = read(ROOT / "webui" / "conversation-mode.js")
+    js = read(JS)
+    assert "_suppressContextPolling: !!options.suppressContextPolling" in conv
+    assert "if (!this._suppressContextPolling)" in conv
+    assert "suppressContextPolling: true" in js
+    assert "suppressTts: true" in js
+    assert "onAsrFinal: (text) => { void routeStoreAsrFinal(text); }" in js

@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-send-clear-after-response';
+const PAGE_VERSION = 'm8-asr-standalone-context';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -432,7 +432,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-send-clear-after-response-2026-05-28-31'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-asr-standalone-context-2026-05-28-32'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -1819,6 +1819,7 @@ function bindVoqualizerButtons() {
   // standalone page retains TTS-enabled state via persistTtsEnabled().
   voqStore = createVoqualizerStore({
     suppressTts: true,
+    suppressContextPolling: true,
     onAsrFinal: (text) => { void routeStoreAsrFinal(text); },
   });
   try { voqStore.init(); } catch (err) { console.error('[voqualizer] store init', err); }

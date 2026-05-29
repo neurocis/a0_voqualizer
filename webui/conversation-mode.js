@@ -231,6 +231,7 @@ export function createVoqualizerStore(options = {}) {
     _contextHandler: null,
     _pttOverlay: false,
     _suppressTts: !!options.suppressTts,
+    _suppressContextPolling: !!options.suppressContextPolling,
     _onAsrFinal: typeof options.onAsrFinal === 'function' ? options.onAsrFinal : null,
     init() {
       if (this._initialized) return this;
