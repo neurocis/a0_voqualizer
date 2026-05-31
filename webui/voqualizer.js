@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-authoritative-tts-single-session-v2-v2-2026-05-30-62';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-collapse-response-json-2026-05-30-63';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-authoritative-tts-single-session-v2';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-authoritative-tts-single-session-v2-v2-2026-05-30-62';
+const PAGE_VERSION = 'm8-collapse-response-json';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-collapse-response-json-2026-05-30-63';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -643,6 +643,7 @@ function buildTtsDebugLines() {
     `ws_prompt_transport=${p.promptSubmitTransport || ''} ws_prompt_ack=${p.lastWsPromptAckAt || 0} ws_prompt_error=${p.lastWsPromptError || ''}`,
     `tts_mode=${AUTHORITATIVE_TTS_STREAM_ONLY ? 'authoritative_stream' : 'hybrid'} active_generation=${tts.activeGenerationId || ''} accepted_generation=${tts.lastAcceptedGenerationId || ''}`,
     `authoritative_single_session=true ignored_reason=${p.lastTtsIgnoredReason || ''}`,
+    `collapsed_json_at=${p.lastCollapsedResponseJsonAt || 0} collapsed_headline=${JSON.stringify(p.lastCollapsedResponseJsonHeadline || '')}`,
     `init_start=${p.lastTtsInitStartAt || 0} init_ready=${p.lastTtsInitReadyAt || 0} init_context=${p.lastTtsInitContextId || ''} init_error=${p.lastTtsInitError || ''}`,
     `speak_entry=${p.lastTtsSpeakEntryAt || 0} speak_entry_len=${p.lastTtsSpeakEntryTextLength || 0} speak_skip=${p.lastTtsSpeakSkipReason || ''}`,
     `last_trigger_at=${p.lastTtsTriggerAt || 0} trigger_type=${p.lastTtsTriggerType || ''} trigger_id=${p.lastTtsTriggerItemId || ''} trigger_fallback=${p.lastTtsTriggerFallbackId || ''} trigger_len=${p.lastTtsTriggerTextLength || 0} skip=${p.lastTtsSkipReason || ''}`,
@@ -880,6 +881,45 @@ function bindTranscriptControls() {
   updateJumpLatest();
 }
 
+function tryParseJsonEnvelope(value) {
+  const text = safeString(value).trim();
+  if (!text || text[0] !== '{') return null;
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return null;
+  }
+}
+
+function displayContentForTranscript(content, item = null) {
+  const raw = safeString(content);
+  const parsed = tryParseJsonEnvelope(raw);
+  const page = globalThis.__voqualizer_page;
+  if (!parsed || typeof parsed !== 'object') return raw;
+
+  const headline = safeString(parsed.headline || parsed.title || '').trim();
+  const toolText = safeString(parsed.tool_args?.text || parsed.text || parsed.message || '').trim();
+  const isResponseTool = safeString(parsed.tool_name || '').trim() === 'response' || !!parsed.tool_args;
+  if (!headline && !toolText) return raw;
+
+  if (page) {
+    page.lastCollapsedResponseJsonAt = Date.now();
+    page.lastCollapsedResponseJsonType = safeString(item?.type || parsed.tool_name || '');
+    page.lastCollapsedResponseJsonHeadline = headline;
+  }
+
+  // Match the compact core DOM behavior: show the response-tool headline plus
+  // the intended response text, never the raw JSON envelope.
+  if (headline && toolText) return `${headline}\n${toolText}`;
+  if (headline) return headline;
+  if (isResponseTool && toolText) return toolText;
+  return raw;
+}
+
+function setBubbleBodyText(body, content, item = null) {
+  if (body) body.textContent = displayContentForTranscript(content, item);
+}
+
 function createBubble({ id, role, content, kind }) {
   const bubble = document.createElement('article');
   bubble.className = `voq-bubble voq-bubble--${role}`;
@@ -890,7 +930,7 @@ function createBubble({ id, role, content, kind }) {
   if (kind) bubble.dataset.kind = kind;
   const body = document.createElement('div');
   body.className = 'voq-bubble-body';
-  body.textContent = safeString(content);
+  setBubbleBodyText(body, content, { type: kind });
   bubble.appendChild(body);
   return bubble;
 }
@@ -914,13 +954,13 @@ function renderOrUpdateLogBubble(state, item) {
   const key = `log-${item.id}`;
   const existing = state.transcriptIds.get(key);
   const role = item.type === 'response' ? 'assistant' : item.type === 'agent' ? 'assistant' : 'system';
-  const content = item.content ?? '';
+  const content = displayContentForTranscript(item.content ?? '', item);
   // M7.3: reconcile with a live cx-stream bubble so a single assistant bubble is shown.
   if (!existing && (item.type === 'response' || item.type === 'agent')) {
     const cxBubble = cxBubbleForLogItem(item);
     if (cxBubble) {
       const body = cxBubble.querySelector('.voq-bubble-body');
-      if (body) body.textContent = safeString(content);
+      if (body) setBubbleBodyText(body, content, { type: kind });
       cxBubble.dataset.kind = item.type;
       cxBubble.dataset.final = item.type === 'response' ? 'true' : 'false';
       cxBubble.dataset.streaming = 'false';
@@ -935,7 +975,7 @@ function renderOrUpdateLogBubble(state, item) {
   }
   if (existing) {
     const body = existing.querySelector('.voq-bubble-body');
-    if (body) body.textContent = safeString(content);
+    if (body) setBubbleBodyText(body, content, { type: kind });
     existing.dataset.kind = item.type;
     existing.dataset.final = item.type === 'response' ? 'true' : 'false';
   } else {
@@ -959,7 +999,7 @@ function renderPreloadedResponseBubble(state, item) {
   const bubble = createBubble({
     id: key,
     role: 'assistant',
-    content: item.content ?? '',
+    content: displayContentForTranscript(item.content ?? '', item),
     kind: item.type || 'response',
   });
   bubble.dataset.final = 'true';
@@ -2050,7 +2090,7 @@ function maybeSpeakResponse(item) {
   const page = globalThis.__voqualizer_page;
   const now = Date.now();
   const type = safeString(item?.type || '');
-  const content = safeString(item?.content || item?.message || item?.text || '');
+  const content = displayContentForTranscript(item?.content || item?.message || item?.text || '', item);
   const id = safeString(item?.id || item?.message_id || item?.log_id || '');
   const fallbackId = id || `fallback-${type}-${content.length}-${stableTextHash(content)}`;
   const recordSkip = (reason) => {
@@ -2147,7 +2187,7 @@ function handleCxToken(payload) {
   if (!body) return;
   const fullText = safeString(data.text);
   const delta = safeString(data.delta);
-  if (fullText) body.textContent = fullText;
+  if (fullText) setBubbleBodyText(body, fullText, { type: 'agent' });
   else if (delta) body.textContent = (body.textContent || '') + delta;
   bubble.dataset.streaming = 'true';
   cx.lastEvent = 'voqualizer_cx_token';
@@ -2168,8 +2208,8 @@ function handleCxStreamFinal(payload) {
   const bubble = cx.bubblesByStreamId.get(streamId);
   if (bubble) {
     const body = bubble.querySelector('.voq-bubble-body');
-    const finalText = safeString(data.text);
-    if (body && finalText) body.textContent = finalText;
+    const finalText = displayContentForTranscript(data.text, { type: 'response' });
+    if (body && finalText) setBubbleBodyText(body, finalText, { type: 'response' });
     bubble.dataset.final = 'true';
     bubble.dataset.streaming = 'false';
   }

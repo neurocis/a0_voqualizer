@@ -80,7 +80,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -514,12 +514,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-authoritative-tts-single-session-v2-v2-2026-05-30-62" in html
-    assert "m8-authoritative-tts-single-session-v2-v2-2026-05-30-62" in css
+    assert "m8-collapse-response-json-2026-05-30-63" in html
+    assert "m8-collapse-response-json-2026-05-30-63" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -545,8 +545,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-authoritative-tts-single-session-v2-v2-2026-05-30-62" in html
-    assert "m8-authoritative-tts-single-session-v2-v2-2026-05-30-62" in css
+    assert "m8-collapse-response-json-2026-05-30-63" in html
+    assert "m8-collapse-response-json-2026-05-30-63" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -830,12 +830,12 @@ def test_voqualizer_tts_uses_ws_namespace_direct_events():
     assert "tts.socket.emit('voqualizer_control'" in js
     assert "socket.emit(VOQUALIZER_HANDLER, { event: 'voqualizer_init'" not in js
     assert "tts.socket.emit(VOQUALIZER_HANDLER, {" not in js
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
 
 
 def test_voqualizer_tts_reconnects_stale_session_and_retries():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "tts.socket && tts.socket.connected" in js
     assert "stale_session_reconnect" in js
     assert "direct_tts_ack_timeout" in js
@@ -846,7 +846,7 @@ def test_voqualizer_tts_reconnects_stale_session_and_retries():
 
 def test_voqualizer_tts_retry_does_not_double_speak():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "ackHasChunks" in js
     assert "shouldRetry" in js
     assert "direct_tts_ack_timeout" in js
@@ -855,7 +855,7 @@ def test_voqualizer_tts_retry_does_not_double_speak():
 
 def test_voqualizer_tts_accepts_live_push_and_suppresses_final_duplicate():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "shouldAcceptTtsUtterance" in js
     assert "live_push_already_streamed" in js
     assert "lastLivePushedTtsUtteranceId" in js
@@ -866,7 +866,7 @@ def test_voqualizer_tts_accepts_live_push_and_suppresses_final_duplicate():
 
 def test_voqualizer_tts_live_push_suppresses_final_direct_tts():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "livePushSinceSubmit" in js
     assert "lastLivePushedTtsAt" in js
     assert "lastLivePushedTtsUtteranceId" in js
@@ -877,7 +877,7 @@ def test_voqualizer_tts_live_push_suppresses_final_direct_tts():
 
 def test_voqualizer_tts_suppresses_ack_fallback_after_live_push():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "lastAckTtsFallbackSuppressedAt" in js
     assert "lastAckTtsFallbackSuppressedChunks" in js
     assert "lastAckTtsFallbackSuppressedReason" in js
@@ -888,7 +888,7 @@ def test_voqualizer_tts_suppresses_ack_fallback_after_live_push():
 def test_voqualizer_store_suppresses_tts_listeners_for_standalone():
     conv = read(CONVERSATION_MODE)
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "suppressTts: true" in js
     assert "if (!this._suppressTts)" in conv
     assert "suppressed_store_tts_chunk" in conv
@@ -898,7 +898,7 @@ def test_voqualizer_store_suppresses_tts_listeners_for_standalone():
 
 def test_voqualizer_tts_ignores_stale_socket_events():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "activeSocketOnly" in js
     assert "socket !== tts.socket" in js
     assert "lastStaleTtsSocketEvent" in js
@@ -907,9 +907,9 @@ def test_voqualizer_tts_ignores_stale_socket_events():
 
 def test_voqualizer_cache_busts_conversation_mode_import():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
-    assert "conversation-mode.js?v=m8-authoritative-tts-single-session-v2-v2-2026-05-30-62" in js
-    assert "store_import_cache=m8-authoritative-tts-single-session-v2-v2-2026-05-30-62" in js
+    assert "m8-collapse-response-json" in js
+    assert "conversation-mode.js?v=m8-collapse-response-json-2026-05-30-63" in js
+    assert "store_import_cache=m8-collapse-response-json-2026-05-30-63" in js
     conv = read(CONVERSATION_MODE)
     assert "if (!this._suppressTts)" in conv
     assert "suppressed_store_tts_chunk" in conv
@@ -917,7 +917,7 @@ def test_voqualizer_cache_busts_conversation_mode_import():
 
 def test_voqualizer_stops_tts_and_speaks_processing_heartbeat():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "cancelInflightTts('new_prompt')" in js
     assert "startProcessingHeartbeat(messageId)" in js
     assert "setInterval(() =>" in js
@@ -931,7 +931,7 @@ def test_voqualizer_stops_tts_and_speaks_processing_heartbeat():
 def test_voqualizer_realtime_ws_prompt_submit_path():
     js = read(JS)
     py = read(ROOT / "api" / "ws_voqualizer.py")
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "submitPromptOverVoqSession" in js
     assert "voqualizer_text_prompt" in js
     assert "promptSubmitTransport = 'websocket'" in js
@@ -948,20 +948,20 @@ def test_voqualizer_realtime_ws_prompt_submit_path():
 
 def test_voqualizer_tts_chunk_dedupe():
     js = read(JS)
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "seenTtsChunkKeys" in js
     assert "ttsChunkDedupeKey" in js
     assert "rememberTtsChunkKey" in js
     assert "duplicate_chunks=" in js
     assert "lastDuplicateTtsChunkUtteranceId" in js
-    assert "conversation-mode.js?v=m8-authoritative-tts-single-session-v2-v2-2026-05-30-62" in js
+    assert "conversation-mode.js?v=m8-collapse-response-json-2026-05-30-63" in js
 
 
 def test_voqualizer_authoritative_tts_stream_only():
     js = read(JS)
     py = read(ROOT / "api" / "ws_voqualizer.py")
     finalizer = read(ROOT / "helpers" / "agent_finalizer.py")
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "AUTHORITATIVE_TTS_STREAM_ONLY = true" in js
     assert "tts_delivery_mode" in js
     assert "authoritative_stream_only" in js
@@ -979,7 +979,7 @@ def test_voqualizer_authoritative_tts_single_session_route():
     js = read(JS)
     finalizer = read(ROOT / "helpers" / "agent_finalizer.py")
     ws = read(ROOT / "api" / "ws_voqualizer.py")
-    assert "m8-authoritative-tts-single-session-v2" in js
+    assert "m8-collapse-response-json" in js
     assert "authoritative_single_session=true" in js
     assert "superseded_authoritative_session" in finalizer
     assert "tts_authoritative_route_score" in finalizer
@@ -994,3 +994,19 @@ def test_voqualizer_sentence_chunker_single_authoritative_owner():
     assert "candidate_sessions" in chunker
     assert "authoritative_session_id" in chunker
     assert "max(candidates, key=score)" in chunker
+
+
+def test_voqualizer_collapses_response_tool_json_in_transcript():
+    js = read(JS)
+    html = read(HTML)
+    css = read(CSS)
+    assert "m8-collapse-response-json" in js
+    assert "m8-collapse-response-json-2026-05-30-63" in html
+    assert "m8-collapse-response-json-2026-05-30-63" in css
+    assert "function displayContentForTranscript" in js
+    assert "tryParseJsonEnvelope" in js
+    assert "parsed.headline" in js
+    assert "parsed.tool_args?.text" in js
+    assert "setBubbleBodyText" in js
+    assert "lastCollapsedResponseJsonAt" in js
+    assert "collapsed_json_at=" in js
