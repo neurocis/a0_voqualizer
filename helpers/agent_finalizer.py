@@ -478,6 +478,11 @@ async def synthesize_agent_response_tts(
             source=metadata_source,
             context_id=context_id,
         )
+        active_generation_id = str(session.metadata.get("active_generation_id") or session.metadata.get("active_message_id") or "")
+        if active_generation_id:
+            request_metadata["generation_id"] = active_generation_id
+            request_metadata["message_id"] = str(session.metadata.get("active_message_id") or active_generation_id)
+            request_metadata["tts_delivery_mode"] = str(session.metadata.get("tts_delivery_mode") or "authoritative_stream")
         if original_text != text:
             request_metadata["speech_normalized"] = True
         request = TTSRequest(

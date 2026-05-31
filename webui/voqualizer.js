@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-chunk-dedupe-2026-05-30-59';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-authoritative-tts-stream-2026-05-30-60';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-chunk-dedupe';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-chunk-dedupe-2026-05-30-59';
+const PAGE_VERSION = 'm8-authoritative-tts-stream';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-authoritative-tts-stream-2026-05-30-60';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -49,6 +49,7 @@ const ASR_SUBMIT_MODE = 'frontend_prompt';
 const BARGE_IN_LEVEL_THRESHOLD = 0.05;
 const POLL_INTERVAL_MS = 700;
 const PRELOAD_MONOLOGUE_LOG_FROM = 0;
+const AUTHORITATIVE_TTS_STREAM_ONLY = true;
 
 const tts = {
   socket: null,
@@ -73,6 +74,8 @@ const tts = {
   livePushSinceSubmit: false,
   lastLivePushAt: 0,
   lastLivePushUtteranceId: '',
+  activeGenerationId: '',
+  lastAcceptedGenerationId: '',
   processingHeartbeatTimer: 0,
   processingHeartbeatSubmissionId: '',
   processingHeartbeatStartedAt: 0,
@@ -638,6 +641,7 @@ function buildTtsDebugLines() {
     `button_class=${JSON.stringify(speaker?.className || '')}`,
     `socket_ready=${p.ttsReady} session=${p.ttsSessionId || ''} context=${p.selectedContextId || ''}`,
     `ws_prompt_transport=${p.promptSubmitTransport || ''} ws_prompt_ack=${p.lastWsPromptAckAt || 0} ws_prompt_error=${p.lastWsPromptError || ''}`,
+    `tts_mode=${AUTHORITATIVE_TTS_STREAM_ONLY ? 'authoritative_stream' : 'hybrid'} active_generation=${tts.activeGenerationId || ''} accepted_generation=${tts.lastAcceptedGenerationId || ''}`,
     `init_start=${p.lastTtsInitStartAt || 0} init_ready=${p.lastTtsInitReadyAt || 0} init_context=${p.lastTtsInitContextId || ''} init_error=${p.lastTtsInitError || ''}`,
     `speak_entry=${p.lastTtsSpeakEntryAt || 0} speak_entry_len=${p.lastTtsSpeakEntryTextLength || 0} speak_skip=${p.lastTtsSpeakSkipReason || ''}`,
     `last_trigger_at=${p.lastTtsTriggerAt || 0} trigger_type=${p.lastTtsTriggerType || ''} trigger_id=${p.lastTtsTriggerItemId || ''} trigger_fallback=${p.lastTtsTriggerFallbackId || ''} trigger_len=${p.lastTtsTriggerTextLength || 0} skip=${p.lastTtsSkipReason || ''}`,
@@ -1228,6 +1232,7 @@ async function submitPromptOverVoqSession(text, contextId, messageId) {
       context_id: contextId,
       message_id: messageId,
       generation_id: messageId,
+      tts_delivery_mode: AUTHORITATIVE_TTS_STREAM_ONLY ? 'authoritative_stream' : 'hybrid',
       text,
     }, (response) => {
       if (settled) return;
@@ -1261,6 +1266,7 @@ async function submitPrompt(state) {
   ensureAudioContext();
   cancelInflightTts('new_prompt');
   const messageId = generateMessageId();
+  tts.activeGenerationId = messageId;
   tts.livePushSinceSubmit = false;
   tts.lastLivePushAt = 0;
   tts.lastLivePushUtteranceId = '';
@@ -1599,8 +1605,9 @@ async function initVoqSession(contextId) {
     context_id: contextId,
     barge_in: !!asr.enabled,
     asr: { enabled: !!asr.enabled },
-    tts: { enabled: !!tts.enabled },
+    tts: { enabled: !!tts.enabled, authoritative_stream: AUTHORITATIVE_TTS_STREAM_ONLY },
     asr_submit_mode: ASR_SUBMIT_MODE,
+    tts_delivery_mode: AUTHORITATIVE_TTS_STREAM_ONLY ? 'authoritative_stream' : 'hybrid',
   };
   let ready;
   try {
@@ -1748,6 +1755,8 @@ async function speakText(text, { utteranceId } = {}) {
 function cancelInflightTts(reason = 'cancel') {
   if (reason !== 'processing_heartbeat') stopProcessingHeartbeat(`cancel:${reason}`);
   if (tts.tracker) tts.tracker.stopAllPlayback();
+  tts.playbackTail = 0;
+  tts.encodedBuffers.clear();
   if (reason === 'new_prompt' || reason === 'context_change' || reason === 'disconnect') {
     tts.seenTtsChunkKeys.clear();
     tts.seenTtsChunkQueue = [];
@@ -1849,6 +1858,20 @@ function handleTtsChunk(payload) {
   if (!tts.enabled) return;
   const data = (payload && payload.data) || payload || {};
   const utteranceId = safeString(data.utterance_id || data.utteranceId || 'default');
+  const metadata = data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
+  const generationId = safeString(data.generation_id || data.generationId || metadata.generation_id || metadata.generationId || data.message_id || metadata.message_id || '');
+  if (AUTHORITATIVE_TTS_STREAM_ONLY && generationId && tts.activeGenerationId && generationId !== tts.activeGenerationId) {
+    const page = globalThis.__voqualizer_page;
+    if (page) {
+      page.lastTtsIgnoredUtteranceId = utteranceId;
+      page.lastTtsIgnoredReason = 'stale_generation';
+      page.lastTtsIgnoredSource = 'chunk';
+      page.lastTtsIgnoredGenerationId = generationId;
+      page.activeTtsGenerationId = tts.activeGenerationId;
+    }
+    return;
+  }
+  if (generationId) tts.lastAcceptedGenerationId = generationId;
   if (!shouldAcceptTtsUtterance(utteranceId, 'chunk')) return;
   if (tts.tracker.cancelledTtsUtterances.has(utteranceId)) return;
   const codec = normalizeTtsCodec(data, payload);
@@ -1877,6 +1900,27 @@ function handleTtsAckFallback(ack, fallbackUtteranceId = '') {
   const chunks = Array.isArray(ack.tts_chunks) ? ack.tts_chunks : [];
   if (!chunks.length) return;
   const utteranceId = safeString(ack.utterance_id || fallbackUtteranceId || 'default');
+  if (AUTHORITATIVE_TTS_STREAM_ONLY) {
+    const page = globalThis.__voqualizer_page;
+    if (page) {
+      page.lastAckTtsFallbackSuppressedAt = Date.now();
+      page.lastAckTtsFallbackSuppressedChunks = chunks.length;
+      page.lastAckTtsFallbackSuppressedUtteranceId = utteranceId;
+      page.lastAckTtsFallbackSuppressedReason = 'authoritative_stream_only';
+      page.lastDirectTtsAck = {
+        event: safeString(ack.event || ''),
+        utterance_id: safeString(ack.utterance_id || fallbackUtteranceId || ''),
+        chunks: Number(ack.chunks || 0),
+        tts_chunks: chunks.length,
+        suppressed: true,
+        suppress_reason: 'authoritative_stream_only',
+        pushed_emit_count: Number(ack.pushed_emit_count || 0),
+        sender_present: !!ack.sender_present,
+      };
+    }
+    updateTtsButton();
+    return;
+  }
   if (tts.livePushSinceSubmit || (globalThis.__voqualizer_page?.lastLivePushedTtsAt && globalThis.__voqualizer_page?.lastSubmitUiEchoAt && globalThis.__voqualizer_page.lastLivePushedTtsAt >= globalThis.__voqualizer_page.lastSubmitUiEchoAt)) {
     if (globalThis.__voqualizer_page) {
       globalThis.__voqualizer_page.lastAckTtsFallbackSuppressedAt = Date.now();
@@ -2022,6 +2066,10 @@ function maybeSpeakResponse(item) {
   if (!item) { recordSkip('missing_item'); return; }
   if (type !== 'response') { recordSkip(`not_response:${type || 'empty'}`); return; }
   if (!content.trim()) { recordSkip('missing_content'); return; }
+  if (AUTHORITATIVE_TTS_STREAM_ONLY) {
+    recordSkip(tts.livePushSinceSubmit ? 'authoritative_stream_live' : 'authoritative_stream_waiting');
+    return;
+  }
   if (tts.livePushSinceSubmit || (page?.lastLivePushedTtsAt && page?.lastSubmitUiEchoAt && page.lastLivePushedTtsAt >= page.lastSubmitUiEchoAt)) {
     recordSkip('live_push_already_streamed');
     return;

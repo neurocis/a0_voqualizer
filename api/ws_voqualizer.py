@@ -253,7 +253,8 @@ def _build_capabilities(config: dict) -> dict[str, Any]:
         "provider_word_timestamps": False,
         "ws_text_prompt": True,
         "realtime_session": True,
-        "protocol_version": "1.2",
+        "authoritative_tts_stream": True,
+        "protocol_version": "1.3",
     }
 
 
@@ -1773,6 +1774,7 @@ class WsVoqualizer(WsHandler):
             pass
         session.metadata["active_generation_id"] = generation_id
         session.metadata["active_message_id"] = message_id
+        session.metadata["tts_delivery_mode"] = str(data.get("tts_delivery_mode") or "authoritative_stream")
         session.metadata["active_prompt_started_at"] = _server_time_ms()
         try:
             context = self._resolve_agent_context(context_id)
