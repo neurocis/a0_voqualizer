@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-realtime-ws-prompt-2026-05-30-58';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-chunk-dedupe-2026-05-30-59';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-realtime-ws-prompt';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-realtime-ws-prompt-2026-05-30-58';
+const PAGE_VERSION = 'm8-tts-chunk-dedupe';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-chunk-dedupe-2026-05-30-59';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -68,6 +68,8 @@ const tts = {
   lastSpeakAt: 0,
   activeDirectUtteranceId: '',
   acceptedTtsUtteranceIds: new Set(),
+  seenTtsChunkKeys: new Set(),
+  seenTtsChunkQueue: [],
   livePushSinceSubmit: false,
   lastLivePushAt: 0,
   lastLivePushUtteranceId: '',
@@ -647,6 +649,7 @@ function buildTtsDebugLines() {
     `ack_pushed=${p.lastAckTtsPushedEmitCount || 0} ack_sender=${p.lastAckTtsSenderPresent}`,
     `live_push_utt=${p.lastLivePushedTtsUtteranceId || ''} live_push_at=${p.lastLivePushedTtsAt || 0} live_push_source=${p.lastLivePushedTtsSource || ''}`,
     `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
+    `duplicate_chunks=${p.duplicateTtsChunkCount || 0} duplicate_utt=${p.lastDuplicateTtsChunkUtteranceId || ''}`,
     `playback_at=${p.lastPlaybackStartAt || 0} playback_ms=${p.lastPlaybackDurationMs || 0} playback_utt=${p.lastPlaybackUtteranceId || ''} playback_error=${p.lastPlaybackError || ''}`,
     `audio_state=${p.audioContextState || ''} audio_create=${p.lastAudioContextCreateAt || 0} audio_create_reason=${p.lastAudioContextCreateReason || ''} audio_create_error=${p.lastAudioContextError || ''}`,
     `audio_resume=${p.lastAudioResumeAt || 0} audio_resume_reason=${p.lastAudioResumeReason || ''} audio_resume_error=${p.lastAudioResumeError || ''}`,
@@ -1745,6 +1748,10 @@ async function speakText(text, { utteranceId } = {}) {
 function cancelInflightTts(reason = 'cancel') {
   if (reason !== 'processing_heartbeat') stopProcessingHeartbeat(`cancel:${reason}`);
   if (tts.tracker) tts.tracker.stopAllPlayback();
+  if (reason === 'new_prompt' || reason === 'context_change' || reason === 'disconnect') {
+    tts.seenTtsChunkKeys.clear();
+    tts.seenTtsChunkQueue = [];
+  }
   if (tts.socket && tts.socket.connected && tts.sessionId) {
     try {
       tts.socket.emit('voqualizer_control', {
@@ -1800,6 +1807,44 @@ function shouldAcceptTtsUtterance(utteranceId, source = 'chunk') {
   }
   return true;
 }
+
+function ttsChunkDedupeKey(data, payload, utteranceId, bytes) {
+  const seq = data.seq ?? data.sequence ?? data.chunk_index ?? data.index ?? data.chunkIndex;
+  if (seq !== undefined && seq !== null && String(seq) !== '') return `${utteranceId}:seq:${String(seq)}`;
+  const b = bytes && bytes.byteLength ? new Uint8Array(bytes) : new Uint8Array(0);
+  let hash = 2166136261;
+  const step = Math.max(1, Math.floor(Math.max(1, b.length) / 64));
+  for (let i = 0; i < b.length; i += step) {
+    hash ^= b[i];
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  hash ^= b.length;
+  hash = Math.imul(hash, 16777619) >>> 0;
+  const created = data.created_at ?? data.createdAt ?? data.server_time ?? payload?.server_time ?? '';
+  return `${utteranceId}:hash:${b.length}:${hash.toString(16)}:${created}`;
+}
+
+function rememberTtsChunkKey(key, utteranceId) {
+  if (!key) return false;
+  if (tts.seenTtsChunkKeys.has(key)) {
+    const page = globalThis.__voqualizer_page;
+    if (page) {
+      page.lastDuplicateTtsChunkAt = Date.now();
+      page.lastDuplicateTtsChunkKey = key;
+      page.lastDuplicateTtsChunkUtteranceId = utteranceId;
+      page.duplicateTtsChunkCount = Number(page.duplicateTtsChunkCount || 0) + 1;
+    }
+    return true;
+  }
+  tts.seenTtsChunkKeys.add(key);
+  tts.seenTtsChunkQueue.push(key);
+  while (tts.seenTtsChunkQueue.length > 5000) {
+    const oldKey = tts.seenTtsChunkQueue.shift();
+    if (oldKey) tts.seenTtsChunkKeys.delete(oldKey);
+  }
+  return false;
+}
+
 function handleTtsChunk(payload) {
   if (!tts.enabled) return;
   const data = (payload && payload.data) || payload || {};
