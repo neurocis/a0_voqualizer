@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-authoritative-tts-single-session-2026-05-30-61';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-authoritative-tts-single-session-v2-v2-2026-05-30-62';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-authoritative-tts-single-session';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-authoritative-tts-single-session-2026-05-30-61';
+const PAGE_VERSION = 'm8-authoritative-tts-single-session-v2';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-authoritative-tts-single-session-v2-v2-2026-05-30-62';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';

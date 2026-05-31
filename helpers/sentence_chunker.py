@@ -193,41 +193,73 @@ class SentenceTTSChunker:
         return await self._synthesize_ready(session, state, ready, final=False)
 
     async def process_context_delta(self, *, context_id: str, text: str) -> dict[str, Any]:
-        """Buffer one token delta for every Voqualizer session bound to context."""
+        """Buffer one token delta for the single authoritative TTS session.
+
+        Earlier hybrid routing generated sentence TTS once per live session bound
+        to the same context.  Mobile reloads/stale tabs could therefore produce
+        4x/11x repeated audio even though each individual browser tried to
+        de-duplicate chunks.  Authoritative-stream mode must synthesize a ready
+        sentence only once for the context, routed to the newest/preferred live
+        session.
+        """
 
         text = _clean_text(text)
         if not context_id or not text:
             return {"sessions": 0, "results": [], "reason": "empty_context_or_text"}
+
         bridge = get_default_context_bridge()
-        bindings = list(bridge.bindings_for_context(context_id))
         registry = BridgeRegistry.instance()
-        results: list[dict[str, Any]] = []
-        sessions = 0
+        candidates: list[BridgeSession] = []
         seen: set[str] = set()
-        for binding in bindings:
+
+        for binding in list(bridge.bindings_for_context(context_id)):
             session = registry.get(binding.session_id)
             if session is None or session.sender is None:
                 continue
-            sessions += 1
+            if session.session_id in seen:
+                continue
             seen.add(session.session_id)
-            result = await self.process_session_delta(session, context_id=binding.context_id, text=text)
-            results.append({"session_id": session.session_id, **result})
+            candidates.append(session)
+
         # Live GUI sessions can be bound by session.context_id before/without an
-        # exact bridge binding for the A0 hook context.  Mirror the finalizer's
-        # active-session fallback so streaming TTS works independently of ASR.
+        # exact bridge binding for the A0 hook context. Include them as
+        # candidates, but do not synthesize once per candidate.
         for session in registry.iter_active():
             if session.session_id in seen or session.sender is None:
                 continue
             if str(getattr(session, "context_id", "") or "") != context_id:
                 continue
-            sessions += 1
             seen.add(session.session_id)
             session.metadata["tts_route_streaming_fallback"] = "session.context_id"
-            result = await self.process_session_delta(session, context_id=context_id, text=text)
-            results.append({"session_id": session.session_id, **result})
-        if not results:
+            candidates.append(session)
+
+        if not candidates:
             return {"sessions": 0, "results": [], "reason": "no_bindings"}
-        return {"sessions": sessions, "results": results}
+
+        def score(session: BridgeSession) -> tuple[int, float, float]:
+            mode = str(session.metadata.get("tts_delivery_mode") or "")
+            return (
+                1 if mode == "authoritative_stream" else 0,
+                float(getattr(session, "last_activity_at", 0.0) or 0.0),
+                float(getattr(session, "created_at", 0.0) or 0.0),
+            )
+
+        owner = max(candidates, key=score)
+        owner.metadata["tts_authoritative_stream_owner"] = True
+        owner.metadata["tts_authoritative_stream_candidate_count"] = len(candidates)
+        for session in candidates:
+            if session is owner:
+                continue
+            session.metadata["tts_last_skip_reason"] = "superseded_authoritative_stream_session"
+            session.metadata["tts_authoritative_stream_owner"] = False
+
+        result = await self.process_session_delta(owner, context_id=context_id, text=text)
+        return {
+            "sessions": 1,
+            "candidate_sessions": len(candidates),
+            "authoritative_session_id": owner.session_id,
+            "results": [{"session_id": owner.session_id, **result}],
+        }
 
     async def finalize_session(
         self,
