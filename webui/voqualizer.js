@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-processing-heartbeat-2026-05-29-57';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-realtime-ws-prompt-2026-05-30-58';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-processing-heartbeat';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-processing-heartbeat-2026-05-29-57';
+const PAGE_VERSION = 'm8-realtime-ws-prompt';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-realtime-ws-prompt-2026-05-30-58';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -635,6 +635,7 @@ function buildTtsDebugLines() {
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
     `socket_ready=${p.ttsReady} session=${p.ttsSessionId || ''} context=${p.selectedContextId || ''}`,
+    `ws_prompt_transport=${p.promptSubmitTransport || ''} ws_prompt_ack=${p.lastWsPromptAckAt || 0} ws_prompt_error=${p.lastWsPromptError || ''}`,
     `init_start=${p.lastTtsInitStartAt || 0} init_ready=${p.lastTtsInitReadyAt || 0} init_context=${p.lastTtsInitContextId || ''} init_error=${p.lastTtsInitError || ''}`,
     `speak_entry=${p.lastTtsSpeakEntryAt || 0} speak_entry_len=${p.lastTtsSpeakEntryTextLength || 0} speak_skip=${p.lastTtsSpeakSkipReason || ''}`,
     `last_trigger_at=${p.lastTtsTriggerAt || 0} trigger_type=${p.lastTtsTriggerType || ''} trigger_id=${p.lastTtsTriggerItemId || ''} trigger_fallback=${p.lastTtsTriggerFallbackId || ''} trigger_len=${p.lastTtsTriggerTextLength || 0} skip=${p.lastTtsSkipReason || ''}`,
@@ -1190,6 +1191,57 @@ async function runPollLoop(state, contextId, submissionId) {
   }
 }
 
+
+async function submitPromptOverVoqSession(text, contextId, messageId) {
+  const page = globalThis.__voqualizer_page;
+  if (page) {
+    page.lastWsPromptAttemptAt = Date.now();
+    page.lastWsPromptMessageId = messageId;
+    page.lastWsPromptContextId = contextId;
+    page.lastWsPromptError = '';
+  }
+  try {
+    await initVoqSession(contextId);
+  } catch (error) {
+    if (page) page.lastWsPromptError = `init_failed: ${error?.message || error}`;
+    throw error;
+  }
+  if (!tts.socket || !tts.socket.connected || !tts.sessionId || !tts.bearerToken) {
+    const err = new Error('voqualizer websocket session not ready');
+    if (page) page.lastWsPromptError = err.message;
+    throw err;
+  }
+  const ack = await new Promise((resolve, reject) => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('voqualizer_text_prompt timeout'));
+    }, 10000);
+    tts.socket.emit('voqualizer_text_prompt', {
+      session_id: tts.sessionId,
+      bearer_token: tts.bearerToken,
+      context: contextId,
+      context_id: contextId,
+      message_id: messageId,
+      generation_id: messageId,
+      text,
+    }, (response) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (response && response.error) reject(new Error(response.error.message || 'voqualizer_text_prompt failed'));
+      else resolve(response || {});
+    });
+  });
+  if (page) {
+    page.lastWsPromptAckAt = Date.now();
+    page.lastWsPromptAckEvent = ack && ack.event || '';
+    page.lastWsPromptAckStatus = ack && ack.status || '';
+  }
+  return ack;
+}
+
 async function submitPrompt(state) {
   const prompt = document.getElementById('voq-prompt-input');
   if (!prompt) return;
@@ -1234,9 +1286,19 @@ async function submitPrompt(state) {
     }
   });
   try {
-    const result = await callJsonApiWithDiagnostics(MESSAGE_ENDPOINT, { text, context: contextId, message_id: messageId }, 'message_async');
+    let result;
+    try {
+      result = await submitPromptOverVoqSession(text, contextId, messageId);
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.promptSubmitTransport = 'websocket';
+    } catch (wsError) {
+      if (globalThis.__voqualizer_page) {
+        globalThis.__voqualizer_page.promptSubmitTransport = 'http_fallback';
+        globalThis.__voqualizer_page.lastWsPromptError = wsError?.message || String(wsError);
+      }
+      result = await callJsonApiWithDiagnostics(MESSAGE_ENDPOINT, { text, context: contextId, message_id: messageId }, 'message_async');
+    }
     void voqInitPromise;
-    if (!result) throw new Error('empty response from message_async');
+    if (!result) throw new Error('empty response from prompt submit');
     setPageStatus('Awaiting response…', 'loading');
     await runPollLoop(state, contextId, messageId);
   } catch (error) {

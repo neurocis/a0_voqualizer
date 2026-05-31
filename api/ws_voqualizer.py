@@ -37,6 +37,9 @@ from typing import Any
 from helpers.ws import WsHandler
 from helpers.ws_manager import WsResult
 from helpers.print_style import PrintStyle
+from agent import UserMessage
+from helpers import extension, message_queue as mq
+from agent import AgentContext
 
 # Plugin-local helpers live under usr/plugins/a0_voqualizer/helpers/. Importing
 # them via their dotted path (rather than via sys.path manipulation) avoids
@@ -248,7 +251,9 @@ def _build_capabilities(config: dict) -> dict[str, Any]:
         "tts_word_plan": True,
         "tts_word_progress": False,
         "provider_word_timestamps": False,
-        "protocol_version": "1.1",
+        "ws_text_prompt": True,
+        "realtime_session": True,
+        "protocol_version": "1.2",
     }
 
 
@@ -477,6 +482,8 @@ class WsVoqualizer(WsHandler):
                 return await self._handle_audio_chunk(data, sid)
             if event == "voqualizer_user_text":
                 return await self._handle_user_text(data, sid)
+            if event == "voqualizer_text_prompt":
+                return await self._handle_text_prompt(data, sid)
             log_voqualizer_error(UNKNOWN_EVENT, f"voqualizer does not handle {event!r}", operation=event)
             return WsResult.error(
                 code=UNKNOWN_EVENT,
@@ -1716,6 +1723,115 @@ class WsVoqualizer(WsHandler):
                 session.transition_to(STATE_READY)
             except Exception:
                 pass
+
+
+    # ------------------------------------------------------------------
+    # voqualizer_text_prompt
+    # ------------------------------------------------------------------
+
+    def _resolve_agent_context(self, ctxid: str):
+        """Resolve an A0 AgentContext by id for the realtime prompt bridge."""
+        context = AgentContext.get(ctxid) if ctxid else None
+        if context is None:
+            context = AgentContext.get() if not ctxid else None
+        if context is None:
+            raise ValueError(f"context {ctxid!r} not found")
+        return context
+
+    async def _handle_text_prompt(self, data: Mapping[str, Any], sid: str) -> dict[str, Any] | WsResult:
+        """Submit a user prompt over the initialized Voqualizer WS session.
+
+        This is the first migration step toward a single realtime session
+        protocol.  It intentionally mirrors the plugin HTTP async endpoint while
+        keeping /poll as the authoritative reconciliation fallback on clients.
+        """
+        if self._session_id is None:
+            return WsResult.error(
+                code=NO_SESSION,
+                message="send voqualizer_init before voqualizer_text_prompt",
+            )
+        session = self._registry().get(self._session_id)
+        if session is None:
+            return WsResult.error(
+                code=NO_SESSION,
+                message=f"session {self._session_id!r} not active",
+            )
+        if not isinstance(data, Mapping):
+            return WsResult.error(code=BAD_REQUEST, message="voqualizer_text_prompt requires an object payload")
+        auth_error = self._verify_session_token(session, data, "voqualizer_text_prompt")
+        if auth_error is not None:
+            return auth_error
+        text = data.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return WsResult.error(code=BAD_REQUEST, message="voqualizer_text_prompt.text must be a non-empty string")
+        context_id = str(data.get("context") or data.get("context_id") or session.context_id or "")
+        message_id = str(data.get("message_id") or uuid.uuid4())
+        generation_id = str(data.get("generation_id") or message_id)
+        try:
+            session.cancel_in_flight_tts()
+        except Exception:
+            pass
+        session.metadata["active_generation_id"] = generation_id
+        session.metadata["active_message_id"] = message_id
+        session.metadata["active_prompt_started_at"] = _server_time_ms()
+        try:
+            context = self._resolve_agent_context(context_id)
+            session.context_id = context.id
+            payload: dict[str, Any] = {"message": text, "attachment_paths": []}
+            await extension.call_extensions_async(
+                "user_message_ui",
+                agent=context.get_agent(),
+                data=payload,
+            )
+            message = str(payload.get("message") or "")
+            attachment_paths = list(payload.get("attachment_paths") or [])
+            mq.log_user_message(context, message, attachment_paths, message_id or None)
+            context.communicate(
+                UserMessage(
+                    message=message,
+                    attachments=attachment_paths,
+                    id=message_id or "",
+                )
+            )
+            if session.sender is not None:
+                await session.sender("voqualizer_prompt_ack", {
+                    "event": "voqualizer_prompt_ack",
+                    "session_id": session.session_id,
+                    "context_id": context.id,
+                    "message_id": message_id,
+                    "generation_id": generation_id,
+                    "status": "submitted",
+                    "server_time": _server_time_ms(),
+                })
+            return {
+                "event": "voqualizer_prompt_ack",
+                "session_id": session.session_id,
+                "context_id": context.id,
+                "message_id": message_id,
+                "generation_id": generation_id,
+                "status": "submitted",
+                "server_time": _server_time_ms(),
+            }
+        except Exception as exc:
+            log_voqualizer_error(
+                HANDLER_ERROR,
+                f"voqualizer_text_prompt failed: {type(exc).__name__}: {exc!r}",
+                session_id=session.session_id,
+                operation="voqualizer_text_prompt",
+                severity="error",
+            )
+            if session.sender is not None:
+                await session.sender("voqualizer_prompt_error", {
+                    "event": "voqualizer_prompt_error",
+                    "session_id": session.session_id,
+                    "context_id": context_id,
+                    "message_id": message_id,
+                    "generation_id": generation_id,
+                    "code": HANDLER_ERROR,
+                    "message": str(exc),
+                    "server_time": _server_time_ms(),
+                })
+            return WsResult.error(code=HANDLER_ERROR, message=f"voqualizer_text_prompt failed: {exc}")
 
     # ------------------------------------------------------------------
     # voqualizer_control
