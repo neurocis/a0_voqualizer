@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-collapse-response-json-2026-05-30-63';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-fix-kind-ignore-thankyou-asr-2026-05-30-64';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-collapse-response-json';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-collapse-response-json-2026-05-30-63';
+const PAGE_VERSION = 'm8-fix-kind-ignore-thankyou-asr';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-fix-kind-ignore-thankyou-asr-2026-05-30-64';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -562,6 +562,7 @@ function buildAsrDebugLines() {
     `ack_store_final=${JSON.stringify(c.lastAckAsrFinalText || '')}`,
     `submit_at=${c.lastPromptSubmitAt} submit_skip=${c.lastPromptSubmitSkipReason}`,
     `page_final=${JSON.stringify(p.asrLastFinalText || '')}`,
+    `ignored_asr_final=${JSON.stringify(p.lastIgnoredAsrFinalText || '')} ignored_reason=${p.lastIgnoredAsrFinalReason || ''}`,
     `prompt=${JSON.stringify(input?.value || '')}`,
   ];
   return lines.join('\n');
@@ -960,7 +961,7 @@ function renderOrUpdateLogBubble(state, item) {
     const cxBubble = cxBubbleForLogItem(item);
     if (cxBubble) {
       const body = cxBubble.querySelector('.voq-bubble-body');
-      if (body) setBubbleBodyText(body, content, { type: kind });
+      if (body) setBubbleBodyText(body, content, item);
       cxBubble.dataset.kind = item.type;
       cxBubble.dataset.final = item.type === 'response' ? 'true' : 'false';
       cxBubble.dataset.streaming = 'false';
@@ -975,7 +976,7 @@ function renderOrUpdateLogBubble(state, item) {
   }
   if (existing) {
     const body = existing.querySelector('.voq-bubble-body');
-    if (body) setBubbleBodyText(body, content, { type: kind });
+    if (body) setBubbleBodyText(body, content, item);
     existing.dataset.kind = item.type;
     existing.dataset.final = item.type === 'response' ? 'true' : 'false';
   } else {
@@ -2438,6 +2439,7 @@ function setPageStateRef(state) {
 // the M3/M4/M5/M7 typed-prompt + /poll + cx-stream + word-highlight pipeline
 // stays the single source of truth for assistant responses on this page.
 async function routeStoreAsrFinal(text) {
+  if (shouldIgnoreAsrFinalText(text)) { recordIgnoredAsrFinal(text, 'false_positive_thank_you'); return; }
   if (!pageState) return;
   const input = document.getElementById('voq-prompt-input');
   const trimmed = String(text || '').trim();
@@ -2457,6 +2459,27 @@ async function routeStoreAsrFinal(text) {
 // Legacy aliases retained so other code paths (and source-token tests) keep
 // matching the same identifiers the M5 implementation introduced. The store
 // owns capture, so these are intentionally thin/no-ops.
+function normalizeAsrFinalForFilter(text) {
+  return safeString(text).trim().toLowerCase().replace(/[\s.!?,;:]+/g, ' ').trim();
+}
+
+function shouldIgnoreAsrFinalText(text) {
+  const normalized = normalizeAsrFinalForFilter(text);
+  if (!normalized) return true;
+  // Common Whisper/mobile false-positive when no meaningful speech was intended.
+  if (normalized === 'thank you' || normalized === 'thanks' || normalized === 'thank you for watching') return true;
+  return false;
+}
+
+function recordIgnoredAsrFinal(text, reason) {
+  const page = globalThis.__voqualizer_page;
+  if (page) {
+    page.lastIgnoredAsrFinalAt = Date.now();
+    page.lastIgnoredAsrFinalText = safeString(text);
+    page.lastIgnoredAsrFinalReason = reason;
+  }
+}
+
 function handleAsrPartial(payload) {
   const data = (payload && payload.data) || payload || {};
   const text = String(data.text || '').trim();
@@ -2467,6 +2490,7 @@ async function handleAsrFinal(payload) {
   const data = (payload && payload.data) || payload || {};
   const text = String(data.text || '').trim();
   if (!text) return;
+  if (shouldIgnoreAsrFinalText(text)) { recordIgnoredAsrFinal(text, 'false_positive_thank_you'); return; }
   await routeStoreAsrFinal(text);
 }
 async function routeAsrFinal(text) { await routeStoreAsrFinal(text); }
