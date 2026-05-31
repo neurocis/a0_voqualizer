@@ -330,6 +330,40 @@ def _sessions_for_context_with_fallback(context_id: str):
         if sid_context and sid_context in candidate_ids:
             results.append((session, sid_context))
             seen.add(session.session_id)
+
+    # Authoritative realtime TTS must have exactly one playback route.  Stale
+    # mobile tabs, resumed sessions, and bridge+fallback bindings can otherwise
+    # cause the same context output to be synthesized/emitted repeatedly.  Keep
+    # only the newest live sender per route context, preferring sessions that
+    # explicitly requested authoritative_stream delivery.
+    if results:
+        by_context: dict[str, tuple[BridgeSession, str]] = {}
+        for session, route_context in results:
+            mode = str(session.metadata.get("tts_delivery_mode") or "")
+            score = (
+                1 if mode == "authoritative_stream" else 0,
+                float(getattr(session, "last_activity_at", 0.0) or 0.0),
+                float(getattr(session, "created_at", 0.0) or 0.0),
+            )
+            current = by_context.get(route_context)
+            if current is None:
+                by_context[route_context] = (session, route_context)
+                session.metadata["tts_authoritative_route_score"] = score
+                continue
+            cur_session, _ = current
+            cur_mode = str(cur_session.metadata.get("tts_delivery_mode") or "")
+            cur_score = (
+                1 if cur_mode == "authoritative_stream" else 0,
+                float(getattr(cur_session, "last_activity_at", 0.0) or 0.0),
+                float(getattr(cur_session, "created_at", 0.0) or 0.0),
+            )
+            if score >= cur_score:
+                cur_session.metadata["tts_last_skip_reason"] = "superseded_authoritative_session"
+                session.metadata["tts_authoritative_route_score"] = score
+                by_context[route_context] = (session, route_context)
+            else:
+                session.metadata["tts_last_skip_reason"] = "superseded_authoritative_session"
+        results = list(by_context.values())
     return results, candidate_ids
 
 def _request_metadata_for_tts_spec(spec: Mapping[str, Any], *, source: str, context_id: str) -> dict[str, Any]:

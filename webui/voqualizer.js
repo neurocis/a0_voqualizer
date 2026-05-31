@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-authoritative-tts-stream-2026-05-30-60';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-authoritative-tts-single-session-2026-05-30-61';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-authoritative-tts-stream';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-authoritative-tts-stream-2026-05-30-60';
+const PAGE_VERSION = 'm8-authoritative-tts-single-session';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-authoritative-tts-single-session-2026-05-30-61';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -642,6 +642,7 @@ function buildTtsDebugLines() {
     `socket_ready=${p.ttsReady} session=${p.ttsSessionId || ''} context=${p.selectedContextId || ''}`,
     `ws_prompt_transport=${p.promptSubmitTransport || ''} ws_prompt_ack=${p.lastWsPromptAckAt || 0} ws_prompt_error=${p.lastWsPromptError || ''}`,
     `tts_mode=${AUTHORITATIVE_TTS_STREAM_ONLY ? 'authoritative_stream' : 'hybrid'} active_generation=${tts.activeGenerationId || ''} accepted_generation=${tts.lastAcceptedGenerationId || ''}`,
+    `authoritative_single_session=true ignored_reason=${p.lastTtsIgnoredReason || ''}`,
     `init_start=${p.lastTtsInitStartAt || 0} init_ready=${p.lastTtsInitReadyAt || 0} init_context=${p.lastTtsInitContextId || ''} init_error=${p.lastTtsInitError || ''}`,
     `speak_entry=${p.lastTtsSpeakEntryAt || 0} speak_entry_len=${p.lastTtsSpeakEntryTextLength || 0} speak_skip=${p.lastTtsSpeakSkipReason || ''}`,
     `last_trigger_at=${p.lastTtsTriggerAt || 0} trigger_type=${p.lastTtsTriggerType || ''} trigger_id=${p.lastTtsTriggerItemId || ''} trigger_fallback=${p.lastTtsTriggerFallbackId || ''} trigger_len=${p.lastTtsTriggerTextLength || 0} skip=${p.lastTtsSkipReason || ''}`,
