@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-green-vu-meter-2026-05-31-72';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-vu-visible-hold-2026-05-31-73';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-green-vu-meter';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-green-vu-meter-2026-05-31-72';
+const PAGE_VERSION = 'm8-tts-vu-visible-hold';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-visible-hold-2026-05-31-73';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -71,6 +71,7 @@ const tts = {
   acceptedTtsUtteranceIds: new Set(),
   seenTtsChunkKeys: new Set(),
   seenTtsChunkQueue: [],
+  ttsVuClearTimer: 0,
   livePushSinceSubmit: false,
   lastLivePushAt: 0,
   lastLivePushUtteranceId: '',
@@ -545,7 +546,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-green-vu-meter-2026-05-31-72'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-visible-hold-2026-05-31-73'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -639,7 +640,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-green-vu-meter-2026-05-31-72'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-visible-hold-2026-05-31-73'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -662,7 +663,7 @@ function buildTtsDebugLines() {
     `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
     `duplicate_chunks=${p.duplicateTtsChunkCount || 0} duplicate_utt=${p.lastDuplicateTtsChunkUtteranceId || ''}`,
     `playback_at=${p.lastPlaybackStartAt || 0} playback_ms=${p.lastPlaybackDurationMs || 0} playback_utt=${p.lastPlaybackUtteranceId || ''} playback_error=${p.lastPlaybackError || ''}`,
-    `tts_vu=${p.ttsVuLevel || 0} tts_vu_at=${p.lastTtsVuAt || 0} tts_vu_clear=${p.lastTtsVuClearAt || 0}`,
+    `tts_vu=${p.ttsVuLevel || 0} tts_vu_at=${p.lastTtsVuAt || 0} tts_vu_clear=${p.lastTtsVuClearAt || 0} tts_vu_hold=${p.lastTtsVuHoldMs || 0}`,
     `audio_state=${p.audioContextState || ''} audio_create=${p.lastAudioContextCreateAt || 0} audio_create_reason=${p.lastAudioContextCreateReason || ''} audio_create_error=${p.lastAudioContextError || ''}`,
     `audio_resume=${p.lastAudioResumeAt || 0} audio_resume_reason=${p.lastAudioResumeReason || ''} audio_resume_error=${p.lastAudioResumeError || ''}`,
     `stale_socket_event=${p.lastStaleTtsSocketEvent || ''} stale_socket_at=${p.lastStaleTtsSocketEventAt || 0}`,
@@ -1544,7 +1545,7 @@ async function resumeAudioContext(reason = 'resume') {
       globalThis.__voqualizer_page.lastAudioResumeError = '';
       globalThis.__voqualizer_page.audioContextState = ctx.state;
     }
-    setTimeout(clearTtsVu, Math.max(80, Math.round(buffer.duration * 1000) + 40));
+    // TTS VU is held/decayed by updateTtsVu() so short PCM chunks remain visible.
   } catch (error) {
     if (globalThis.__voqualizer_page) {
       globalThis.__voqualizer_page.lastAudioResumeAt = Date.now();
@@ -1946,7 +1947,7 @@ function bytesToTtsVuPercent(bytes) {
   }
   if (!count) return 0;
   const rms = Math.sqrt(total / count) / 32768;
-  return Math.max(0, Math.min(1, rms * 4.2));
+  return Math.max(0.18, Math.min(1, rms * 7.5));
 }
 
 function updateTtsVu(bytes) {
@@ -1954,15 +1955,22 @@ function updateTtsVu(bytes) {
   if (!speaker) return;
   const vu = bytesToTtsVuPercent(bytes);
   speaker.style.setProperty('--voqualizer-tts-vu-level', String(vu));
-  speaker.style.setProperty('--voqualizer-tts-vu-opacity', vu > 0.01 ? '0.9' : '0');
+  speaker.style.setProperty('--voqualizer-tts-vu-opacity', vu > 0.01 ? '0.96' : '0');
   speaker.classList.toggle('voqualizer-tts-playing', vu > 0.01);
+  if (tts.ttsVuClearTimer) clearTimeout(tts.ttsVuClearTimer);
+  tts.ttsVuClearTimer = setTimeout(clearTtsVu, 220);
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.ttsVuLevel = vu;
     globalThis.__voqualizer_page.lastTtsVuAt = Date.now();
+    globalThis.__voqualizer_page.lastTtsVuHoldMs = 220;
   }
 }
 
 function clearTtsVu() {
+  if (tts.ttsVuClearTimer) {
+    clearTimeout(tts.ttsVuClearTimer);
+    tts.ttsVuClearTimer = 0;
+  }
   const speaker = document.getElementById('voqualizer-speaker-button');
   if (speaker) {
     speaker.style.setProperty('--voqualizer-tts-vu-level', '0');
@@ -2885,6 +2893,7 @@ function initVoqualizerPage() {
     ttsVuLevel: 0,
     lastTtsVuAt: 0,
     lastTtsVuClearAt: 0,
+    lastTtsVuHoldMs: 0,
     audioContextState: '',
     lastStatus: 'Ready',
     lastStatusLevel: 'info',
