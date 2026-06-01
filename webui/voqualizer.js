@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-asr-provider-reset-debug-2026-05-31-68';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-prompt-clear-button-2026-05-31-69';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-asr-provider-reset-debug';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-asr-provider-reset-debug-2026-05-31-68';
+const PAGE_VERSION = 'm8-prompt-clear-button';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-prompt-clear-button-2026-05-31-69';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -545,7 +545,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-asr-provider-reset-debug-2026-05-31-68'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-prompt-clear-button-2026-05-31-69'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -639,7 +639,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-asr-provider-reset-debug-2026-05-31-68'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-prompt-clear-button-2026-05-31-69'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -1331,6 +1331,7 @@ async function submitPrompt(state) {
   renderUserBubble(state, { id: messageId, text });
   prompt.value = '';
   autosizePrompt(prompt);
+  updatePromptClearButton();
   // Do not block visible submit feedback on optional realtime/TTS socket setup.
   // Socket.IO load/connect/init can take a noticeable moment on mobile; the
   // typed prompt submit path is authoritative, so show the echo immediately
@@ -1367,13 +1368,39 @@ async function submitPrompt(state) {
   }
 }
 
+function updatePromptClearButton() {
+  const prompt = document.getElementById('voq-prompt-input');
+  const clear = document.getElementById('voq-prompt-clear');
+  if (!clear || !prompt) return;
+  const hasText = !!String(prompt.value || '').trim();
+  clear.hidden = !hasText;
+  clear.setAttribute('aria-hidden', hasText ? 'false' : 'true');
+}
+
+function clearPromptText(state) {
+  const prompt = document.getElementById('voq-prompt-input');
+  if (!prompt) return;
+  prompt.value = '';
+  delete prompt.dataset.voqAsrGhost;
+  autosizePrompt(prompt);
+  resetSendIndicatorOnInteraction();
+  updatePromptClearButton();
+  updateSendButton(state);
+  prompt.focus();
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastPromptClearAt = Date.now();
+  }
+}
+
 function bindPromptInput(state) {
   const prompt = document.getElementById('voq-prompt-input');
   const button = document.getElementById('voq-send-button');
+  const clear = document.getElementById('voq-prompt-clear');
   if (!prompt) return;
   prompt.addEventListener('input', () => {
     resetSendIndicatorOnInteraction();
     autosizePrompt(prompt);
+    updatePromptClearButton();
     updateSendButton(state);
   });
   prompt.addEventListener('focus', () => { resetSendIndicatorOnInteraction(); updateSendButton(state); });
@@ -1385,7 +1412,9 @@ function bindPromptInput(state) {
     void submitPrompt(state);
   });
   if (button) button.addEventListener('click', () => void submitPrompt(state));
+  if (clear) clear.addEventListener('click', () => clearPromptText(state));
   autosizePrompt(prompt);
+  updatePromptClearButton();
   updateSendButton(state);
 }
 
@@ -2452,6 +2481,7 @@ async function routeStoreAsrFinal(text) {
     input.value = trimmed;
     delete input.dataset.voqAsrGhost;
     autosizePrompt(input);
+    updatePromptClearButton();
   }
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.asrLastFinalText = trimmed;

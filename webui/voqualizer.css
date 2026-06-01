@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-asr-provider-reset-debug-2026-05-31-68 */
+/* voq-mobile-version: m8-prompt-clear-button-2026-05-31-69 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -323,6 +323,11 @@ body {
   align-items: end;
 }
 
+.voq-prompt-shell {
+  position: relative;
+  min-width: 0;
+}
+
 .voq-prompt-input {
   width: 100%;
   min-height: 52px;
@@ -330,7 +335,7 @@ body {
   resize: none;
   border: 1px solid var(--voq-border);
   border-radius: 16px;
-  padding: 14px 16px;
+  padding: 14px 48px 14px 16px;
   background: rgba(2, 6, 23, 0.72);
   color: var(--voq-text);
   outline: none;
@@ -340,6 +345,35 @@ body {
 }
 
 .voq-prompt-input::placeholder { color: var(--voq-faint); }
+
+.voq-prompt-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.82);
+  color: var(--voq-muted);
+  display: inline-grid;
+  place-items: center;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.voq-prompt-clear:hover,
+.voq-prompt-clear:focus-visible {
+  color: var(--voq-text);
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.voq-prompt-clear:active { transform: translateY(-50%) scale(0.96); }
+.voq-prompt-clear[hidden] { display: none; }
 
 .voq-actions {
   display: flex;
@@ -1095,4 +1129,9 @@ body {
 .voq-context-menu-button[data-debug-visible="true"] {
   border-color: rgba(125, 211, 252, 0.72);
   box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.18);
+}
+
+@media (max-width: 480px) {
+  .voq-prompt-input { padding-right: 46px; }
+  .voq-prompt-clear { right: 9px; width: 34px; height: 34px; }
 }
