@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-remove-tts-v-badge-2026-05-31-71 */
+/* voq-mobile-version: m8-tts-green-vu-meter-2026-05-31-72 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -924,6 +924,35 @@ body {
   color: #ff3b30;
   text-shadow: 0 0 7px rgba(255, 59, 48, 0.9), 0 0 14px rgba(255, 59, 48, 0.45);
 }
+
+.voqualizer-tts-vu {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% calc(100% - 8px),
+      rgba(46, 204, 113, calc(0.35 + (0.55 * var(--voqualizer-tts-vu-level, 0)))) 0%,
+      rgba(46, 204, 113, calc(0.24 + (0.42 * var(--voqualizer-tts-vu-level, 0)))) calc(32% + (42% * var(--voqualizer-tts-vu-level, 0))),
+      transparent calc(34% + (42% * var(--voqualizer-tts-vu-level, 0)))),
+    linear-gradient(0deg,
+      rgba(46, 204, 113, 0.92) 0%,
+      rgba(46, 204, 113, 0.58) calc(100% * var(--voqualizer-tts-vu-level, 0)),
+      transparent calc(100% * var(--voqualizer-tts-vu-level, 0)));
+  opacity: var(--voqualizer-tts-vu-opacity, 0);
+  transform: scale(calc(0.84 + (0.18 * var(--voqualizer-tts-vu-level, 0))));
+  transform-origin: center;
+  transition: transform 65ms linear, opacity 100ms ease, filter 65ms linear;
+  filter: drop-shadow(0 0 calc(3px + (8px * var(--voqualizer-tts-vu-level, 0))) rgba(46, 204, 113, 0.95));
+  pointer-events: none;
+  z-index: 1;
+}
+.voqualizer-speaker .material-symbols-outlined,
+.voqualizer-speaker .voq-text-fallback { z-index: 2; }
+.voqualizer-speaker.voqualizer-tts-playing {
+  box-shadow:
+    0 0 0 2px rgba(34, 197, 94, 0.95) inset,
+    0 0 calc(7px + (12px * var(--voqualizer-tts-vu-level, 0))) rgba(34, 197, 94, 0.62);
+}
 .voqualizer-mic-vu {
   position: absolute;
   inset: 4px;
@@ -1011,7 +1040,7 @@ body {
 @keyframes voqualizerPulse { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .voqualizer-connecting { animation: none; }
-  .voqualizer-mic-vu { transition: none; }
+  .voqualizer-mic-vu, .voqualizer-tts-vu { transition: none; }
 }
 
 .voq-action-button.voq-send-success {
