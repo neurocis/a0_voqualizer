@@ -1246,7 +1246,7 @@ class WsVoqualizer(WsHandler):
         )
         state.clear()
         state.update(self._new_asr_utterance_state(session))
-        session.metadata["asr_utterance_state_reset_at_ms"] = now_ms()
+        session.metadata["asr_utterance_state_reset_at_ms"] = _server_time_ms()
         return 0
 
     async def _handle_audio_chunk(self, data: Any, sid: str) -> dict[str, Any] | WsResult:
