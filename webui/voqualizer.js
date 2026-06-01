@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-restore-asr-vu-after-suppress-tts-2026-05-31-66';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-ignore-blank-silence-inaudible-asr-2026-05-31-67';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-restore-asr-vu-after-suppress-tts';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-restore-asr-vu-after-suppress-tts-2026-05-31-66';
+const PAGE_VERSION = 'm8-ignore-blank-silence-inaudible-asr';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-ignore-blank-silence-inaudible-asr-2026-05-31-67';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -545,7 +545,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-restore-asr-vu-after-suppress-tts-2026-05-31-66'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-ignore-blank-silence-inaudible-asr-2026-05-31-67'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -636,7 +636,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-restore-asr-vu-after-suppress-tts-2026-05-31-66'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-ignore-blank-silence-inaudible-asr-2026-05-31-67'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -2440,7 +2440,7 @@ function setPageStateRef(state) {
 // the M3/M4/M5/M7 typed-prompt + /poll + cx-stream + word-highlight pipeline
 // stays the single source of truth for assistant responses on this page.
 async function routeStoreAsrFinal(text) {
-  if (shouldIgnoreAsrFinalText(text)) { recordIgnoredAsrFinal(text, 'false_positive_thank_you'); return; }
+  if (shouldIgnoreAsrFinalText(text)) { recordIgnoredAsrFinal(text, 'false_positive_silence_or_filler'); return; }
   if (!pageState) return;
   const input = document.getElementById('voq-prompt-input');
   const trimmed = String(text || '').trim();
@@ -2461,14 +2461,27 @@ async function routeStoreAsrFinal(text) {
 // matching the same identifiers the M5 implementation introduced. The store
 // owns capture, so these are intentionally thin/no-ops.
 function normalizeAsrFinalForFilter(text) {
-  return safeString(text).trim().toLowerCase().replace(/[\s.!?,;:]+/g, ' ').trim();
+  return safeString(text)
+    .trim()
+    .toLowerCase()
+    .replace(/[\[\](){}]/g, ' ')
+    .replace(/[\s.!?,;:_-]+/g, ' ')
+    .trim();
 }
 
 function shouldIgnoreAsrFinalText(text) {
   const normalized = normalizeAsrFinalForFilter(text);
   if (!normalized) return true;
-  // Common Whisper/mobile false-positive when no meaningful speech was intended.
-  if (normalized === 'thank you' || normalized === 'thanks' || normalized === 'thank you for watching') return true;
+  // Common Whisper/mobile false-positives when no meaningful speech was intended.
+  const ignored = new Set([
+    'thank you',
+    'thanks',
+    'thank you for watching',
+    'blank audio',
+    'silence',
+    'inaudible',
+  ]);
+  if (ignored.has(normalized)) return true;
   return false;
 }
 
@@ -2491,7 +2504,7 @@ async function handleAsrFinal(payload) {
   const data = (payload && payload.data) || payload || {};
   const text = String(data.text || '').trim();
   if (!text) return;
-  if (shouldIgnoreAsrFinalText(text)) { recordIgnoredAsrFinal(text, 'false_positive_thank_you'); return; }
+  if (shouldIgnoreAsrFinalText(text)) { recordIgnoredAsrFinal(text, 'false_positive_silence_or_filler'); return; }
   await routeStoreAsrFinal(text);
 }
 async function routeAsrFinal(text) { await routeStoreAsrFinal(text); }
