@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-asr-does-not-own-tts-2026-05-31-65';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-restore-asr-vu-after-suppress-tts-2026-05-31-66';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-asr-does-not-own-tts';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-asr-does-not-own-tts-2026-05-31-65';
+const PAGE_VERSION = 'm8-restore-asr-vu-after-suppress-tts';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-restore-asr-vu-after-suppress-tts-2026-05-31-66';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -545,7 +545,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-processing-heartbeat-2026-05-29-57'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-restore-asr-vu-after-suppress-tts-2026-05-31-66'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -636,7 +636,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-processing-heartbeat-2026-05-29-57'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-restore-asr-vu-after-suppress-tts-2026-05-31-66'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,

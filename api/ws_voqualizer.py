@@ -624,6 +624,7 @@ class WsVoqualizer(WsHandler):
 
         session.metadata["asr_final_silence_ms"] = asr_final_silence_ms
         session.metadata["asr_preroll_ms"] = asr_preroll_ms
+        session.metadata["asr_enabled"] = bool(asr_block.get("enabled", True))
         asr_submit_mode = str(data.get("asr_submit_mode") or asr_block.get("submit_mode") or "context_bridge").strip()
         if asr_submit_mode not in {"context_bridge", "frontend_prompt"}:
             asr_submit_mode = "context_bridge"

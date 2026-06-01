@@ -613,6 +613,11 @@ export function createVoqualizerStore(options = {}) {
               context_id: this.contextId || '',
               input_codec: INPUT_CODEC,
               output_codec: OUTPUT_CODEC,
+              asr: {
+                enabled: this.desiredMode === DESIRED_CONVERSATIONAL || this.desiredMode === DESIRED_PTT,
+                codec: INPUT_CODEC,
+                submit_mode: this._onAsrFinal ? 'frontend_prompt' : 'context_bridge',
+              },
               tts: { enabled: this._suppressTts ? false : this.isTtsEnabled(), suppressed: !!this._suppressTts },
               asr_submit_mode: this._onAsrFinal ? 'frontend_prompt' : 'context_bridge',
               tts_delivery_mode: this._suppressTts ? 'disabled' : 'hybrid',
@@ -621,8 +626,14 @@ export function createVoqualizerStore(options = {}) {
               const data = this._unwrapPayload(response);
               this.sessionId = data.session_id || this.sessionId;
               this.bearerToken = data.bearer_token || this.bearerToken;
-              if (this.desiredMode === DESIRED_TTS) this.state = STATE_TTS_READY;
-              this._setReason('ready', 'init_ack');
+              if (!this.sessionId || !this.bearerToken) {
+                this.lastError = 'voqualizer_init_missing_session_token';
+                this.lastAudioAckError = this.lastError;
+                this._setReason('init_missing_session_token', 'init_ack');
+              } else {
+                if (this.desiredMode === DESIRED_TTS) this.state = STATE_TTS_READY;
+                this._setReason('ready', 'init_ack');
+              }
               finish();
             });
           } catch (_e) { finish(); }
