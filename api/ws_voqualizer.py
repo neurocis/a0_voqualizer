@@ -1025,6 +1025,9 @@ class WsVoqualizer(WsHandler):
             await self._emit_transcript(session, result)
         except ASRError as exc:
             session.metadata["asr_background_errors"] = int(session.metadata.get("asr_background_errors", 0)) + 1
+            session.metadata["asr_last_background_error"] = f"{type(exc).__name__}: {exc!r}"
+            session.metadata["asr_provider_reset_count"] = int(session.metadata.get("asr_provider_reset_count", 0)) + 1
+            session.metadata.pop("asr_provider_instance", None)
             if session.sender is not None and _should_emit_session_error(session, "asr_background_error"):
                 payload = exc.to_dict()
                 payload["session_id"] = session.session_id
@@ -1032,6 +1035,9 @@ class WsVoqualizer(WsHandler):
                 await session.sender("voqualizer_error", payload)
         except Exception as exc:
             session.metadata["asr_background_errors"] = int(session.metadata.get("asr_background_errors", 0)) + 1
+            session.metadata["asr_last_background_error"] = f"{type(exc).__name__}: {exc!r}"
+            session.metadata["asr_provider_reset_count"] = int(session.metadata.get("asr_provider_reset_count", 0)) + 1
+            session.metadata.pop("asr_provider_instance", None)
             log_voqualizer_error(
                 HANDLER_ERROR,
                 f"background ASR transcription failed: {type(exc).__name__}: {exc!r}",
@@ -1365,6 +1371,14 @@ class WsVoqualizer(WsHandler):
                 "asr_last_partial_metadata",
                 "asr_last_final_text",
                 "asr_last_final_metadata",
+                "asr_background_errors",
+                "asr_last_background_error",
+                "asr_provider_reset_count",
+                "asr_background_error_suppressed_count",
+                "asr_empty_results_suppressed",
+                "asr_last_suppressed_text",
+                "stale_asr_result_ignored",
+                "asr_last_stale_final_text",
                 "context_injection_skipped",
                 "context_injections",
                 "context_injection_errors",

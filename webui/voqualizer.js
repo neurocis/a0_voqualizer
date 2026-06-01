@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-ignore-blank-silence-inaudible-asr-2026-05-31-67';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-asr-provider-reset-debug-2026-05-31-68';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-ignore-blank-silence-inaudible-asr';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-ignore-blank-silence-inaudible-asr-2026-05-31-67';
+const PAGE_VERSION = 'm8-asr-provider-reset-debug';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-asr-provider-reset-debug-2026-05-31-68';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -545,7 +545,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-ignore-blank-silence-inaudible-asr-2026-05-31-67'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-asr-provider-reset-debug-2026-05-31-68'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -557,6 +557,9 @@ function buildAsrDebugLines() {
     `vad_rms=${ack.asr_vad_last_rms} vad_peak=${ack.asr_vad_peak_rms} vad_threshold=${ack.asr_vad_speech_rms} vad_speech=${ack.asr_vad_has_speech} vad_ms=${ack.asr_vad_speech_ms} vad_chunks=${ack.asr_vad_buffered_chunks}`,
     `ack_partial=${JSON.stringify(ack.asr_last_partial_text || '')}`,
     `ack_final=${JSON.stringify(ack.asr_last_final_text || '')}`,
+    `asr_bg_errors=${ack.asr_background_errors || 0} asr_provider_resets=${ack.asr_provider_reset_count || 0} asr_error=${JSON.stringify(ack.asr_last_background_error || '')}`,
+    `asr_empty_suppressed=${ack.asr_empty_results_suppressed || 0} asr_suppressed_text=${JSON.stringify(ack.asr_last_suppressed_text || '')}`,
+    `asr_stale_ignored=${ack.stale_asr_result_ignored || 0} asr_stale_final=${JSON.stringify(ack.asr_last_stale_final_text || '')}`,
     `store_partial=${JSON.stringify(c.lastAsrPartialText || '')}`,
     `store_final=${JSON.stringify(c.lastAsrFinalText || '')}`,
     `ack_store_final=${JSON.stringify(c.lastAckAsrFinalText || '')}`,
@@ -636,7 +639,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-ignore-blank-silence-inaudible-asr-2026-05-31-67'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-asr-provider-reset-debug-2026-05-31-68'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
