@@ -216,6 +216,9 @@ class SentenceTTSChunker:
             session = registry.get(binding.session_id)
             if session is None or session.sender is None:
                 continue
+            if not getattr(session, "tts_enabled", True) or session.metadata.get("tts_suppressed"):
+                session.metadata["tts_last_skip_reason"] = "tts_disabled_or_suppressed"
+                continue
             if session.session_id in seen:
                 continue
             seen.add(session.session_id)
@@ -226,6 +229,9 @@ class SentenceTTSChunker:
         # candidates, but do not synthesize once per candidate.
         for session in registry.iter_active():
             if session.session_id in seen or session.sender is None:
+                continue
+            if not getattr(session, "tts_enabled", True) or session.metadata.get("tts_suppressed"):
+                session.metadata["tts_last_skip_reason"] = "tts_disabled_or_suppressed"
                 continue
             if str(getattr(session, "context_id", "") or "") != context_id:
                 continue

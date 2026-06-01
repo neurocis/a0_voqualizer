@@ -633,6 +633,7 @@ class WsVoqualizer(WsHandler):
         tts_enabled_init = tts_block.get("enabled")
         if isinstance(tts_enabled_init, bool):
             session.tts_enabled = tts_enabled_init
+        session.metadata["tts_suppressed"] = bool(tts_block.get("suppressed"))
 
         # Wire up sender + bookkeeping for this connection.
         await self._bind_sender(session, sid)

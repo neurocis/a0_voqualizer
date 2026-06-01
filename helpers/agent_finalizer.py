@@ -321,10 +321,16 @@ def _sessions_for_context_with_fallback(context_id: str):
         for binding in bindings:
             session = registry.get(binding.session_id)
             if session is not None and session.session_id not in seen:
+                if not getattr(session, "tts_enabled", True) or session.metadata.get("tts_suppressed"):
+                    session.metadata["tts_last_skip_reason"] = "tts_disabled_or_suppressed"
+                    continue
                 results.append((session, binding.context_id))
                 seen.add(session.session_id)
     for session in registry.iter_active():
         if session.session_id in seen:
+            continue
+        if not getattr(session, "tts_enabled", True) or session.metadata.get("tts_suppressed"):
+            session.metadata["tts_last_skip_reason"] = "tts_disabled_or_suppressed"
             continue
         sid_context = str(getattr(session, "context_id", "") or "")
         if sid_context and sid_context in candidate_ids:

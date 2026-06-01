@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-fix-kind-ignore-thankyou-asr-2026-05-30-64';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-asr-does-not-own-tts-2026-05-31-65';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-fix-kind-ignore-thankyou-asr';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-fix-kind-ignore-thankyou-asr-2026-05-30-64';
+const PAGE_VERSION = 'm8-asr-does-not-own-tts';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-asr-does-not-own-tts-2026-05-31-65';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -641,6 +641,7 @@ function buildTtsDebugLines() {
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
     `socket_ready=${p.ttsReady} session=${p.ttsSessionId || ''} context=${p.selectedContextId || ''}`,
+    `store_suppress_tts=${!!(globalThis.__voqualizer_conversation?._suppressTts)} store_state=${globalThis.__voqualizer_conversation?.state || ''} store_session=${globalThis.__voqualizer_conversation?.sessionId || ''}`,
     `ws_prompt_transport=${p.promptSubmitTransport || ''} ws_prompt_ack=${p.lastWsPromptAckAt || 0} ws_prompt_error=${p.lastWsPromptError || ''}`,
     `tts_mode=${AUTHORITATIVE_TTS_STREAM_ONLY ? 'authoritative_stream' : 'hybrid'} active_generation=${tts.activeGenerationId || ''} accepted_generation=${tts.lastAcceptedGenerationId || ''}`,
     `authoritative_single_session=true ignored_reason=${p.lastTtsIgnoredReason || ''}`,

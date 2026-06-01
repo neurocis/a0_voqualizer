@@ -613,8 +613,9 @@ export function createVoqualizerStore(options = {}) {
               context_id: this.contextId || '',
               input_codec: INPUT_CODEC,
               output_codec: OUTPUT_CODEC,
-              tts: { enabled: this.isTtsEnabled() },
+              tts: { enabled: this._suppressTts ? false : this.isTtsEnabled(), suppressed: !!this._suppressTts },
               asr_submit_mode: this._onAsrFinal ? 'frontend_prompt' : 'context_bridge',
+              tts_delivery_mode: this._suppressTts ? 'disabled' : 'hybrid',
             }, (response) => {
               if (!this._isGenerationCurrent(generation) || this.desiredMode === DESIRED_IDLE) { finish(); return; }
               const data = this._unwrapPayload(response);
