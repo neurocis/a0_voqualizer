@@ -46,6 +46,28 @@ export const DESIRED_CONVERSATIONAL = 'conversational';
 export const DESIRED_PTT = 'ptt';
 export const DESIRED_TTS = 'tts';
 
+function normalizedAsrDedupeText(text) {
+  return String(text || '').trim().toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ' ').trim();
+}
+
+async function parseJsonResponseSafely(response, operation = 'request') {
+  const contentType = response?.headers?.get ? (response.headers.get('content-type') || '') : '';
+  const text = await response.text();
+  const preview = text.slice(0, 240).replace(/\s+/g, ' ').trim();
+  if (!contentType.includes('application/json') || /^\s*</.test(text)) {
+    const error = new Error(`${operation} returned non-JSON response status=${response?.status || 0} content_type=${contentType || 'unknown'} preview=${preview}`);
+    error.status = response?.status || 0;
+    error.contentType = contentType;
+    error.preview = preview;
+    throw error;
+  }
+  try { return JSON.parse(text); }
+  catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    throw new Error(`${operation} JSON parse failed: ${message}; status=${response?.status || 0}; preview=${preview}`);
+  }
+}
+
 function normalizeContextCandidate(value) {
   if (value == null) return '';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
@@ -233,6 +255,11 @@ export function createVoqualizerStore(options = {}) {
     _suppressTts: !!options.suppressTts,
     _suppressContextPolling: !!options.suppressContextPolling,
     _onAsrFinal: typeof options.onAsrFinal === 'function' ? options.onAsrFinal : null,
+    _recentAsrFinals: new Map(),
+    duplicateAsrFinalCount: 0,
+    lastDuplicateAsrFinalAt: 0,
+    lastDuplicateAsrFinalText: '',
+    lastDuplicateAsrFinalSource: '',
     init() {
       if (this._initialized) return this;
       this._initialized = true;
@@ -972,6 +999,29 @@ export function createVoqualizerStore(options = {}) {
       this._publishDebug();
       return true;
     },
+    _shouldDropDuplicateAsrFinal(text, data = {}, source = 'asr_final') {
+      const normalized = normalizedAsrDedupeText(text);
+      if (!normalized) return false;
+      const utterance = String(data.utterance_id || data.utteranceId || data.utterance_generation || data.generation_id || data.generationId || '');
+      const key = utterance ? `utt:${utterance}:${normalized}` : `text:${normalized}`;
+      const now = Date.now();
+      for (const [oldKey, oldAt] of this._recentAsrFinals.entries()) {
+        if (now - oldAt > 4500) this._recentAsrFinals.delete(oldKey);
+      }
+      const previousAt = this._recentAsrFinals.get(key) || 0;
+      if (previousAt && now - previousAt <= 4500) {
+        this.lastDuplicateAsrFinalAt = now;
+        this.lastDuplicateAsrFinalText = String(text || '');
+        this.lastDuplicateAsrFinalSource = source;
+        this.duplicateAsrFinalCount = Number(this.duplicateAsrFinalCount || 0) + 1;
+        this._setReason('duplicate_asr_final_ignored');
+        this._publishDebug();
+        return true;
+      }
+      this._recentAsrFinals.set(key, now);
+      return false;
+    },
+
     _submitPromptFromAsr(text) {
       const finalText = String(text || '').trim();
       if (!finalText) { this.lastPromptSubmitSkipReason = 'empty_final'; this._publishDebug(); return false; }
@@ -1249,6 +1299,7 @@ export function createVoqualizerStore(options = {}) {
         if (mirrored) {
           this._clearAsrPromptMirror('asr_final_event_blank_populate');
         }
+        if (this._shouldDropDuplicateAsrFinal(text, data, 'asr_final_event')) return;
         if (this._onAsrFinal) {
           try {
             this._onAsrFinal(text, data);

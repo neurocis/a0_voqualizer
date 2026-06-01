@@ -434,3 +434,13 @@ def test_direct_tts_ack_chunk_fallback_markers_exist():
         "this._handleTtsDone(data.tts_done)",
     ):
         assert marker in source, f'missing direct TTS ack fallback marker {marker!r}'
+
+
+def test_conversation_mode_defensive_json_and_asr_dedupe():
+    content = CM.read_text()
+    assert "async function parseJsonResponseSafely" in content
+    assert "returned non-JSON response" in content
+    assert "preview=" in content
+    assert "_shouldDropDuplicateAsrFinal" in content
+    assert "duplicate_asr_final_ignored" in content
+    assert "_recentAsrFinals: new Map()" in content

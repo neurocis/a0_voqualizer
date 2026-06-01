@@ -80,7 +80,7 @@ def test_voqualizer_page_avoids_main_webgui_observer_dependencies():
 
 def test_voqualizer_page_static_shell_debug_marker():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "__voqualizer_page" in js
     assert "standalone: true" in js
     assert "milestone: 7" in js
@@ -514,12 +514,12 @@ def test_voqualizer_preloads_last_monologue_result():
         "Loading latest monologue result…",
     ]:
         assert token in js, token
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
 
 def test_voqualizer_submit_feedback_before_optional_voq_init():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "lastSubmitUiEchoAt" in js
     assert "lastSubmitVoqInitError" in js
     assert "Do not block visible submit feedback" in js
@@ -545,8 +545,8 @@ def test_voqualizer_preload_warms_realtime_tts_session():
         "removes the cold-start cost",
     ]:
         assert token in js, token
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
 
 
 def test_voqualizer_send_button_circular_and_brighter_pulse():
@@ -663,7 +663,7 @@ def test_voqualizer_conversation_store_invokes_asr_final_callback():
     assert "asr_submit_mode: this._onAsrFinal ? 'frontend_prompt' : 'context_bridge'" in conv
     assert "this._onAsrFinal(text, data)" in conv
     assert "asr_final_callback_error" in conv
-    assert "onAsrFinal: (text) => { void routeStoreAsrFinal(text); }" in js
+    assert "onAsrFinal: (text, data) => { void routeStoreAsrFinal(text, data || {}, 'store_callback'); }" in js
     assert "await submitPrompt(pageState)" in js
 
 
@@ -712,7 +712,7 @@ def test_voqualizer_standalone_suppresses_main_context_polling():
     assert "if (!this._suppressContextPolling)" in conv
     assert "suppressContextPolling: true" in js
     assert "suppressTts: true" in js
-    assert "onAsrFinal: (text) => { void routeStoreAsrFinal(text); }" in js
+    assert "onAsrFinal: (text, data) => { void routeStoreAsrFinal(text, data || {}, 'store_callback'); }" in js
 
 
 def test_voqualizer_asr_vad_sensitivity_and_debug_ack():
@@ -830,12 +830,12 @@ def test_voqualizer_tts_uses_ws_namespace_direct_events():
     assert "tts.socket.emit('voqualizer_control'" in js
     assert "socket.emit(VOQUALIZER_HANDLER, { event: 'voqualizer_init'" not in js
     assert "tts.socket.emit(VOQUALIZER_HANDLER, {" not in js
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
 
 
 def test_voqualizer_tts_reconnects_stale_session_and_retries():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "tts.socket && tts.socket.connected" in js
     assert "stale_session_reconnect" in js
     assert "direct_tts_ack_timeout" in js
@@ -846,7 +846,7 @@ def test_voqualizer_tts_reconnects_stale_session_and_retries():
 
 def test_voqualizer_tts_retry_does_not_double_speak():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "ackHasChunks" in js
     assert "shouldRetry" in js
     assert "direct_tts_ack_timeout" in js
@@ -855,7 +855,7 @@ def test_voqualizer_tts_retry_does_not_double_speak():
 
 def test_voqualizer_tts_accepts_live_push_and_suppresses_final_duplicate():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "shouldAcceptTtsUtterance" in js
     assert "live_push_already_streamed" in js
     assert "lastLivePushedTtsUtteranceId" in js
@@ -866,7 +866,7 @@ def test_voqualizer_tts_accepts_live_push_and_suppresses_final_duplicate():
 
 def test_voqualizer_tts_live_push_suppresses_final_direct_tts():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "livePushSinceSubmit" in js
     assert "lastLivePushedTtsAt" in js
     assert "lastLivePushedTtsUtteranceId" in js
@@ -877,7 +877,7 @@ def test_voqualizer_tts_live_push_suppresses_final_direct_tts():
 
 def test_voqualizer_tts_suppresses_ack_fallback_after_live_push():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "lastAckTtsFallbackSuppressedAt" in js
     assert "lastAckTtsFallbackSuppressedChunks" in js
     assert "lastAckTtsFallbackSuppressedReason" in js
@@ -888,7 +888,7 @@ def test_voqualizer_tts_suppresses_ack_fallback_after_live_push():
 def test_voqualizer_store_suppresses_tts_listeners_for_standalone():
     conv = read(CONVERSATION_MODE)
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "suppressTts: true" in js
     assert "if (!this._suppressTts)" in conv
     assert "suppressed_store_tts_chunk" in conv
@@ -898,7 +898,7 @@ def test_voqualizer_store_suppresses_tts_listeners_for_standalone():
 
 def test_voqualizer_tts_ignores_stale_socket_events():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "activeSocketOnly" in js
     assert "socket !== tts.socket" in js
     assert "lastStaleTtsSocketEvent" in js
@@ -907,9 +907,9 @@ def test_voqualizer_tts_ignores_stale_socket_events():
 
 def test_voqualizer_cache_busts_conversation_mode_import():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
-    assert "conversation-mode.js?v=m8-tts-vu-visible-hold-2026-05-31-73" in js
-    assert "store_import_cache=m8-tts-vu-visible-hold-2026-05-31-73" in js
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "conversation-mode.js?v=m8-dom-json-asr-dedupe-2026-05-31-74" in js
+    assert "store_import_cache=m8-dom-json-asr-dedupe-2026-05-31-74" in js
     conv = read(CONVERSATION_MODE)
     assert "if (!this._suppressTts)" in conv
     assert "suppressed_store_tts_chunk" in conv
@@ -917,7 +917,7 @@ def test_voqualizer_cache_busts_conversation_mode_import():
 
 def test_voqualizer_stops_tts_and_speaks_processing_heartbeat():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "cancelInflightTts('new_prompt')" in js
     assert "startProcessingHeartbeat(messageId)" in js
     assert "setInterval(() =>" in js
@@ -931,7 +931,7 @@ def test_voqualizer_stops_tts_and_speaks_processing_heartbeat():
 def test_voqualizer_realtime_ws_prompt_submit_path():
     js = read(JS)
     py = read(ROOT / "api" / "ws_voqualizer.py")
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "submitPromptOverVoqSession" in js
     assert "voqualizer_text_prompt" in js
     assert "promptSubmitTransport = 'websocket'" in js
@@ -948,20 +948,20 @@ def test_voqualizer_realtime_ws_prompt_submit_path():
 
 def test_voqualizer_tts_chunk_dedupe():
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "seenTtsChunkKeys" in js
     assert "ttsChunkDedupeKey" in js
     assert "rememberTtsChunkKey" in js
     assert "duplicate_chunks=" in js
     assert "lastDuplicateTtsChunkUtteranceId" in js
-    assert "conversation-mode.js?v=m8-tts-vu-visible-hold-2026-05-31-73" in js
+    assert "conversation-mode.js?v=m8-dom-json-asr-dedupe-2026-05-31-74" in js
 
 
 def test_voqualizer_authoritative_tts_stream_only():
     js = read(JS)
     py = read(ROOT / "api" / "ws_voqualizer.py")
     finalizer = read(ROOT / "helpers" / "agent_finalizer.py")
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "AUTHORITATIVE_TTS_STREAM_ONLY = true" in js
     assert "tts_delivery_mode" in js
     assert "authoritative_stream_only" in js
@@ -979,7 +979,7 @@ def test_voqualizer_authoritative_tts_single_session_route():
     js = read(JS)
     finalizer = read(ROOT / "helpers" / "agent_finalizer.py")
     ws = read(ROOT / "api" / "ws_voqualizer.py")
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "authoritative_single_session=true" in js
     assert "superseded_authoritative_session" in finalizer
     assert "tts_authoritative_route_score" in finalizer
@@ -1000,9 +1000,9 @@ def test_voqualizer_collapses_response_tool_json_in_transcript():
     js = read(JS)
     html = read(HTML)
     css = read(CSS)
-    assert "m8-tts-vu-visible-hold" in js
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
     assert "function displayContentForTranscript" in js
     assert "tryParseJsonEnvelope" in js
     assert "parsed.headline" in js
@@ -1016,9 +1016,9 @@ def test_voqualizer_fix_kind_reference_and_ignore_thank_you_asr():
     js = read(JS)
     html = read(HTML)
     css = read(CSS)
-    assert "m8-tts-vu-visible-hold" in js
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
     assert "setBubbleBodyText(body, content, item)" in js
     assert "setBubbleBodyText(body, content, { type: kind });\n      cxBubble.dataset.kind" not in js
     assert "function shouldIgnoreAsrFinalText" in js
@@ -1033,7 +1033,7 @@ def test_voqualizer_asr_store_does_not_own_tts_stream():
     ws = read(ROOT / "api" / "ws_voqualizer.py")
     finalizer = read(ROOT / "helpers" / "agent_finalizer.py")
     chunker = read(ROOT / "helpers" / "sentence_chunker.py")
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "store_suppress_tts=" in js
     assert "enabled: this._suppressTts ? false : this.isTtsEnabled()" in conv
     assert "tts_delivery_mode: this._suppressTts ? 'disabled' : 'hybrid'" in conv
@@ -1046,7 +1046,7 @@ def test_voqualizer_asr_init_remains_enabled_when_tts_suppressed():
     js = read(JS)
     conv = read(ROOT / "webui" / "conversation-mode.js")
     ws = read(ROOT / "api" / "ws_voqualizer.py")
-    assert "m8-tts-vu-visible-hold" in js
+    assert "m8-dom-json-asr-dedupe" in js
     assert "asr: {" in conv
     assert "enabled: this.desiredMode === DESIRED_CONVERSATIONAL || this.desiredMode === DESIRED_PTT" in conv
     assert "submit_mode: this._onAsrFinal ? 'frontend_prompt' : 'context_bridge'" in conv
@@ -1058,9 +1058,9 @@ def test_voqualizer_ignores_blank_silence_inaudible_asr():
     js = read(JS)
     html = read(HTML)
     css = read(CSS)
-    assert "m8-tts-vu-visible-hold" in js
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
     assert "blank audio" in js
     assert "silence" in js
     assert "inaudible" in js
@@ -1086,9 +1086,9 @@ def test_voqualizer_asr_provider_reset_debug_after_background_error():
     html = read(HTML)
     css = read(CSS)
     ws = read(ROOT / "api" / "ws_voqualizer.py")
-    assert "m8-tts-vu-visible-hold" in js
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
     assert 'session.metadata.pop("asr_provider_instance", None)' in ws
     assert 'asr_provider_reset_count' in ws
     assert 'asr_last_background_error' in ws
@@ -1103,9 +1103,9 @@ def test_voqualizer_prompt_clear_button():
     html = read(HTML)
     css = read(CSS)
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
     assert 'id="voq-prompt-clear"' in html
     assert 'aria-label="Clear prompt text"' in html
     assert 'class="voq-prompt-shell"' in html
@@ -1121,9 +1121,9 @@ def test_voqualizer_ignores_throat_clearing_asr_artifacts():
     html = read(HTML)
     css = read(CSS)
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
     assert "clears throat" in js
     assert "clear throat" in js
     assert "clearing throat" in js
@@ -1137,9 +1137,9 @@ def test_voqualizer_removes_tts_v_badge():
     html = read(HTML)
     css = read(CSS)
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
     speaker_start = html.index('id="voqualizer-speaker-button"')
     speaker_end = html.index('id="voqualizer-mic-button"')
     speaker_block = html[speaker_start:speaker_end]
@@ -1151,9 +1151,9 @@ def test_voqualizer_tts_green_vu_meter():
     html = read(HTML)
     css = read(CSS)
     js = read(JS)
-    assert "m8-tts-vu-visible-hold" in js
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in html
-    assert "m8-tts-vu-visible-hold-2026-05-31-73" in css
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in html
+    assert "m8-dom-json-asr-dedupe-2026-05-31-74" in css
     assert 'class="voqualizer-tts-vu"' in html
     assert '.voqualizer-tts-vu' in css
     assert 'voqualizer-tts-playing' in css
@@ -1171,3 +1171,17 @@ def test_voqualizer_tts_green_vu_meter():
     mic_start = html.index('id="voqualizer-mic-button"')
     speaker_block = html[speaker_start:mic_start]
     assert 'voqualizer-speech-detected' not in speaker_block
+
+
+def test_voqualizer_asr_final_dedupe():
+    js = read(JS)
+    conv = read(ROOT / "webui" / "conversation-mode.js")
+    assert "m8-dom-json-asr-dedupe" in js
+    assert "ASR_FINAL_DEDUPE_MS" in js
+    assert "function shouldDropDuplicateAsrFinal" in js
+    assert "duplicate_asr_final=" in js
+    assert "onAsrFinal: (text, data) => { void routeStoreAsrFinal(text, data || {}, 'store_callback'); }" in js
+    assert "_shouldDropDuplicateAsrFinal" in conv
+    assert "duplicate_asr_final_ignored" in conv
+    assert "parseJsonResponseSafely" in conv
+    assert "returned non-JSON response" in conv

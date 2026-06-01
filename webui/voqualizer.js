@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-vu-visible-hold-2026-05-31-73';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-dom-json-asr-dedupe-2026-05-31-74';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-vu-visible-hold';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-visible-hold-2026-05-31-73';
+const PAGE_VERSION = 'm8-dom-json-asr-dedupe';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-dom-json-asr-dedupe-2026-05-31-74';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -83,6 +83,43 @@ const tts = {
   processingHeartbeatLastAt: 0,
   processingHeartbeatCount: 0,
 };
+
+const recentAsrFinalSubmissions = new Map();
+const ASR_FINAL_DEDUPE_MS = 4500;
+
+function normalizedAsrFinalDedupeText(text) {
+  return safeString(text).trim().toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ' ').trim();
+}
+
+function asrFinalDedupeKey(text, data = {}) {
+  const normalized = normalizedAsrFinalDedupeText(text);
+  const utterance = safeString(data.utterance_id || data.utteranceId || data.utterance_generation || data.generation_id || data.generationId || '');
+  return utterance ? `utt:${utterance}:${normalized}` : `text:${normalized}`;
+}
+
+function shouldDropDuplicateAsrFinal(text, data = {}, source = 'asr_final') {
+  const normalized = normalizedAsrFinalDedupeText(text);
+  if (!normalized) return false;
+  const key = asrFinalDedupeKey(text, data);
+  const now = Date.now();
+  for (const [oldKey, oldAt] of recentAsrFinalSubmissions.entries()) {
+    if (now - oldAt > ASR_FINAL_DEDUPE_MS) recentAsrFinalSubmissions.delete(oldKey);
+  }
+  const previousAt = recentAsrFinalSubmissions.get(key) || 0;
+  if (previousAt && now - previousAt <= ASR_FINAL_DEDUPE_MS) {
+    const page = globalThis.__voqualizer_page;
+    if (page) {
+      page.lastDuplicateAsrFinalAt = now;
+      page.lastDuplicateAsrFinalText = safeString(text);
+      page.lastDuplicateAsrFinalReason = 'duplicate_asr_final';
+      page.lastDuplicateAsrFinalSource = source;
+      page.duplicateAsrFinalCount = Number(page.duplicateAsrFinalCount || 0) + 1;
+    }
+    return true;
+  }
+  recentAsrFinalSubmissions.set(key, now);
+  return false;
+}
 
 const asr = {
   enabled: loadAsrEnabled(),
@@ -546,7 +583,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-visible-hold-2026-05-31-73'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-dom-json-asr-dedupe-2026-05-31-74'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -567,6 +604,7 @@ function buildAsrDebugLines() {
     `submit_at=${c.lastPromptSubmitAt} submit_skip=${c.lastPromptSubmitSkipReason}`,
     `page_final=${JSON.stringify(p.asrLastFinalText || '')}`,
     `ignored_asr_final=${JSON.stringify(p.lastIgnoredAsrFinalText || '')} ignored_reason=${p.lastIgnoredAsrFinalReason || ''}`,
+    `duplicate_asr_final=${JSON.stringify(p.lastDuplicateAsrFinalText || '')} duplicate_asr_count=${p.duplicateAsrFinalCount || 0} duplicate_asr_source=${p.lastDuplicateAsrFinalSource || ''}`,
     `prompt=${JSON.stringify(input?.value || '')}`,
   ];
   return lines.join('\n');
@@ -640,7 +678,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-visible-hold-2026-05-31-73'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-dom-json-asr-dedupe-2026-05-31-74'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -2527,8 +2565,9 @@ function setPageStateRef(state) {
 // M8: route ASR finals into the standalone submitPrompt(pageState) path so
 // the M3/M4/M5/M7 typed-prompt + /poll + cx-stream + word-highlight pipeline
 // stays the single source of truth for assistant responses on this page.
-async function routeStoreAsrFinal(text) {
+async function routeStoreAsrFinal(text, data = {}, source = 'store_asr_final') {
   if (shouldIgnoreAsrFinalText(text)) { recordIgnoredAsrFinal(text, 'false_positive_silence_or_filler'); return; }
+  if (shouldDropDuplicateAsrFinal(text, data, source)) return;
   if (!pageState) return;
   const input = document.getElementById('voq-prompt-input');
   const trimmed = String(text || '').trim();
@@ -2598,9 +2637,9 @@ async function handleAsrFinal(payload) {
   const text = String(data.text || '').trim();
   if (!text) return;
   if (shouldIgnoreAsrFinalText(text)) { recordIgnoredAsrFinal(text, 'false_positive_silence_or_filler'); return; }
-  await routeStoreAsrFinal(text);
+  await routeStoreAsrFinal(text, data, 'socket_asr_final');
 }
-async function routeAsrFinal(text) { await routeStoreAsrFinal(text); }
+async function routeAsrFinal(text) { await routeStoreAsrFinal(text, {}, 'route_asr_final'); }
 function handleAudioAck(payload) {
   const data = (payload && payload.data) || payload || {};
   if (globalThis.__voqualizer_page) {
@@ -2631,7 +2670,7 @@ function bindVoqualizerButtons() {
   voqStore = createVoqualizerStore({
     suppressTts: true,
     suppressContextPolling: true,
-    onAsrFinal: (text) => { void routeStoreAsrFinal(text); },
+    onAsrFinal: (text, data) => { void routeStoreAsrFinal(text, data || {}, 'store_callback'); },
   });
   try { voqStore.init(); } catch (err) { console.error('[voqualizer] store init', err); }
 
