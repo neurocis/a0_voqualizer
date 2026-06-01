@@ -1066,3 +1066,16 @@ def test_voqualizer_ignores_blank_silence_inaudible_asr():
     assert "inaudible" in js
     assert "false_positive_silence_or_filler" in js
     assert "replace(/[\\[\\](){}]/g, ' ')" in js
+
+
+def test_voqualizer_rate_limits_async_error_pushes():
+    ws = ROOT / "api" / "ws_voqualizer.py"
+    finalizer = ROOT / "helpers" / "agent_finalizer.py"
+    ws_text = ws.read_text()
+    finalizer_text = finalizer.read_text()
+    assert "_should_emit_session_error" in ws_text
+    assert "asr_background_error_suppressed_count" in ws_text
+    assert "tts_user_text_error_suppressed_count" in ws_text
+    assert "suppressed_repeats" in ws_text
+    assert "_should_emit_session_error" in finalizer_text
+    assert "agent_finalizer_tts_error_suppressed_count" in finalizer_text

@@ -113,6 +113,36 @@ def _server_time_ms() -> float:
     return time.time() * 1000.0
 
 
+def _should_emit_session_error(
+    session: BridgeSession,
+    key: str,
+    *,
+    interval_ms: float = 3000.0,
+    max_initial: int = 3,
+) -> bool:
+    """Return True when an async error event should be pushed to the client.
+
+    Mobile ASR can produce the same recoverable/provider error for many audio
+    frames in a row.  Pushing every occurrence as ``voqualizer_error`` can
+    overflow A0's buffered websocket event queue when the client is busy or
+    reconnecting.  Keep logs/metadata complete, but rate-limit client pushes.
+    """
+
+    now = _server_time_ms()
+    count_key = f"{key}_emit_count"
+    last_key = f"{key}_last_emit_ms"
+    suppressed_key = f"{key}_suppressed_count"
+    count = int(session.metadata.get(count_key, 0) or 0)
+    last = float(session.metadata.get(last_key, 0.0) or 0.0)
+    allowed = count < max_initial or (now - last) >= interval_ms
+    if allowed:
+        session.metadata[count_key] = count + 1
+        session.metadata[last_key] = now
+        return True
+    session.metadata[suppressed_key] = int(session.metadata.get(suppressed_key, 0) or 0) + 1
+    return False
+
+
 
 def _clean_asr_transcript_text(text: str) -> str:
     """Remove common Whisper silence/echo hallucinations from final ASR text.
@@ -995,9 +1025,10 @@ class WsVoqualizer(WsHandler):
             await self._emit_transcript(session, result)
         except ASRError as exc:
             session.metadata["asr_background_errors"] = int(session.metadata.get("asr_background_errors", 0)) + 1
-            if session.sender is not None:
+            if session.sender is not None and _should_emit_session_error(session, "asr_background_error"):
                 payload = exc.to_dict()
                 payload["session_id"] = session.session_id
+                payload["suppressed_repeats"] = int(session.metadata.get("asr_background_error_suppressed_count", 0) or 0)
                 await session.sender("voqualizer_error", payload)
         except Exception as exc:
             session.metadata["asr_background_errors"] = int(session.metadata.get("asr_background_errors", 0)) + 1
@@ -1508,7 +1539,9 @@ class WsVoqualizer(WsHandler):
                 operation="voqualizer_user_text",
                 details=payload.get("details") if isinstance(payload.get("details"), dict) else None,
             )
-            await session.sender("voqualizer_error", payload)
+            if _should_emit_session_error(session, "tts_user_text_error"):
+                payload["suppressed_repeats"] = int(session.metadata.get("tts_user_text_error_suppressed_count", 0) or 0)
+                await session.sender("voqualizer_error", payload)
 
     async def _handle_user_text(self, data: Mapping[str, Any], sid: str) -> dict[str, Any] | WsResult:
         if self._session_id is None:

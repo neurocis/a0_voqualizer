@@ -424,11 +424,34 @@ async def _emit_tts_done(
     await session.sender("voqualizer_tts_done", payload)
 
 
+def _server_time_ms() -> float:
+    return time.time() * 1000.0
+
+
+def _should_emit_session_error(session: BridgeSession, key: str, *, interval_ms: float = 3000.0, max_initial: int = 3) -> bool:
+    now = _server_time_ms()
+    count_key = f"{key}_emit_count"
+    last_key = f"{key}_last_emit_ms"
+    suppressed_key = f"{key}_suppressed_count"
+    count = int(session.metadata.get(count_key, 0) or 0)
+    last = float(session.metadata.get(last_key, 0.0) or 0.0)
+    allowed = count < max_initial or (now - last) >= interval_ms
+    if allowed:
+        session.metadata[count_key] = count + 1
+        session.metadata[last_key] = now
+        return True
+    session.metadata[suppressed_key] = int(session.metadata.get(suppressed_key, 0) or 0) + 1
+    return False
+
+
 async def _emit_tts_error(session: BridgeSession, err: TTSError) -> None:
     if session.sender is None:
         return
     payload = err.to_dict()
     payload["session_id"] = session.session_id
+    if not _should_emit_session_error(session, "agent_finalizer_tts_error"):
+        return
+    payload["suppressed_repeats"] = int(session.metadata.get("agent_finalizer_tts_error_suppressed_count", 0) or 0)
     await session.sender("voqualizer_error", payload)
 
 
