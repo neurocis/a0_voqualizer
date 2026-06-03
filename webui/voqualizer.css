@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-dom-json-asr-dedupe-2026-05-31-74 */
+/* voq-mobile-version: m8-tts-vu-longer-linger-2026-06-02-75 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -942,8 +942,8 @@ body {
   mix-blend-mode: screen;
   transform: scale(calc(0.88 + (0.16 * var(--voqualizer-tts-vu-level, 0))));
   transform-origin: center;
-  transition: transform 65ms linear, opacity 100ms ease, filter 65ms linear;
-  filter: drop-shadow(0 0 calc(4px + (10px * var(--voqualizer-tts-vu-level, 0))) rgba(46, 204, 113, 0.98));
+  transition: transform 180ms ease-out, opacity 520ms ease-out, filter 220ms ease-out;
+  filter: drop-shadow(0 0 calc(6px + (14px * var(--voqualizer-tts-vu-level, 0))) rgba(46, 204, 113, 1));
   pointer-events: none;
   z-index: 1;
 }
@@ -952,7 +952,7 @@ body {
 .voqualizer-speaker.voqualizer-tts-playing {
   box-shadow:
     0 0 0 2px rgba(34, 197, 94, 0.95) inset,
-    0 0 calc(8px + (14px * var(--voqualizer-tts-vu-level, 0))) rgba(34, 197, 94, 0.72);
+    0 0 calc(8px + (14px * var(--voqualizer-tts-vu-level, 0))) rgba(34, 197, 94, 0.88);
 }
 .voqualizer-mic-vu {
   position: absolute;
@@ -970,7 +970,7 @@ body {
   opacity: var(--voqualizer-vu-opacity, 0);
   transform: scale(calc(0.84 + (0.18 * var(--voqualizer-vu-level, 0))));
   transform-origin: center;
-  transition: transform 65ms linear, opacity 100ms ease, filter 65ms linear;
+  transition: transform 180ms ease-out, opacity 520ms ease-out, filter 220ms ease-out;
   filter: drop-shadow(0 0 calc(3px + (8px * var(--voqualizer-vu-level, 0))) rgba(46, 204, 113, 0.95));
   pointer-events: none;
   z-index: 1;
