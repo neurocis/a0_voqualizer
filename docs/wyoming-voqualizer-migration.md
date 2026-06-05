@@ -184,3 +184,18 @@ Implemented scaffold:
 Next implementation step: replace the scaffold provider with real A0 context
 submission/streaming and then attach authoritative Wyoming TTS output to response
 chunks/finals.
+
+
+### W6 authoritative TTS adapter scaffold
+
+Implemented scaffold:
+
+- `WyomingTtsAdapter` accepts standard `synthesize` and assistant final events;
+- emits only Wyoming `audio-start`, `audio-chunk`, and `audio-stop` events;
+- each stream is tagged with interface/session/ctxID/generation metadata;
+- chunks use monotonic `chunk_seq`;
+- cancel/barge-in advances generation and clears chunk state;
+- old ACK/direct/custom websocket TTS paths are not used.
+
+Next implementation step: wire the adapter to the real TTS provider and compose
+prompt-response-final -> authoritative TTS events in the interface runtime.
