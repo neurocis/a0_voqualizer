@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-tts-vu-longer-linger-2026-06-02-75 */
+/* voq-mobile-version: m8-tts-vu-playback-envelope-2026-06-04-76 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -927,7 +927,7 @@ body {
 
 .voqualizer-tts-vu {
   position: absolute;
-  inset: 4px;
+  inset: 3px;
   border-radius: 50%;
   background:
     radial-gradient(circle at 50% calc(100% - 8px),
@@ -942,7 +942,7 @@ body {
   mix-blend-mode: screen;
   transform: scale(calc(0.88 + (0.16 * var(--voqualizer-tts-vu-level, 0))));
   transform-origin: center;
-  transition: transform 180ms ease-out, opacity 520ms ease-out, filter 220ms ease-out;
+  transition: transform 260ms ease-out, opacity 620ms ease-out, filter 260ms ease-out;
   filter: drop-shadow(0 0 calc(6px + (14px * var(--voqualizer-tts-vu-level, 0))) rgba(46, 204, 113, 1));
   pointer-events: none;
   z-index: 1;
@@ -956,7 +956,7 @@ body {
 }
 .voqualizer-mic-vu {
   position: absolute;
-  inset: 4px;
+  inset: 3px;
   border-radius: 50%;
   background:
     radial-gradient(circle at 50% calc(100% - 8px),
@@ -970,7 +970,7 @@ body {
   opacity: var(--voqualizer-vu-opacity, 0);
   transform: scale(calc(0.84 + (0.18 * var(--voqualizer-vu-level, 0))));
   transform-origin: center;
-  transition: transform 180ms ease-out, opacity 520ms ease-out, filter 220ms ease-out;
+  transition: transform 260ms ease-out, opacity 620ms ease-out, filter 260ms ease-out;
   filter: drop-shadow(0 0 calc(3px + (8px * var(--voqualizer-vu-level, 0))) rgba(46, 204, 113, 0.95));
   pointer-events: none;
   z-index: 1;

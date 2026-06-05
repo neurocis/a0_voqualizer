@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-vu-longer-linger-2026-06-02-75';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-vu-playback-envelope-2026-06-04-76';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-vu-longer-linger';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-longer-linger-2026-06-02-75';
+const PAGE_VERSION = 'm8-tts-vu-playback-envelope';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-playback-envelope-2026-06-04-76';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -73,6 +73,7 @@ const tts = {
   seenTtsChunkQueue: [],
   ttsVuClearTimer: 0,
   ttsVuDecayTimer: 0,
+  ttsVuEnvelopeTimer: 0,
   livePushSinceSubmit: false,
   lastLivePushAt: 0,
   lastLivePushUtteranceId: '',
@@ -584,7 +585,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-longer-linger-2026-06-02-75'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-playback-envelope-2026-06-04-76'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -679,7 +680,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-longer-linger-2026-06-02-75'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-playback-envelope-2026-06-04-76'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -702,7 +703,7 @@ function buildTtsDebugLines() {
     `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
     `duplicate_chunks=${p.duplicateTtsChunkCount || 0} duplicate_utt=${p.lastDuplicateTtsChunkUtteranceId || ''}`,
     `playback_at=${p.lastPlaybackStartAt || 0} playback_ms=${p.lastPlaybackDurationMs || 0} playback_utt=${p.lastPlaybackUtteranceId || ''} playback_error=${p.lastPlaybackError || ''}`,
-    `tts_vu=${p.ttsVuLevel || 0} tts_vu_at=${p.lastTtsVuAt || 0} tts_vu_decay=${p.lastTtsVuDecayAt || 0} tts_vu_clear=${p.lastTtsVuClearAt || 0} tts_vu_hold=${p.lastTtsVuHoldMs || 0}`,
+    `tts_vu=${p.ttsVuLevel || 0} tts_vu_at=${p.lastTtsVuAt || 0} tts_vu_decay=${p.lastTtsVuDecayAt || 0} tts_vu_clear=${p.lastTtsVuClearAt || 0} tts_vu_hold=${p.lastTtsVuHoldMs || 0} tts_vu_delay=${p.lastTtsVuPlaybackDelayMs || 0} tts_vu_source=${p.lastTtsVuSource || ""}`,
     `audio_state=${p.audioContextState || ''} audio_create=${p.lastAudioContextCreateAt || 0} audio_create_reason=${p.lastAudioContextCreateReason || ''} audio_create_error=${p.lastAudioContextError || ''}`,
     `audio_resume=${p.lastAudioResumeAt || 0} audio_resume_reason=${p.lastAudioResumeReason || ''} audio_resume_error=${p.lastAudioResumeError || ''}`,
     `stale_socket_event=${p.lastStaleTtsSocketEvent || ''} stale_socket_at=${p.lastStaleTtsSocketEventAt || 0}`,
@@ -1974,46 +1975,85 @@ function rememberTtsChunkKey(key, utteranceId) {
 function bytesToTtsVuPercent(bytes) {
   if (!bytes || !bytes.byteLength) return 0;
   const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes.buffer || bytes);
-  const sampleLimit = Math.min(view.byteLength - (view.byteLength % 2), 4800);
+  const sampleLimit = Math.min(view.byteLength - (view.byteLength % 2), 9600);
   if (sampleLimit <= 1) return 0;
   let total = 0;
+  let peak = 0;
   let count = 0;
   for (let i = 0; i < sampleLimit; i += 2) {
     let sample = view[i] | (view[i + 1] << 8);
     if (sample & 0x8000) sample -= 0x10000;
+    const abs = Math.abs(sample) / 32768;
+    peak = Math.max(peak, abs);
     total += sample * sample;
     count += 1;
   }
   if (!count) return 0;
   const rms = Math.sqrt(total / count) / 32768;
-  return Math.max(0.18, Math.min(1, rms * 7.5));
+  const blended = (rms * 0.78) + (peak * 0.22);
+  return Math.max(0.16, Math.min(1, Math.pow(blended * 5.8, 0.62)));
 }
 
-function updateTtsVu(bytes) {
+function setTtsVuVisual(level, opacity = 0.98) {
   const speaker = document.getElementById('voqualizer-speaker-button');
   if (!speaker) return;
-  const vu = bytesToTtsVuPercent(bytes);
+  const vu = Math.max(0, Math.min(1, Number(level || 0)));
   speaker.style.setProperty('--voqualizer-tts-vu-level', String(vu));
-  speaker.style.setProperty('--voqualizer-tts-vu-opacity', vu > 0.01 ? '0.96' : '0');
+  speaker.style.setProperty('--voqualizer-tts-vu-opacity', vu > 0.01 ? String(opacity) : '0');
   speaker.classList.toggle('voqualizer-tts-playing', vu > 0.01);
-  if (tts.ttsVuClearTimer) clearTimeout(tts.ttsVuClearTimer);
-  if (tts.ttsVuDecayTimer) {
-    clearTimeout(tts.ttsVuDecayTimer);
-    tts.ttsVuDecayTimer = 0;
-  }
-  tts.ttsVuClearTimer = setTimeout(clearTtsVu, 220);
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.ttsVuLevel = vu;
     globalThis.__voqualizer_page.lastTtsVuAt = Date.now();
-    globalThis.__voqualizer_page.lastTtsVuHoldMs = 220;
   }
 }
 
-function clearTtsVu() {
+function stopTtsVuTimers() {
   if (tts.ttsVuClearTimer) {
     clearTimeout(tts.ttsVuClearTimer);
     tts.ttsVuClearTimer = 0;
   }
+  if (tts.ttsVuDecayTimer) {
+    clearTimeout(tts.ttsVuDecayTimer);
+    tts.ttsVuDecayTimer = 0;
+  }
+  if (tts.ttsVuEnvelopeTimer) {
+    clearTimeout(tts.ttsVuEnvelopeTimer);
+    tts.ttsVuEnvelopeTimer = 0;
+  }
+}
+
+function updateTtsVu(bytes, playbackDelayMs = 0, durationMs = 180) {
+  const vu = bytesToTtsVuPercent(bytes);
+  stopTtsVuTimers();
+  const delay = Math.max(0, Math.min(5000, Number(playbackDelayMs || 0)));
+  const hold = Math.max(240, Math.min(2200, Number(durationMs || 180) + 360));
+  const start = () => {
+    setTtsVuVisual(vu, 0.98);
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastTtsVuPlaybackDelayMs = Math.round(delay);
+      globalThis.__voqualizer_page.lastTtsVuHoldMs = Math.round(hold);
+      globalThis.__voqualizer_page.lastTtsVuSource = 'scheduled_pcm_playback';
+    }
+    tts.ttsVuDecayTimer = setTimeout(decayTtsVu, hold);
+  };
+  if (delay > 8) {
+    tts.ttsVuEnvelopeTimer = setTimeout(start, delay);
+  } else {
+    start();
+  }
+}
+
+function decayTtsVu() {
+  tts.ttsVuDecayTimer = 0;
+  setTtsVuVisual(0.18, 0.48);
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastTtsVuDecayAt = Date.now();
+  }
+  tts.ttsVuClearTimer = setTimeout(clearTtsVu, 750);
+}
+
+function clearTtsVu() {
+  stopTtsVuTimers();
   const speaker = document.getElementById('voqualizer-speaker-button');
   if (speaker) {
     speaker.style.setProperty('--voqualizer-tts-vu-level', '0');
@@ -2060,7 +2100,6 @@ function handleTtsChunk(payload) {
   }
   if (!bytes || !bytes.byteLength) return;
   if (codec === 'pcm16/16k' || codec === 'pcm16/24k') {
-    updateTtsVu(bytes);
     playPcmChunk(bytes, sampleRate, utteranceId);
   } else {
     bufferEncodedChunk(bytes, codec, utteranceId, !!(data.is_final || data.final));
@@ -2158,6 +2197,7 @@ function playPcmChunk(bytes, sampleRate, utteranceId) {
   const startAt = Math.max(ctx.currentTime + 0.01, tts.playbackTail);
   try {
     source.start(startAt);
+    updateTtsVu(aligned, Math.max(0, (startAt - ctx.currentTime) * 1000), buffer.duration * 1000);
     if (globalThis.__voqualizer_page) {
       globalThis.__voqualizer_page.lastPlaybackStartAt = Date.now();
       globalThis.__voqualizer_page.lastPlaybackStartAudioTime = startAt;
@@ -2939,6 +2979,8 @@ function initVoqualizerPage() {
     lastTtsVuClearAt: 0,
     lastTtsVuHoldMs: 0,
     lastTtsVuDecayAt: 0,
+    lastTtsVuPlaybackDelayMs: 0,
+    lastTtsVuSource: "",
     audioContextState: '',
     lastStatus: 'Ready',
     lastStatusLevel: 'info',
