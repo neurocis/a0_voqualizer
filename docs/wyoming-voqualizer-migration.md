@@ -228,3 +228,17 @@ Implemented scaffold:
 
 Next implementation step: expose config loading/startup helpers for enabled
 interfaces and replace scaffold providers with real A0 ASR/context/TTS providers.
+
+
+### W9 runtime bootstrap scaffold
+
+Implemented scaffold:
+
+- `WyomingVoqualizerRuntime` loads enabled Wyoming interfaces;
+- every enabled interface receives a composed ASR -> prompt -> TTS pipeline runtime;
+- `WyomingTcpInterfaceManager` owns one TCP server per enabled interface;
+- runtime status reports configured/enabled interfaces, bind ports, and manager info;
+- an example config documents the 1:1 interface-to-ctxID mapping.
+
+Next implementation step: integrate runtime startup with plugin lifecycle/hooks and
+replace scaffold providers with real A0 ASR/context/TTS adapters.

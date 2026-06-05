@@ -1,0 +1,32 @@
+[
+  {
+    "id": "hero",
+    "name": "Hero",
+    "ctxid": "REPLACE_WITH_HERO_CTXID",
+    "enabled": true,
+    "bind_host": "0.0.0.0",
+    "bind_port": 10701,
+    "capabilities": {
+      "asr": true,
+      "tts": true,
+      "prompt": true,
+      "assistant_text": true,
+      "authoritative_tts": true
+    }
+  },
+  {
+    "id": "secondary",
+    "name": "Secondary",
+    "ctxid": "REPLACE_WITH_SECONDARY_CTXID",
+    "enabled": false,
+    "bind_host": "0.0.0.0",
+    "bind_port": 10702,
+    "capabilities": {
+      "asr": true,
+      "tts": true,
+      "prompt": true,
+      "assistant_text": true,
+      "authoritative_tts": true
+    }
+  }
+]
