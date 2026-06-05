@@ -309,3 +309,39 @@ Implemented scaffold:
 - old `api/ws_voqualizer.py` remains for reference and is not used by this endpoint.
 
 Next implementation step: wire the host framework WS layer to call `run_wyoming_ws_bridge_session(...)` for the configured Wyoming WS route, then migrate the standalone Voqualizer web UI to use this endpoint as just another Wyoming client.
+
+
+### W15 DOM main UI client migration plan
+
+Scope note:
+
+- in addition to the standalone Voqualizer web UI, this plugin also ships DOM main UI ASR/TTS extensions (notably `webui/conversation-mode.js` and the `voqualizer-mic-button` / `voqualizer-speaker-button` UI in extension HTML);
+- those DOM extensions currently consume the retired custom Voqualizer WebSocket protocol;
+- the breaking Wyoming rewrite will treat the DOM extensions as just another Wyoming WS bridge client, on equal footing with the standalone web UI and any external Wyoming-compatible client/device/app.
+
+Planned DOM extension migration (kept in lockstep with standalone UI migration):
+
+1. Add a small Wyoming WS client adapter under `webui/wyoming/` that exposes:
+   - `connect(interfaceId)` to open the bridge socket;
+   - `sendEvent(type, data, payload?)` for canonical Wyoming envelopes;
+   - `onEvent(type, handler)` dispatcher;
+   - generation/utterance tracking;
+   - barge-in helpers.
+2. Re-implement `conversation-mode.js` ASR/TTS state machine on top of that adapter, replacing the legacy `voqualizer_*` socket protocol.
+3. Keep DOM mic/speaker UI markup and UX intact so visual parity (VU, idle/active state, idle bars, etc.) is preserved.
+4. Decommission DOM dependencies on:
+   - `voqualizer_init`
+   - `voqualizer_user_text`
+   - `voqualizer_audio_chunk`
+   - `voqualizer_tts_chunk`
+   - ACK fallback playback;
+   - shared-store TTS suppression hacks that worked around the old transport.
+5. Maintain old DOM/socket files in-tree for reference but stop depending on them at runtime.
+6. Apply the same generation/cancellation rules used by the Wyoming pipeline so barge-in cancels stale generations and prevents duplicate playback.
+
+Acceptance for DOM client migration:
+
+- DOM main UI ASR/TTS extensions only speak Wyoming events to the new bridge endpoint;
+- old custom socket protocol is fully unused from DOM code paths;
+- visual UX (mic/speaker buttons, VU, idle bars) remains familiar;
+- legacy code in `webui/voqualizer.js`, `webui/conversation-mode.js`, and `api/ws_voqualizer.py` remains for reference but is not loaded by the new path.
