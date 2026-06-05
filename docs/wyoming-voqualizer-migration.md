@@ -154,3 +154,17 @@ Implemented scaffold:
 
 Next implementation step: replace the temporary prompt echo handler with real A0
 context submission and add standard ASR/TTS event adapters.
+
+
+### W4 ASR adapter scaffold
+
+Implemented scaffold:
+
+- `WyomingAsrAdapter` handles `audio-start`, `audio-chunk`, and `audio-stop`;
+- audio is scoped to the connected interface/session, whose ctxID is fixed by configuration;
+- final transcript emits Wyoming `transcript` events with interface/session/ctxID metadata;
+- false-positive ASR artifacts are ignored with a Wyoming-framed diagnostic event;
+- duplicate finals are suppressed by utterance id or normalized text hash.
+
+Next implementation step: wire `WyomingAsrAdapter` to the real Voqualizer/A0 ASR
+provider and route final transcripts into the Wyoming prompt path.
