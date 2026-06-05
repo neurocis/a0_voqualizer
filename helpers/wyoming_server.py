@@ -221,3 +221,25 @@ async def echo_text_prompt_handler(session: WyomingSession, incoming: WyomingEve
 async def run_noop_server_forever() -> None:  # pragma: no cover - placeholder for W2 TCP binding
     """Placeholder hook for future asyncio TCP Wyoming server binding."""
     await asyncio.Event().wait()
+
+
+def build_wyoming_pipeline_runtime(interface: WyomingInterface):
+    """Create a runtime whose event handling is the composed Wyoming pipeline.
+
+    The import is intentionally local to avoid forcing provider wiring during
+    module import. Each runtime still maps exactly one interface to one ctxID.
+    """
+    from .wyoming_pipeline import WyomingVoqualizerPipeline
+
+    runtime = WyomingInterfaceRuntime(interface)
+    pipeline = WyomingVoqualizerPipeline()
+    runtime.set_pipeline(pipeline.handle_event)
+    return runtime
+
+
+def build_wyoming_pipeline_manager(interfaces: list[WyomingInterface]) -> WyomingInterfaceManager:
+    """Create a manager with composed Wyoming pipelines for every interface."""
+    manager = WyomingInterfaceManager()
+    for interface in interfaces:
+        manager.add_runtime(build_wyoming_pipeline_runtime(interface))
+    return manager

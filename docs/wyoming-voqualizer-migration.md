@@ -214,3 +214,17 @@ Implemented scaffold:
 
 Next implementation step: wire this pipeline into each TCP interface runtime and
 replace scaffold providers with real A0 ASR/prompt/TTS providers.
+
+
+### W8 pipeline runtime wiring scaffold
+
+Implemented scaffold:
+
+- `WyomingInterfaceRuntime` can delegate all events to a composed pipeline;
+- `build_wyoming_pipeline_runtime(interface)` creates one pipeline runtime for one interface ctxID;
+- `build_wyoming_pipeline_manager(interfaces)` creates one runtime per configured interface;
+- generic Wyoming TCP sessions can now be routed through ASR -> prompt -> authoritative TTS composition;
+- context remains fixed at the interface boundary.
+
+Next implementation step: expose config loading/startup helpers for enabled
+interfaces and replace scaffold providers with real A0 ASR/context/TTS providers.
