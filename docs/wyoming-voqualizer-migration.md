@@ -345,3 +345,17 @@ Acceptance for DOM client migration:
 - old custom socket protocol is fully unused from DOM code paths;
 - visual UX (mic/speaker buttons, VU, idle bars) remains familiar;
 - legacy code in `webui/voqualizer.js`, `webui/conversation-mode.js`, and `api/ws_voqualizer.py` remains for reference but is not loaded by the new path.
+
+
+### W16 Wyoming WsHandler wiring
+
+Implemented scaffold:
+
+- new `api/ws_wyoming.py` `WsWyoming` handler mounts a `WyomingWsBridge` per Socket.IO connection;
+- speaks a tiny Wyoming-only protocol surface: `wyoming_init`, `wyoming_event`, `wyoming_payload`, `wyoming_close`;
+- binary payloads are carried as base64 in `payload_b64` (single shot) or streamed via `wyoming_payload` chunks paired with a previous `wyoming_event`;
+- client-supplied `ctxid` / `interface_id` in event envelopes are stripped by `WyomingWsBridge.handle_text_envelope`;
+- works under the existing framework `/ws` namespace with `requires_auth=True` and CSRF auto-following;
+- old `api/ws_voqualizer.py` remains in-tree purely for reference.
+
+Next implementation step: add the shared browser-side Wyoming WS client adapter and re-point the standalone Voqualizer web UI plus the DOM main UI ASR/TTS extensions onto it (W17–W19).

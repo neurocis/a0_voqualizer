@@ -157,3 +157,23 @@ class WyomingWsBridge:
             "last_event_type": self.debug.last_event_type,
             "last_outgoing_type": self.debug.last_outgoing_type,
         }
+
+    async def handle_text_envelope(self, *, event_type: str, event_data: dict, payload: bytes | None = None):
+        """Process a Wyoming event envelope already split from its transport.
+
+        Strips client-supplied ``ctxid`` / ``interface_id`` overrides and
+        forwards the event to the bound :class:`WyomingInterfaceRuntime`. The
+        return value is the list of reply :class:`WyomingEvent` instances the
+        caller should send back to its client.
+        """
+        from .wyoming_protocol import WyomingEvent
+        safe_data = {k: v for k, v in (event_data or {}).items() if k not in ("ctxid", "interface_id")}
+        ev = WyomingEvent(type=str(event_type), data=safe_data, payload=payload or b"")
+        replies = await self._runtime.handle_event(self._session, ev)
+        for reply in replies or []:
+            try:
+                self._snapshot["text_out"] = int(self._snapshot.get("text_out", 0)) + 1
+                self._snapshot["last_outgoing_event"] = reply.type
+            except Exception:
+                pass
+        return list(replies or [])
