@@ -1,0 +1,15 @@
+{
+  "interfaces": [
+    {
+      "id": "hero-smoke",
+      "name": "Hero Smoke",
+      "ctxid": "REPLACE_WITH_REAL_CTXID",
+      "enabled": true,
+      "bind_host": "127.0.0.1",
+      "bind_port": 10701,
+      "asr": { "enabled": true },
+      "tts": { "enabled": true },
+      "assistant_text": { "enabled": true }
+    }
+  ]
+}

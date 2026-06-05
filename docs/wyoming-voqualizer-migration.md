@@ -423,3 +423,25 @@ Implemented scaffold:
 - legacy `api/ws_voqualizer.py` and the original DOM/standalone web UIs remain in-tree for reference per the breaking-rewrite plan.
 
 Next implementation step: cross-client interop validation against Home Assistant Wyoming integration and the OHF/`wyoming.net` reference clients, plus optional retirement of the legacy assets once the new pipeline is validated end-to-end.
+
+
+### W22 Interop/smoke validation checklist
+
+Added smoke fixture:
+
+- `config/wyoming_interfaces.smoke.example.json` documents a single local Wyoming interface (`hero-smoke`) bound 1:1 to a placeholder Agent Zero ctxID.
+
+Manual smoke checklist:
+
+1. Copy `config/wyoming_interfaces.smoke.example.json` to `config/wyoming_interfaces.json` and replace `REPLACE_WITH_REAL_CTXID` with a real ctxID.
+2. Restart or call the admin `wyoming_status` endpoint with `action=start`.
+3. Verify runtime status reports `running=true`, interface id `hero-smoke`, bind port `10701`, and `live_providers`.
+4. TCP describe/info: connect with a Wyoming-capable TCP client and send `describe`; expect `info` for `hero-smoke` with fixed ctxID metadata.
+5. Socket.IO wyoming_init: browser/DOM clients connect to `/ws` with handler `plugins/a0_voqualizer/ws_wyoming`, emit `wyoming_init {interface_id:"hero-smoke"}`, and receive `info`.
+6. text prompt: send Wyoming `voqualizer-text-prompt` and verify assistant start/chunk/final events and authoritative Wyoming `audio-start/audio-chunk/audio-stop` TTS events.
+7. ASR path: send `audio-start/audio-chunk/audio-stop`; verify `transcript` and false-positive filtering/dedupe.
+8. External interop: validate event framing against Home Assistant Wyoming expectations and the OHF/`wyoming.net` client/reference shapes.
+
+Known caveat:
+
+- The default prompt submitter is still a safe echo until the host Agent Zero context submitter is injected. ASR/TTS provider factories are live-bound, but true agent response text requires the framework submitter hook.

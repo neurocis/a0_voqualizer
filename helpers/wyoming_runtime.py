@@ -41,6 +41,9 @@ class WyomingVoqualizerRuntime:
         self.enabled_interfaces = [interface for interface in interfaces if interface.enabled]
         self.manager: WyomingInterfaceManager = build_wyoming_pipeline_manager(self.enabled_interfaces)
         self.tcp_manager = WyomingTcpInterfaceManager(self.manager)
+        self.running = False
+        self._lock = asyncio.Lock()
+        self.errors: list[str] = []
         # W20/W21: replace scaffold runtimes with live-bound ASR/prompt/TTS runtimes.
         for iface in self.enabled_interfaces:
             try:
@@ -49,9 +52,6 @@ class WyomingVoqualizerRuntime:
                 self.errors.append(f"live provider binding failed for {iface.id}: {exc}")
                 continue
             self.manager.runtimes[iface.id] = live_runtime
-        self.running = False
-        self._lock = asyncio.Lock()
-        self.errors: list[str] = []
 
     async def start(self) -> None:
         async with self._lock:
