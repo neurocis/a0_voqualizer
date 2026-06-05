@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .wyoming_interfaces import WyomingInterface, load_interfaces_from_file, load_interfaces
+from .wyoming_live_providers import bind_live_providers_to_runtime
 from .wyoming_server import (
     WyomingInterfaceManager,
     WyomingTcpInterfaceManager,
@@ -40,6 +41,14 @@ class WyomingVoqualizerRuntime:
         self.enabled_interfaces = [interface for interface in interfaces if interface.enabled]
         self.manager: WyomingInterfaceManager = build_wyoming_pipeline_manager(self.enabled_interfaces)
         self.tcp_manager = WyomingTcpInterfaceManager(self.manager)
+        # W20/W21: replace scaffold runtimes with live-bound ASR/prompt/TTS runtimes.
+        for iface in self.enabled_interfaces:
+            try:
+                live_runtime = bind_live_providers_to_runtime(iface)
+            except Exception as exc:  # noqa: BLE001 - keep runtime construction resilient
+                self.errors.append(f"live provider binding failed for {iface.id}: {exc}")
+                continue
+            self.manager.runtimes[iface.id] = live_runtime
         self.running = False
         self._lock = asyncio.Lock()
         self.errors: list[str] = []

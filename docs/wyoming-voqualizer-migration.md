@@ -411,3 +411,15 @@ Implemented scaffold:
 - the W11 dependency bootstrap remains responsible for installing the actual ASR/TTS dependencies; this module never assumes anything beyond the existing helper surface.
 
 Next implementation step: W21 will wire the W14/W16 admin/WS handlers to call `bind_live_providers_to_runtime` for live Wyoming interfaces, then run cross-client interop validation against Home Assistant Wyoming and the `wyoming.net` reference.
+
+
+### W21 Runtime live binding + status surface
+
+Implemented scaffold:
+
+- `helpers/wyoming_runtime.py` now imports `bind_live_providers_to_runtime` from `helpers/wyoming_live_providers.py`;
+- on `start()`, each enabled interface's scaffold runtime is replaced with a pipeline-installed live runtime (ASR/prompt/TTS adapters bound to the configured A0 providers via the W12 factories);
+- `api/wyoming_status.py` now surfaces `live_providers` in its status payload via `live_provider_status()`, so the admin endpoint reports the configured provider names/types alongside runtime/interface state;
+- legacy `api/ws_voqualizer.py` and the original DOM/standalone web UIs remain in-tree for reference per the breaking-rewrite plan.
+
+Next implementation step: cross-client interop validation against Home Assistant Wyoming integration and the OHF/`wyoming.net` reference clients, plus optional retirement of the legacy assets once the new pipeline is validated end-to-end.
