@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-tts-vu-simple-playback-2026-06-04-81 */
+/* voq-mobile-version: m8-tts-vu-asr-style-continuous-2026-06-04-82 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -927,42 +927,61 @@ body {
 
 .voqualizer-tts-vu {
   position: absolute;
-  inset: 3px;
+  inset: 4px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  opacity: var(--voqualizer-tts-vu-opacity, 0);
   pointer-events: none;
   z-index: 4;
-  background: rgba(22, 163, 74, calc(0.08 + (0.20 * var(--voqualizer-tts-vu-level, 0))));
-  box-shadow:
-    0 0 0 2px rgba(74, 222, 128, calc(0.35 + (0.55 * var(--voqualizer-tts-vu-level, 0)))) inset,
-    0 0 calc(8px + (18px * var(--voqualizer-tts-vu-level, 0))) rgba(34, 197, 94, 0.85);
-  transition: opacity 180ms linear, box-shadow 120ms linear, background 120ms linear;
+  overflow: hidden;
+  opacity: var(--voqualizer-tts-vu-opacity, 0);
+  background:
+    radial-gradient(circle at 50% calc(100% - 8px),
+      rgba(34, 197, 94, calc(0.20 + (0.55 * var(--voqualizer-tts-vu-level, 0)))) 0,
+      rgba(34, 197, 94, calc(0.12 + (0.30 * var(--voqualizer-tts-vu-level, 0)))) calc(10% + (58% * var(--voqualizer-tts-vu-level, 0))),
+      rgba(34, 197, 94, 0.08) calc(13% + (60% * var(--voqualizer-tts-vu-level, 0))),
+      transparent calc(20% + (62% * var(--voqualizer-tts-vu-level, 0))));
+  box-shadow: 0 0 calc(5px + (13px * var(--voqualizer-tts-vu-level, 0))) rgba(34, 197, 94, 0.78) inset;
+  transition: opacity 120ms linear, background 90ms linear, box-shadow 120ms linear;
+}
+.voqualizer-tts-vu::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 50%;
+  border: 2px solid rgba(74, 222, 128, calc(0.28 + (0.52 * var(--voqualizer-tts-vu-level, 0))));
 }
 .voqualizer-tts-vu-bar {
-  position: relative;
-  width: 5px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
   height: 22px;
+  margin-top: -11px;
   border-radius: 999px;
-  background: #86efac;
-  box-shadow: 0 0 7px rgba(134, 239, 172, 0.95);
-  transform-origin: bottom center;
-  transition: transform 90ms linear, opacity 90ms linear;
-  opacity: calc(0.58 + (0.42 * var(--voqualizer-tts-vu-level, 0)));
+  background: rgba(134, 239, 172, 0.94);
+  box-shadow: 0 0 5px rgba(134, 239, 172, 0.82);
+  transform-origin: center bottom;
+  opacity: calc(0.45 + (0.45 * var(--voqualizer-tts-vu-level, 0)));
+  transition: transform 90ms linear, opacity 120ms linear;
 }
-.voqualizer-tts-vu-bar-1 { transform: scaleY(var(--voqualizer-tts-vu-bar-1, 0.25)); }
-.voqualizer-tts-vu-bar-2 { transform: scaleY(var(--voqualizer-tts-vu-bar-2, 0.38)); }
-.voqualizer-tts-vu-bar-3 { transform: scaleY(var(--voqualizer-tts-vu-bar-3, 0.22)); }
+.voqualizer-tts-vu-bar-1 { transform: translateX(-10px) scaleY(var(--voqualizer-tts-vu-bar-1, 0.24)); }
+.voqualizer-tts-vu-bar-2 { transform: translateX(-2px) scaleY(var(--voqualizer-tts-vu-bar-2, 0.34)); }
+.voqualizer-tts-vu-bar-3 { transform: translateX(6px) scaleY(var(--voqualizer-tts-vu-bar-3, 0.24)); }
 .voqualizer-speaker.voqualizer-tts-vu-idle .voqualizer-tts-vu,
 .voqualizer-speaker.voqualizer-tts-on .voqualizer-tts-vu,
 #voqualizer-speaker-button[aria-pressed="true"] .voqualizer-tts-vu {
-  opacity: max(var(--voqualizer-tts-vu-opacity, 0), 0.50);
+  opacity: max(var(--voqualizer-tts-vu-opacity, 0), 0.42);
+  --voqualizer-tts-vu-level: max(var(--voqualizer-tts-vu-level, 0), 0.16);
+  --voqualizer-tts-vu-bar-1: max(var(--voqualizer-tts-vu-bar-1, 0), 0.24);
+  --voqualizer-tts-vu-bar-2: max(var(--voqualizer-tts-vu-bar-2, 0), 0.34);
+  --voqualizer-tts-vu-bar-3: max(var(--voqualizer-tts-vu-bar-3, 0), 0.24);
 }
 .voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu {
   opacity: 1;
+}
+.voqualizer-speaker.voqualizer-tts-playing {
+  box-shadow:
+    0 0 0 2px rgba(34, 197, 94, 0.95) inset,
+    0 0 calc(8px + (12px * var(--voqualizer-tts-vu-level, 0))) rgba(34, 197, 94, 0.78);
 }
 .voqualizer-speaker .material-symbols-outlined,
 .voqualizer-speaker .voq-text-fallback { position: relative; z-index: 9; }
