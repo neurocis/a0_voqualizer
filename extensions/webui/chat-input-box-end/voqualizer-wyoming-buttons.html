@@ -1,0 +1,174 @@
+<!--
+  W19 DOM main UI Wyoming extension scaffold.
+
+  This extension adds Wyoming-protocol mic/speaker buttons to the main A0
+  chat input row. It is NOT a replacement for the legacy
+  `voqualizer-buttons.html` extension, which remains in-tree for reference per
+  the breaking-rewrite plan. Both can coexist; users can disable the legacy one
+  once Wyoming-based behavior is validated end-to-end.
+
+  Protocol: speaks only Wyoming events via the shared
+  `webui/wyoming/wyoming-ws-client.js` adapter. The interface_id is read from
+  a `data-wyoming-interface` attribute on the host element so different chat
+  contexts can map 1:1 to different Wyoming interfaces (each with its own
+  fixed Agent Zero ctxID, enforced server-side).
+-->
+<div
+  x-data="voqualizerWyomingButtons"
+  x-init="init()"
+  x-move-to="chat-input-box-end"
+  data-wyoming-interface=""
+  class="voqualizer-wyoming-buttons"
+  style="display:inline-flex;gap:6px;align-items:center;margin-left:8px;"
+>
+  <button
+    id="voqualizer-wyoming-speaker-button"
+    type="button"
+    aria-label="Wyoming TTS toggle"
+    :aria-pressed="ttsEnabled"
+    @click="toggleTts()"
+    class="voqualizer-wyoming-btn"
+    style="min-width:36px;min-height:36px;border-radius:50%;"
+  >🔊</button>
+  <button
+    id="voqualizer-wyoming-mic-button"
+    type="button"
+    aria-label="Wyoming mic toggle"
+    :aria-pressed="micActive"
+    @click="toggleMic()"
+    class="voqualizer-wyoming-btn"
+    style="min-width:36px;min-height:36px;border-radius:50%;"
+  >🎤</button>
+  <span
+    class="voqualizer-wyoming-status"
+    x-text="statusText"
+    style="font-size:0.75rem;opacity:0.7;"
+  ></span>
+</div>
+
+<script type="module">
+  import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w19-wyoming-dom-2026-06-05-1';
+
+  function _resolveInterfaceId(rootEl) {
+    const attr = rootEl?.getAttribute?.('data-wyoming-interface');
+    if (attr && attr.trim()) return attr.trim();
+    const params = new URLSearchParams(location.search);
+    return params.get('wyoming') || 'default';
+  }
+
+  document.addEventListener('alpine:init', () => {
+    Alpine.data('voqualizerWyomingButtons', () => ({
+      client: null,
+      ttsEnabled: false,
+      micActive: false,
+      statusText: 'wyoming: disconnected',
+      audioCtx: null,
+      nextStart: 0,
+      micStream: null,
+      micProcessor: null,
+      micSource: null,
+      currentUtterance: null,
+      _initialized: false,
+      async init() {
+        if (this._initialized) return;
+        this._initialized = true;
+        const interfaceId = _resolveInterfaceId(this.$root);
+        try {
+          this.client = createWyomingWsClient({ interfaceId, debug: false });
+          this._wireEvents();
+          await this.client.connect();
+        } catch (err) {
+          this.statusText = `wyoming: connect failed (${err?.message || err})`;
+        }
+      },
+      _wireEvents() {
+        const c = this.client;
+        c.on('open', ({ info }) => { this.statusText = `wyoming: ${info?.data?.name || 'connected'}`; });
+        c.on('close', () => { this.statusText = 'wyoming: disconnected'; });
+        c.on('error', (err) => { this.statusText = `wyoming: error (${err?.error || 'unknown'})`; });
+        c.on('event:transcript', (ev) => {
+          const text = String(ev.data?.text || '');
+          if (!text || !window.A0) return;
+          // Best-effort: feed the recognized transcript into the main chat input
+          // textarea if present so existing send/submit behavior is reused.
+          const ta = document.querySelector('textarea[name="message"], textarea#message, textarea');
+          if (ta) ta.value = (ta.value ? ta.value + ' ' : '') + text;
+        });
+        c.on('event:audio-start', () => this._ensureAudio());
+        c.on('event:audio-chunk', (ev) => this._playPcmChunk(ev.payload));
+      },
+      _ensureAudio() {
+        if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        this.nextStart = Math.max(this.audioCtx.currentTime, this.nextStart);
+      },
+      _playPcmChunk(pcm) {
+        if (!this.ttsEnabled) return;
+        if (!pcm || !pcm.length) return;
+        this._ensureAudio();
+        const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2);
+        const buf = this.audioCtx.createBuffer(1, samples.length, 16000);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < samples.length; i++) data[i] = samples[i] / 32768;
+        const src = this.audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(this.audioCtx.destination);
+        const startAt = Math.max(this.audioCtx.currentTime, this.nextStart);
+        src.start(startAt);
+        this.nextStart = startAt + buf.duration;
+      },
+      async toggleTts() {
+        this.ttsEnabled = !this.ttsEnabled;
+        if (!this.ttsEnabled && this.client) {
+          try { await this.client.cancelTts(); } catch (_) {}
+        }
+      },
+      async toggleMic() {
+        if (this.micActive) {
+          await this._stopMic();
+          return;
+        }
+        await this._startMic();
+      },
+      async _startMic() {
+        if (!this.client) return;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, noiseSuppression: true, echoCancellation: true } });
+          this._ensureAudio();
+          const source = this.audioCtx.createMediaStreamSource(stream);
+          const processor = this.audioCtx.createScriptProcessor(4096, 1, 1);
+          const utt = await this.client.beginAudio({ rate: this.audioCtx.sampleRate, width: 2, channels: 1 });
+          processor.onaudioprocess = async (e) => {
+            const f32 = e.inputBuffer.getChannelData(0);
+            const i16 = new Int16Array(f32.length);
+            for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32767));
+            try { await this.client.sendAudioChunk(new Uint8Array(i16.buffer)); } catch (_) {}
+          };
+          source.connect(processor);
+          processor.connect(this.audioCtx.destination);
+          this.micStream = stream;
+          this.micProcessor = processor;
+          this.micSource = source;
+          this.currentUtterance = utt;
+          this.micActive = true;
+          this.statusText = 'wyoming: listening';
+        } catch (err) {
+          this.statusText = `wyoming: mic failed (${err?.message || err})`;
+        }
+      },
+      async _stopMic() {
+        try { this.micProcessor?.disconnect(); } catch (_) {}
+        try { this.micSource?.disconnect(); } catch (_) {}
+        try { this.micStream?.getTracks?.().forEach(t => t.stop()); } catch (_) {}
+        if (this.client && this.currentUtterance) {
+          try { await this.client.endAudio({ utteranceId: this.currentUtterance }); } catch (_) {}
+        }
+        this.micStream = null;
+        this.micProcessor = null;
+        this.micSource = null;
+        this.currentUtterance = null;
+        this.micActive = false;
+        this.statusText = 'wyoming: idle';
+      },
+    }));
+  });
+</script>

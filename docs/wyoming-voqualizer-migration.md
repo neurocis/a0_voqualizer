@@ -385,3 +385,16 @@ Implemented scaffold:
 - selects the Wyoming interface via `?interface=<id>` query parameter; the interface boundary picks the fixed Agent Zero ctxID server-side.
 
 Next implementation step: W19 will re-point the DOM main-UI ASR/TTS extensions (`extensions/webui/chat-input-box-end/voqualizer-buttons.html` and the parts of `webui/conversation-mode.js` they consume) onto the same `WyomingWsClient` adapter, again without removing the legacy assets.
+
+
+### W19 DOM main UI Wyoming extension scaffold
+
+Implemented scaffold:
+
+- new `extensions/webui/chat-input-box-end/voqualizer-wyoming-buttons.html` adds mic/speaker buttons to the main A0 chat input row, driven by the W17 `WyomingWsClient` adapter;
+- legacy `extensions/webui/chat-input-box-end/voqualizer-buttons.html` remains in-tree for reference per the breaking-rewrite plan; both can coexist;
+- Wyoming interface mapping is sourced from a `data-wyoming-interface` attribute (or `?wyoming=` query param fallback), so different chat contexts map 1:1 to different interfaces with fixed ctxID server-side;
+- recognized transcripts are fed into the main chat textarea so existing send semantics are reused without coupling to the retired custom websocket protocol;
+- TTS playback uses a dedicated AudioContext fed from Wyoming `audio-*` events.
+
+Next implementation step: W20 will bind the W12 A0 provider adapter factories to real plugin ASR/context/TTS providers and wire them into `WyomingVoqualizerPipeline` for live interfaces.
