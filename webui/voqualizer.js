@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-vu-idle-bars-visible-2026-06-04-79';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-vu-playback-queue-2026-06-04-80';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-vu-idle-bars-visible';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-idle-bars-visible-2026-06-04-79';
+const PAGE_VERSION = 'm8-tts-vu-playback-queue';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-playback-queue-2026-06-04-80';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -74,6 +74,8 @@ const tts = {
   ttsVuClearTimer: 0,
   ttsVuDecayTimer: 0,
   ttsVuEnvelopeTimer: 0,
+  ttsVuAnimationFrame: 0,
+  ttsVuScheduledSegments: [],
   livePushSinceSubmit: false,
   lastLivePushAt: 0,
   lastLivePushUtteranceId: '',
@@ -585,7 +587,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-idle-bars-visible-2026-06-04-79'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-playback-queue-2026-06-04-80'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -680,7 +682,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-idle-bars-visible-2026-06-04-79'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-playback-queue-2026-06-04-80'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -703,7 +705,7 @@ function buildTtsDebugLines() {
     `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
     `duplicate_chunks=${p.duplicateTtsChunkCount || 0} duplicate_utt=${p.lastDuplicateTtsChunkUtteranceId || ''}`,
     `playback_at=${p.lastPlaybackStartAt || 0} playback_ms=${p.lastPlaybackDurationMs || 0} playback_utt=${p.lastPlaybackUtteranceId || ''} playback_error=${p.lastPlaybackError || ''}`,
-    `tts_vu=${p.ttsVuLevel || 0} tts_vu_at=${p.lastTtsVuAt || 0} tts_vu_decay=${p.lastTtsVuDecayAt || 0} tts_vu_clear=${p.lastTtsVuClearAt || 0} tts_vu_hold=${p.lastTtsVuHoldMs || 0} tts_vu_delay=${p.lastTtsVuPlaybackDelayMs || 0} tts_vu_source=${p.lastTtsVuSource || ""} tts_vu_target=${p.lastTtsVuTargetFound === false ? "false" : "true"} tts_vu_element=${p.lastTtsVuElementFound === false ? "false" : "true"} tts_vu_el_level=${p.lastTtsVuElementLevel || 0} tts_vu_el_opacity=${p.lastTtsVuElementOpacity || ""} tts_vu_visual_active=${p.lastTtsVuVisualActive ? "true" : "false"} tts_vu_display=${p.lastTtsVuComputedDisplay || ""} tts_vu_visibility=${p.lastTtsVuComputedVisibility || ""} tts_vu_rect=${p.lastTtsVuRect || ""} tts_vu_idle=${p.lastTtsVuIdleEnabled ? "true" : "false"} tts_vu_bars=${p.lastTtsVuBarCount || 0}`,
+    `tts_vu=${p.ttsVuLevel || 0} tts_vu_at=${p.lastTtsVuAt || 0} tts_vu_decay=${p.lastTtsVuDecayAt || 0} tts_vu_clear=${p.lastTtsVuClearAt || 0} tts_vu_hold=${p.lastTtsVuHoldMs || 0} tts_vu_delay=${p.lastTtsVuPlaybackDelayMs || 0} tts_vu_source=${p.lastTtsVuSource || ""} tts_vu_target=${p.lastTtsVuTargetFound === false ? "false" : "true"} tts_vu_element=${p.lastTtsVuElementFound === false ? "false" : "true"} tts_vu_el_level=${p.lastTtsVuElementLevel || 0} tts_vu_el_opacity=${p.lastTtsVuElementOpacity || ""} tts_vu_visual_active=${p.lastTtsVuVisualActive ? "true" : "false"} tts_vu_display=${p.lastTtsVuComputedDisplay || ""} tts_vu_visibility=${p.lastTtsVuComputedVisibility || ""} tts_vu_rect=${p.lastTtsVuRect || ""} tts_vu_idle=${p.lastTtsVuIdleEnabled ? "true" : "false"} tts_vu_bars=${p.lastTtsVuBarCount || 0} tts_vu_queue=${p.lastTtsVuQueueLength || 0} tts_vu_segments=${p.lastTtsVuActiveSegments || 0} tts_vu_sched=${p.lastTtsVuScheduledAt || 0} tts_vu_sched_level=${p.lastTtsVuScheduledLevel || 0}`,
     `audio_state=${p.audioContextState || ''} audio_create=${p.lastAudioContextCreateAt || 0} audio_create_reason=${p.lastAudioContextCreateReason || ''} audio_create_error=${p.lastAudioContextError || ''}`,
     `audio_resume=${p.lastAudioResumeAt || 0} audio_resume_reason=${p.lastAudioResumeReason || ''} audio_resume_error=${p.lastAudioResumeError || ''}`,
     `stale_socket_event=${p.lastStaleTtsSocketEvent || ''} stale_socket_at=${p.lastStaleTtsSocketEventAt || 0}`,
@@ -2095,40 +2097,100 @@ function stopTtsVuTimers() {
     clearTimeout(tts.ttsVuEnvelopeTimer);
     tts.ttsVuEnvelopeTimer = 0;
   }
+  if (tts.ttsVuAnimationFrame) {
+    cancelAnimationFrame(tts.ttsVuAnimationFrame);
+    tts.ttsVuAnimationFrame = 0;
+  }
 }
 
 function updateTtsVu(bytes, playbackDelayMs = 0, durationMs = 180) {
+  // Backward-compatible wrapper: schedule the meter against wall-clock when no
+  // AudioContext time is available. Normal PCM playback uses scheduleTtsVuSegment().
+  const startAtMs = Date.now() + Math.max(0, Number(playbackDelayMs || 0));
+  scheduleTtsVuSegment(bytes, startAtMs, Number(durationMs || 180), 'scheduled_pcm_playback_fallback_ms');
+}
+
+function scheduleTtsVuSegment(bytes, startAt, durationMs = 180, source = 'scheduled_pcm_playback', audioContext = null) {
   const vu = bytesToTtsVuPercent(bytes);
-  stopTtsVuTimers();
-  const delay = Math.max(0, Math.min(5000, Number(playbackDelayMs || 0)));
-  const hold = Math.max(240, Math.min(2200, Number(durationMs || 180) + 360));
-  const start = () => {
-    setTtsVuVisual(vu, 0.98);
-    if (globalThis.__voqualizer_page) {
-      globalThis.__voqualizer_page.lastTtsVuPlaybackDelayMs = Math.round(delay);
-      globalThis.__voqualizer_page.lastTtsVuHoldMs = Math.round(hold);
-      globalThis.__voqualizer_page.lastTtsVuSource = 'scheduled_pcm_playback';
-    }
-    tts.ttsVuDecayTimer = setTimeout(decayTtsVu, hold);
+  const ctx = audioContext || tts.audioContext || null;
+  const nowMs = Date.now();
+  const startMs = ctx && typeof startAt === 'number'
+    ? nowMs + Math.max(0, (startAt - ctx.currentTime) * 1000)
+    : Math.max(nowMs, Number(startAt || nowMs));
+  const duration = Math.max(90, Math.min(1800, Number(durationMs || 180)));
+  const segment = {
+    startMs,
+    endMs: startMs + duration,
+    level: vu,
+    source,
   };
-  if (delay > 8) {
-    tts.ttsVuEnvelopeTimer = setTimeout(start, delay);
-  } else {
-    start();
+  tts.ttsVuScheduledSegments.push(segment);
+  const cutoff = nowMs - 1200;
+  tts.ttsVuScheduledSegments = tts.ttsVuScheduledSegments.filter((item) => item.endMs >= cutoff).slice(-160);
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastTtsVuPlaybackDelayMs = Math.round(Math.max(0, startMs - nowMs));
+    globalThis.__voqualizer_page.lastTtsVuHoldMs = Math.round(duration);
+    globalThis.__voqualizer_page.lastTtsVuSource = source;
+    globalThis.__voqualizer_page.lastTtsVuScheduledAt = nowMs;
+    globalThis.__voqualizer_page.lastTtsVuScheduledLevel = vu;
+    globalThis.__voqualizer_page.lastTtsVuQueueLength = tts.ttsVuScheduledSegments.length;
   }
+  ensureTtsVuPlaybackLoop();
+}
+
+function ensureTtsVuPlaybackLoop() {
+  if (tts.ttsVuAnimationFrame) return;
+  const tick = () => {
+    tts.ttsVuAnimationFrame = 0;
+    const now = Date.now();
+    let level = 0;
+    let activeCount = 0;
+    tts.ttsVuScheduledSegments = tts.ttsVuScheduledSegments.filter((seg) => seg.endMs + 850 >= now);
+    for (const seg of tts.ttsVuScheduledSegments) {
+      if (now < seg.startMs || now > seg.endMs) continue;
+      activeCount += 1;
+      const progress = Math.max(0, Math.min(1, (now - seg.startMs) / Math.max(1, seg.endMs - seg.startMs)));
+      const envelope = 0.72 + (0.28 * Math.sin(Math.PI * progress));
+      level = Math.max(level, Math.max(0.22, seg.level * envelope));
+    }
+    if (activeCount > 0) {
+      setTtsVuVisual(level, 1);
+      if (globalThis.__voqualizer_page) {
+        globalThis.__voqualizer_page.lastTtsVuVisualActive = true;
+        globalThis.__voqualizer_page.lastTtsVuActiveSegments = activeCount;
+        globalThis.__voqualizer_page.lastTtsVuQueueLength = tts.ttsVuScheduledSegments.length;
+      }
+    } else if (tts.ttsVuScheduledSegments.length) {
+      // Keep idle bars visible between queued chunks, but do not animate intensely.
+      if (tts.enabled) setTtsVuVisual(0.20, 0.58);
+    } else {
+      decayTtsVu();
+      return;
+    }
+    tts.ttsVuAnimationFrame = requestAnimationFrame(tick);
+  };
+  tts.ttsVuAnimationFrame = requestAnimationFrame(tick);
 }
 
 function decayTtsVu() {
-  tts.ttsVuDecayTimer = 0;
-  setTtsVuVisual(0.18, 0.48);
-  if (globalThis.__voqualizer_page) {
-    globalThis.__voqualizer_page.lastTtsVuDecayAt = Date.now();
-  }
-  tts.ttsVuClearTimer = setTimeout(clearTtsVu, 750);
+  if (tts.ttsVuDecayTimer) return;
+  tts.ttsVuDecayTimer = setTimeout(() => {
+    tts.ttsVuDecayTimer = 0;
+    if (tts.enabled) {
+      setTtsVuVisual(0.20, 0.58);
+      ensureTtsVuIdleVisual();
+    } else {
+      setTtsVuVisual(0, 0);
+    }
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.lastTtsVuDecayAt = Date.now();
+    }
+  }, 180);
 }
 
 function clearTtsVu() {
   stopTtsVuTimers();
+  tts.ttsVuScheduledSegments = [];
   const speaker = document.getElementById('voqualizer-speaker-button');
   if (speaker) {
     const vuEl = getTtsVuElement(speaker);
@@ -2198,9 +2260,6 @@ function handleTtsChunk(payload) {
   }
   if (!bytes || !bytes.byteLength) return;
   if (codec === 'pcm16/16k' || codec === 'pcm16/24k') {
-    // Immediate visual proof of TTS activity, then playback-envelope update refines the level at scheduled audio time.
-    setTtsVuVisual(Math.max(0.34, bytesToTtsVuPercent(bytes)), 1);
-    if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastTtsVuSource = 'chunk_receipt_plus_scheduled_pcm_playback';
     playPcmChunk(bytes, sampleRate, utteranceId);
   } else {
     bufferEncodedChunk(bytes, codec, utteranceId, !!(data.is_final || data.final));
@@ -2298,7 +2357,7 @@ function playPcmChunk(bytes, sampleRate, utteranceId) {
   const startAt = Math.max(ctx.currentTime + 0.01, tts.playbackTail);
   try {
     source.start(startAt);
-    updateTtsVu(aligned, Math.max(0, (startAt - ctx.currentTime) * 1000), buffer.duration * 1000);
+    scheduleTtsVuSegment(aligned, startAt, buffer.duration * 1000, 'scheduled_pcm_playback_queue', ctx);
     if (globalThis.__voqualizer_page) {
       globalThis.__voqualizer_page.lastPlaybackStartAt = Date.now();
       globalThis.__voqualizer_page.lastPlaybackStartAudioTime = startAt;
@@ -2345,7 +2404,6 @@ function bufferEncodedChunk(bytes, codec, utteranceId, isFinal) {
 }
 
 function handleTtsDone(payload) {
-  clearTtsVu();
   const data = (payload && payload.data) || payload || {};
   const utteranceId = safeString(data.utterance_id || data.utteranceId || 'default');
   if (!shouldAcceptTtsUtterance(utteranceId, 'done')) return;
@@ -3095,6 +3153,10 @@ function initVoqualizerPage() {
     lastTtsVuIdleEnsureAt: 0,
     lastTtsVuIdleEnabled: false,
     lastTtsVuBarCount: 0,
+    lastTtsVuQueueLength: 0,
+    lastTtsVuActiveSegments: 0,
+    lastTtsVuScheduledAt: 0,
+    lastTtsVuScheduledLevel: 0,
     audioContextState: '',
     lastStatus: 'Ready',
     lastStatusLevel: 'info',
