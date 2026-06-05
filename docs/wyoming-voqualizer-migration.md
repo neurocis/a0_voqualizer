@@ -268,3 +268,15 @@ Implemented scaffold:
 - plugin metadata now describes the breaking Wyoming TCP rewrite instead of the retired custom websocket bridge.
 
 Next implementation step: replace scaffold ASR/prompt/TTS providers with real A0 adapters and decide whether old websocket API files should be deleted now or after provider wiring.
+
+
+### W12 A0 provider adapter scaffold
+
+Implemented scaffold:
+
+- old `api/ws_voqualizer.py` and web UI assets remain in-tree for reference;
+- `helpers/wyoming_a0_adapters.py` wraps pluggable A0 ASR/TTS providers and a prompt submitter;
+- adapters feed the Wyoming ASR, prompt, and TTS pipeline without reusing old websocket events;
+- adapter status reports which provider factories/submitter are configured.
+
+Next implementation step: bind these adapter factories to the real plugin registry/config providers and compose them into `WyomingVoqualizerPipeline` for live interfaces.
