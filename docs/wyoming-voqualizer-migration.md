@@ -445,3 +445,23 @@ Manual smoke checklist:
 Known caveat:
 
 - The default prompt submitter is still a safe echo until the host Agent Zero context submitter is injected. ASR/TTS provider factories are live-bound, but true agent response text requires the framework submitter hook.
+
+
+### W23 Smoke diagnostic runner
+
+Implemented:
+
+- `tools/wyoming_smoke.py` validates a Wyoming interface config and prints a JSON diagnostic report;
+- report includes configured/enabled interfaces, fixed ctxID bindings, bind host/port, and `live_provider_status()` output;
+- optional `--tcp-describe` performs a canonical Wyoming `describe` -> `info` round-trip against a selected enabled interface;
+- no retired `voqualizer_*` websocket protocol names are used.
+
+Example:
+
+```bash
+cd /a0/usr/plugins/a0_voqualizer
+python3 tools/wyoming_smoke.py --config config/wyoming_interfaces.json
+python3 tools/wyoming_smoke.py --config config/wyoming_interfaces.json --interface hero-smoke --tcp-describe
+```
+
+Next implementation step: add a real Agent Zero context prompt submitter injection so `voqualizer-text-prompt` can produce true assistant responses instead of the current safe echo submitter.
