@@ -11,6 +11,11 @@ class WyomingStatus(ApiHandler):
         action = str((input or {}).get("action") or "status").strip().lower()
         if action == "status":
             return hooks.wyoming_runtime_status()
+        if action == "bootstrap":
+            status = hooks.ensure_dependency_bootstrap()
+            runtime_status = hooks.wyoming_runtime_status()
+            runtime_status["bootstrap"] = status
+            return runtime_status
         if action == "start":
             runtime = await hooks.start_wyoming_runtime()
             status = hooks.wyoming_runtime_status()
@@ -24,5 +29,5 @@ class WyomingStatus(ApiHandler):
         return {
             "error": "unsupported_action",
             "message": f"Unsupported Wyoming status action: {action}",
-            "supported_actions": ["status", "start", "stop"],
+            "supported_actions": ["status", "bootstrap", "start", "stop"],
         }

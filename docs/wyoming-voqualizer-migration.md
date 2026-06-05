@@ -256,3 +256,15 @@ Implemented scaffold:
 
 Next implementation step: wire real A0 ASR/context/TTS providers into the pipeline
 and decide the operational config source for interface definitions.
+
+
+### W11 dependency bootstrap and metadata restoration
+
+Implemented scaffold:
+
+- preserved the original conservative dependency bootstrap inside the new Wyoming lifecycle hooks;
+- dependency status remains written to `.dependency_status.json`;
+- admin status now includes dependency status and a `bootstrap` action;
+- plugin metadata now describes the breaking Wyoming TCP rewrite instead of the retired custom websocket bridge.
+
+Next implementation step: replace scaffold ASR/prompt/TTS providers with real A0 adapters and decide whether old websocket API files should be deleted now or after provider wiring.
