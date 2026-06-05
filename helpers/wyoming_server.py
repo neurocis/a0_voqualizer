@@ -13,7 +13,7 @@ import uuid
 from typing import Any, Awaitable, Callable
 
 from .wyoming_interfaces import WyomingInterface
-from .wyoming_protocol import WyomingEvent, event
+from .wyoming_protocol import WyomingEvent, WyomingProtocolError, event, read_event_from_stream, write_event_to_stream
 
 
 Handler = Callable[["WyomingSession", WyomingEvent], Awaitable[list[WyomingEvent]]]
@@ -112,6 +112,84 @@ class WyomingInterfaceManager:
             }
             for runtime in self.runtimes.values()
         ]
+
+
+class WyomingTcpServer:
+    """Asyncio TCP binding for one Wyoming interface runtime.
+
+    This is the first real server binding scaffold. It accepts generic Wyoming TCP
+    clients, creates a session bound to the runtime interface/ctxID, reads Wyoming
+    framed events, dispatches them through the runtime, and writes Wyoming framed
+    replies. Browser bridges should adapt to this protocol rather than define a
+    separate primary protocol.
+    """
+
+    def __init__(self, runtime: WyomingInterfaceRuntime) -> None:
+        self.runtime = runtime
+        self.server: asyncio.AbstractServer | None = None
+
+    async def start(self) -> asyncio.AbstractServer:
+        self.server = await asyncio.start_server(
+            self.handle_client,
+            self.runtime.interface.bind_host,
+            self.runtime.interface.bind_port,
+        )
+        return self.server
+
+    async def stop(self) -> None:
+        if self.server is None:
+            return
+        self.server.close()
+        await self.server.wait_closed()
+        self.server = None
+
+    async def handle_client(self, reader, writer) -> None:
+        session = self.runtime.create_session()
+        peer = None
+        try:
+            peer = writer.get_extra_info("peername") if hasattr(writer, "get_extra_info") else None
+            session.metadata["peername"] = repr(peer)
+            while True:
+                incoming = await read_event_from_stream(reader)
+                if incoming is None:
+                    break
+                replies = await self.runtime.handle_event(session, incoming)
+                for outgoing in replies:
+                    await write_event_to_stream(writer, outgoing)
+        except WyomingProtocolError as exc:
+            await write_event_to_stream(writer, event("error", code="protocol_error", message=str(exc)))
+        except Exception as exc:  # pragma: no cover - defensive runtime guard
+            await write_event_to_stream(writer, event("error", code="handler_error", message=str(exc)))
+        finally:
+            self.runtime.close_session(session.session_id)
+            close = getattr(writer, "close", None)
+            if close is not None:
+                close()
+            wait_closed = getattr(writer, "wait_closed", None)
+            if wait_closed is not None:
+                try:
+                    await wait_closed()
+                except Exception:
+                    pass
+
+
+class WyomingTcpInterfaceManager:
+    """Starts/stops TCP servers for all enabled Wyoming interface runtimes."""
+
+    def __init__(self, manager: WyomingInterfaceManager) -> None:
+        self.manager = manager
+        self.servers: dict[str, WyomingTcpServer] = {
+            interface_id: WyomingTcpServer(runtime)
+            for interface_id, runtime in manager.runtimes.items()
+        }
+
+    async def start(self) -> None:
+        for server in self.servers.values():
+            await server.start()
+
+    async def stop(self) -> None:
+        for server in list(self.servers.values()):
+            await server.stop()
 
 
 async def echo_text_prompt_handler(session: WyomingSession, incoming: WyomingEvent) -> list[WyomingEvent]:

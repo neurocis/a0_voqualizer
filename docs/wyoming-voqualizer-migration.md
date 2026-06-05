@@ -141,3 +141,16 @@ Deliverables:
 - protocol fixture tests;
 - Home Assistant/OHF/wyoming.net compatibility checklist;
 - manual smoke tests for generic client and browser client.
+
+
+### W2.5/W3 TCP server binding scaffold
+
+Implemented scaffold:
+
+- `read_event_from_stream` / `write_event_to_stream` for asyncio stream framing;
+- `WyomingTcpServer` for one generic Wyoming TCP client connection per interface runtime;
+- `WyomingTcpInterfaceManager` for concurrently active interface listeners;
+- tests proving `describe` returns interface-bound `info` and closes sessions cleanly.
+
+Next implementation step: replace the temporary prompt echo handler with real A0
+context submission and add standard ASR/TTS event adapters.

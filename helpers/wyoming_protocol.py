@@ -86,3 +86,37 @@ def decode_event(header_line: bytes | str, payload: bytes = b"") -> WyomingEvent
 def event(type_: str, **data: Any) -> WyomingEvent:
     """Convenience constructor for JSON-only Wyoming events."""
     return WyomingEvent(type=type_, data=dict(data))
+
+
+async def read_event_from_stream(reader, *, max_header_bytes: int = 65536) -> WyomingEvent | None:
+    """Read one Wyoming event from an asyncio StreamReader-like object.
+
+    Returns None on clean EOF before a header is read. Raises WyomingProtocolError
+    for malformed headers, oversized headers, or truncated payloads.
+    """
+    try:
+        header_line = await reader.readline()
+    except Exception as exc:  # pragma: no cover - stream defensive
+        raise WyomingProtocolError(f"failed to read Wyoming header: {exc}") from exc
+    if not header_line:
+        return None
+    if len(header_line) > max_header_bytes:
+        raise WyomingProtocolError("Wyoming header exceeds maximum size")
+    event_type, data, payload_length = decode_header_line(header_line)
+    payload = b""
+    if payload_length:
+        try:
+            payload = await reader.readexactly(payload_length)
+        except Exception as exc:
+            raise WyomingProtocolError(
+                f"failed to read Wyoming payload length={payload_length}: {exc}"
+            ) from exc
+    return WyomingEvent(type=event_type, data=data, payload=payload)
+
+
+async def write_event_to_stream(writer, outgoing: WyomingEvent) -> None:
+    """Write one Wyoming event to an asyncio StreamWriter-like object."""
+    writer.write(encode_event(outgoing))
+    drain = getattr(writer, "drain", None)
+    if drain is not None:
+        await drain()
