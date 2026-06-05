@@ -199,3 +199,18 @@ Implemented scaffold:
 
 Next implementation step: wire the adapter to the real TTS provider and compose
 prompt-response-final -> authoritative TTS events in the interface runtime.
+
+
+### W7 pipeline composition scaffold
+
+Implemented scaffold:
+
+- `WyomingVoqualizerPipeline` composes ASR, prompt, and authoritative TTS adapters;
+- `describe` returns interface info;
+- ASR `audio-stop` transcript output can feed the fixed-ctxID prompt path;
+- assistant final output can feed authoritative Wyoming TTS audio events;
+- cancel/barge-in is scoped to one interface/session and advances generation;
+- no old custom websocket protocol participates in this pipeline.
+
+Next implementation step: wire this pipeline into each TCP interface runtime and
+replace scaffold providers with real A0 ASR/prompt/TTS providers.
