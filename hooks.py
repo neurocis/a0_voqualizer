@@ -1,155 +1,90 @@
-"""a0_voqualizer install hooks.
+"""Lifecycle hooks for the a0_voqualizer Wyoming rewrite.
 
-Installs runtime dependencies (faster-whisper, piper-tts, numpy, soundfile,
-webrtcvad, aiohttp, samplerate, jsonschema) into the framework runtime when
-the plugin is enabled. Skips re-installation on subsequent loads.
-
-Writes a `.dependency_status.json` next to this file so runtime code can
-report degraded modes if any optional component is missing.
-
-This module is intentionally conservative — it only uses stdlib at module
-import time so it won't break plugin discovery if optional helpers haven't
-been materialized yet (mirrors `a0_crosschatapi` and `a0_transcribbler`).
+The Wyoming runtime is intentionally independent from the retired custom
+Voqualizer websocket protocol. These hooks provide an opt-in startup scaffold for
+1:1 Wyoming interface -> ctxID TCP services.
 """
+from __future__ import annotations
 
-import json
-import os
-import subprocess
-import sys
-from datetime import datetime
+import asyncio
+from pathlib import Path
+from typing import Any
 
+from .helpers.wyoming_runtime import DEFAULT_INTERFACE_CONFIG, WyomingVoqualizerRuntime, load_wyoming_runtime
 
-PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
-STATUS_FILE = os.path.join(PLUGIN_DIR, ".dependency_status.json")
-
-# (module_name, pip_spec) — what we check and install.
-# pip_spec mirrors requirements.txt; keep them in sync.
-_REQUIREMENTS = [
-    ("numpy", "numpy>=1.24.0"),
-    ("soundfile", "soundfile>=0.12.1"),
-    ("webrtcvad", "webrtcvad>=2.0.10"),
-    ("faster_whisper", "faster-whisper>=1.0.0"),
-    ("aiohttp", "aiohttp>=3.9.0"),
-    ("piper", "piper-tts>=1.2.0"),
-    ("samplerate", "samplerate>=0.2.1"),
-    ("jsonschema", "jsonschema>=4.0.0"),
-]
+_wyoming_runtime: WyomingVoqualizerRuntime | None = None
+_wyoming_task: asyncio.Task | None = None
+_wyoming_lock = asyncio.Lock()
 
 
-def _log(level: str, msg: str) -> None:
-    """Simple logging without framework dependencies."""
-    timestamp = datetime.now().isoformat()
-    print(f"[{timestamp}] [{level}] [a0_voqualizer] {msg}")
+def wyoming_config_path() -> Path:
+    return DEFAULT_INTERFACE_CONFIG
 
 
-def _write_status(status: dict) -> None:
-    try:
-        with open(STATUS_FILE, "w") as f:
-            json.dump(status, f, indent=2)
-    except Exception as e:
-        _log("WARN", f"Could not write status file: {e}")
+def get_wyoming_runtime() -> WyomingVoqualizerRuntime | None:
+    return _wyoming_runtime
 
 
-def _module_importable(name: str) -> bool:
-    try:
-        __import__(name)
-        return True
-    except ImportError:
-        return False
-    except Exception as e:
-        # Module exists but raised at import time; treat as present so we
-        # don't repeatedly reinstall it.
-        _log("WARN", f"Module {name} import raised non-ImportError: {e}")
-        return True
+def wyoming_runtime_status() -> dict[str, Any]:
+    runtime = get_wyoming_runtime()
+    if runtime is None:
+        return {
+            "configured": False,
+            "running": False,
+            "config_path": str(wyoming_config_path()),
+            "message": "Wyoming runtime has not been started",
+        }
+    status = runtime.status_dict()
+    status["configured"] = True
+    status["config_path"] = str(wyoming_config_path())
+    return status
 
 
-def _pip_install(specs: list[str]) -> bool:
-    if not specs:
-        return True
-    _log("INFO", f"Installing: {', '.join(specs)}")
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", *specs],
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-        if result.returncode == 0:
-            _log("INFO", "Install succeeded")
-            return True
-        _log("ERROR", f"Install failed (rc={result.returncode}): {result.stderr.strip()[:500]}")
-        return False
-    except subprocess.TimeoutExpired:
-        _log("ERROR", "pip install timed out")
-        return False
-    except Exception as e:
-        _log("ERROR", f"pip install exception: {e}")
-        return False
+async def start_wyoming_runtime(config_path: str | Path | None = None) -> WyomingVoqualizerRuntime | None:
+    """Start the configured Wyoming TCP runtime if config exists.
 
-
-def _ensure_config_json() -> None:
-    """Materialize config.json from default_config.yaml on first activation.
-
-    Helpers/registry.py will own the canonical loader later (A1.2); this is a
-    minimal first-run bootstrap so the plugin appears wired-up.
+    Missing config is treated as non-fatal because the migration scaffold should
+    not start placeholder ports until the operator creates config/wyoming_interfaces.json.
     """
-    config_path = os.path.join(PLUGIN_DIR, "config.json")
-    default_yaml = os.path.join(PLUGIN_DIR, "default_config.yaml")
-    if os.path.exists(config_path):
-        return
-    try:
-        import yaml  # PyYAML ships with the framework runtime
-        with open(default_yaml, "r") as f:
-            data = yaml.safe_load(f) or {}
-        with open(config_path, "w") as f:
-            json.dump(data, f, indent=2)
-        _log("INFO", f"Materialized config.json from default_config.yaml")
-    except Exception as e:
-        _log("WARN", f"Could not materialize config.json: {e}")
+    global _wyoming_runtime, _wyoming_task
+    async with _wyoming_lock:
+        path = Path(config_path) if config_path is not None else wyoming_config_path()
+        if not path.exists():
+            return None
+        if _wyoming_runtime is not None and _wyoming_runtime.running:
+            return _wyoming_runtime
+        runtime = load_wyoming_runtime(path)
+        await runtime.start()
+        _wyoming_runtime = runtime
+        _wyoming_task = asyncio.current_task()
+        return runtime
 
 
-def install() -> None:
-    """Install entry point invoked by the framework when the plugin activates."""
-    _log("INFO", "install() called")
-
-    missing: list[str] = []
-    present: list[str] = []
-    for module, spec in _REQUIREMENTS:
-        if _module_importable(module):
-            present.append(module)
-        else:
-            missing.append(spec)
-
-    install_ok = True
-    if missing:
-        install_ok = _pip_install(missing)
-        # Re-check after install
-        present = [m for m, _ in _REQUIREMENTS if _module_importable(m)]
-
-    _ensure_config_json()
-
-    status = {
-        "plugin": "a0_voqualizer",
-        "checked_at": datetime.now().isoformat(),
-        "requirements": [m for m, _ in _REQUIREMENTS],
-        "present": present,
-        "missing": [m for m, _ in _REQUIREMENTS if m not in present],
-        "install_attempted": bool(missing),
-        "install_ok": install_ok,
-    }
-    _write_status(status)
-    _log("INFO", f"Status: present={len(present)}/{len(_REQUIREMENTS)} install_ok={install_ok}")
+async def stop_wyoming_runtime() -> None:
+    global _wyoming_runtime, _wyoming_task
+    async with _wyoming_lock:
+        runtime = _wyoming_runtime
+        _wyoming_runtime = None
+        _wyoming_task = None
+        if runtime is not None:
+            await runtime.stop()
 
 
-def uninstall() -> None:
-    """Uninstall entry point invoked by the framework when the plugin deactivates.
+async def install() -> None:
+    """Install hook: no-op except ensuring config directory exists."""
+    wyoming_config_path().parent.mkdir(parents=True, exist_ok=True)
 
-    We deliberately do **not** uninstall pip packages — they may be shared with
-    other plugins. We only remove our own status file.
-    """
-    _log("INFO", "uninstall() called")
-    try:
-        if os.path.exists(STATUS_FILE):
-            os.remove(STATUS_FILE)
-    except Exception as e:
-        _log("WARN", f"Could not remove status file: {e}")
+
+async def startup() -> None:
+    """Start Wyoming runtime when config/wyoming_interfaces.json exists."""
+    await start_wyoming_runtime()
+
+
+async def shutdown() -> None:
+    """Stop Wyoming TCP servers cleanly."""
+    await stop_wyoming_runtime()
+
+
+async def uninstall() -> None:
+    """Stop Wyoming TCP servers before plugin removal."""
+    await stop_wyoming_runtime()

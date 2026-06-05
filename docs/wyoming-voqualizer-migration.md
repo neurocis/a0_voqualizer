@@ -242,3 +242,17 @@ Implemented scaffold:
 
 Next implementation step: integrate runtime startup with plugin lifecycle/hooks and
 replace scaffold providers with real A0 ASR/context/TTS adapters.
+
+
+### W10 plugin lifecycle scaffold
+
+Implemented scaffold:
+
+- plugin hooks expose Wyoming runtime start/stop/status helpers;
+- runtime startup is opt-in and only starts when `config/wyoming_interfaces.json` exists;
+- missing config is non-fatal so placeholder ports are not opened accidentally;
+- shutdown/uninstall stop Wyoming TCP servers cleanly;
+- `api/wyoming_status.py` exposes status/start/stop actions for admin diagnostics.
+
+Next implementation step: wire real A0 ASR/context/TTS providers into the pipeline
+and decide the operational config source for interface definitions.
