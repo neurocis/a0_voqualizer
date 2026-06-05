@@ -113,3 +113,23 @@ class WyomingVoqualizerPipeline:
             "dropped_stale_events": self.debug.dropped_stale_events,
             "unsupported_events": self.debug.unsupported_events,
         }
+
+    def install_into(self, runtime) -> None:
+        """Register this pipeline's handle_event for every supported event type.
+
+        The Wyoming interface runtime dispatches by event type, so the pipeline
+        registers itself as the handler for ASR, prompt, TTS, and control event
+        types it understands. Unsupported events fall through to the runtime's
+        default error response.
+        """
+        supported_event_types = (
+            "audio-start",
+            "audio-chunk",
+            "audio-stop",
+            "transcript",
+            "voqualizer-text-prompt",
+            "synthesize",
+            "voqualizer-control",
+        )
+        for event_type in supported_event_types:
+            runtime.on(event_type, self.handle_event)

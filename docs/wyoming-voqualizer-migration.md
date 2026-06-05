@@ -398,3 +398,16 @@ Implemented scaffold:
 - TTS playback uses a dedicated AudioContext fed from Wyoming `audio-*` events.
 
 Next implementation step: W20 will bind the W12 A0 provider adapter factories to real plugin ASR/context/TTS providers and wire them into `WyomingVoqualizerPipeline` for live interfaces.
+
+
+### W20 Live A0 provider binding
+
+Implemented scaffold:
+
+- new `helpers/wyoming_live_providers.py` composes the W12 adapter factories with the plugin config loader and the real A0 ASR/TTS provider helpers;
+- `build_live_asr_factory(cfg)` and `build_live_tts_factory(cfg)` resolve the configured default provider (Whisper, OpenAI, OpenAI-compatible, LocalAI, Piper, etc.) and gracefully fall back to the mock providers when construction fails;
+- `bind_live_providers_to_runtime(interface, ...)` returns a `WyomingInterfaceRuntime` with a fully wired `WyomingVoqualizerPipeline` installed via the new `install_into(runtime)` helper;
+- the default prompt submitter still echoes for safety; the framework `/ws` Wyoming handler can override the submitter with a real Agent Zero context submission callable;
+- the W11 dependency bootstrap remains responsible for installing the actual ASR/TTS dependencies; this module never assumes anything beyond the existing helper surface.
+
+Next implementation step: W21 will wire the W14/W16 admin/WS handlers to call `bind_live_providers_to_runtime` for live Wyoming interfaces, then run cross-client interop validation against Home Assistant Wyoming and the `wyoming.net` reference.
