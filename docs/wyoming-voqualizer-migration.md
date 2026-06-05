@@ -280,3 +280,19 @@ Implemented scaffold:
 - adapter status reports which provider factories/submitter are configured.
 
 Next implementation step: bind these adapter factories to the real plugin registry/config providers and compose them into `WyomingVoqualizerPipeline` for live interfaces.
+
+
+### W13 Wyoming-over-WebSocket browser bridge scaffold
+
+Implemented scaffold:
+
+- `WyomingWsBridge` lets browser/mobile WebSocket clients talk to the Wyoming runtime;
+- each WS session is bound 1:1 to one configured Wyoming interface and its fixed Agent Zero ctxID;
+- client-supplied `ctxid` / `interface_id` are ignored, just like for native Wyoming TCP clients;
+- text frames carry the Wyoming event envelope (JSON); optional following binary frame carries the event payload;
+- Wyoming replies are sent back as a JSON envelope plus optional binary payload;
+- old `api/ws_voqualizer.py` and old web UI assets remain in-tree for reference, but this bridge does not depend on them.
+
+Next implementation step: wire `WyomingWsBridge` into a plugin API endpoint and
+begin migrating the standalone Voqualizer web UI to use the bridge as just
+another Wyoming client.
