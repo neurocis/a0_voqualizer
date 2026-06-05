@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>Voqualizer (Wyoming)</title>
+  <link rel="stylesheet" href="/plugins/a0_voqualizer/webui/voqualizer.css?v=w18-wyoming-2026-06-05-1">
+  <style>
+    /* W18 — minimal additions for the Wyoming-based standalone page.
+       The bulk of the look-and-feel is reused from the legacy stylesheet kept
+       for reference. This file lives alongside webui/voqualizer.html and does
+       NOT replace it; the legacy standalone page is retained as a reference
+       implementation per the breaking-rewrite plan. */
+    #voq-wyoming-status {
+      font-size: 0.85rem;
+      opacity: 0.7;
+      padding: 4px 12px;
+    }
+    #voq-wyoming-transcript {
+      padding: 12px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .voq-bubble { padding: 8px 12px; border-radius: 8px; margin: 6px 0; }
+    .voq-bubble.user { background: rgba(80, 160, 255, 0.15); }
+    .voq-bubble.assistant { background: rgba(120, 200, 120, 0.15); }
+  </style>
+</head>
+<body>
+  <div id="voq-wyoming-app" class="voqualizer-app">
+    <header class="voq-header">
+      <span class="voq-brand">Voqualizer</span>
+      <span id="voq-wyoming-status">disconnected</span>
+    </header>
+    <main id="voq-wyoming-transcript" aria-live="polite"></main>
+    <footer class="voq-composer">
+      <button id="voq-wyoming-tts" type="button" aria-label="TTS">🔊</button>
+      <button id="voq-wyoming-mic" type="button" aria-label="Mic">🎤</button>
+      <input id="voq-wyoming-input" type="text" placeholder="Send message…" autocomplete="off">
+      <button id="voq-wyoming-send" type="button" aria-label="Send">➤</button>
+    </footer>
+  </div>
+  <script type="module">
+    import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w18-wyoming-2026-06-05-1';
+
+    const params = new URLSearchParams(location.search);
+    const interfaceId = params.get('interface') || 'default';
+    const statusEl = document.getElementById('voq-wyoming-status');
+    const transcriptEl = document.getElementById('voq-wyoming-transcript');
+    const inputEl = document.getElementById('voq-wyoming-input');
+    const sendBtn = document.getElementById('voq-wyoming-send');
+    const micBtn = document.getElementById('voq-wyoming-mic');
+    const ttsBtn = document.getElementById('voq-wyoming-tts');
+
+    function setStatus(text) { statusEl.textContent = text; }
+    function addBubble(role, text) {
+      const div = document.createElement('div');
+      div.className = `voq-bubble ${role}`;
+      div.textContent = text;
+      transcriptEl.appendChild(div);
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      return div;
+    }
+
+    const client = createWyomingWsClient({ interfaceId, debug: true });
+
+    client.on('open', ({ info }) => {
+      setStatus(`connected · ${info?.data?.name || interfaceId}`);
+    });
+    client.on('close', () => setStatus('disconnected'));
+    client.on('error', (err) => setStatus(`error: ${err?.error || 'unknown'}`));
+
+    let currentAssistantBubble = null;
+
+    client.on('event:transcript', (ev) => {
+      const text = String(ev.data?.text || '');
+      if (!text) return;
+      addBubble('user', text);
+    });
+    client.on('event:voqualizer-response-start', () => {
+      currentAssistantBubble = addBubble('assistant', '');
+    });
+    client.on('event:voqualizer-response-chunk', (ev) => {
+      if (!currentAssistantBubble) currentAssistantBubble = addBubble('assistant', '');
+      currentAssistantBubble.textContent += String(ev.data?.text || '');
+    });
+    client.on('event:voqualizer-response-final', (ev) => {
+      if (!currentAssistantBubble) currentAssistantBubble = addBubble('assistant', '');
+      const finalText = String(ev.data?.text || '');
+      if (finalText) currentAssistantBubble.textContent = finalText;
+      currentAssistantBubble = null;
+    });
+
+    // TTS audio: forward to a single AudioContext for playback.
+    let audioCtx = null;
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      return audioCtx;
+    }
+    let nextStart = 0;
+    client.on('event:audio-start', () => {
+      const ctx = ensureAudio();
+      nextStart = Math.max(ctx.currentTime, nextStart);
+    });
+    client.on('event:audio-chunk', (ev) => {
+      const ctx = ensureAudio();
+      const pcm = ev.payload;
+      if (!pcm || !pcm.length) return;
+      const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2);
+      const buf = ctx.createBuffer(1, samples.length, 16000);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) data[i] = samples[i] / 32768;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      const startAt = Math.max(ctx.currentTime, nextStart);
+      src.start(startAt);
+      nextStart = startAt + buf.duration;
+    });
+    client.on('event:audio-stop', () => {});
+
+    sendBtn.addEventListener('click', async () => {
+      const text = inputEl.value.trim();
+      if (!text) return;
+      inputEl.value = '';
+      addBubble('user', text);
+      try {
+        await client.submitText(text);
+      } catch (err) {
+        setStatus(`send failed: ${err?.message || err}`);
+      }
+    });
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }
+    });
+    ttsBtn.addEventListener('click', async () => {
+      try { await client.cancelTts(); } catch (_) {}
+    });
+    micBtn.addEventListener('click', async () => {
+      micBtn.disabled = true;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, noiseSuppression: true, echoCancellation: true } });
+        const ctx = ensureAudio();
+        const source = ctx.createMediaStreamSource(stream);
+        const processor = ctx.createScriptProcessor(4096, 1, 1);
+        const utt = await client.beginAudio({ rate: ctx.sampleRate, width: 2, channels: 1 });
+        processor.onaudioprocess = async (e) => {
+          const f32 = e.inputBuffer.getChannelData(0);
+          const i16 = new Int16Array(f32.length);
+          for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32767));
+          await client.sendAudioChunk(new Uint8Array(i16.buffer));
+        };
+        source.connect(processor);
+        processor.connect(ctx.destination);
+        await new Promise(r => setTimeout(r, 5000));
+        processor.disconnect();
+        source.disconnect();
+        stream.getTracks().forEach(t => t.stop());
+        await client.endAudio({ utteranceId: utt });
+      } catch (err) {
+        setStatus(`mic failed: ${err?.message || err}`);
+      } finally {
+        micBtn.disabled = false;
+      }
+    });
+
+    try {
+      await client.connect();
+    } catch (err) {
+      setStatus(`connect failed: ${err?.message || err}`);
+    }
+  </script>
+</body>
+</html>

@@ -373,3 +373,15 @@ Implemented scaffold:
 - the adapter is framework-agnostic and reusable from the standalone Voqualizer web UI and from the DOM main UI ASR/TTS extensions.
 
 Next implementation step: W18 will re-point the standalone Voqualizer web UI onto this adapter, and W19 will do the same for `webui/conversation-mode.js` and the DOM mic/speaker extension UI, while keeping legacy assets in-tree for reference.
+
+
+### W18 Wyoming-based standalone page scaffold
+
+Implemented scaffold:
+
+- new `webui/voqualizer-wyoming.html` is a minimal standalone page built on top of the W17 `WyomingWsClient` adapter;
+- it lives alongside legacy `webui/voqualizer.html` which remains in-tree as the reference implementation per the breaking-rewrite plan;
+- supports text submit, mic capture sample loop, TTS audio playback via Wyoming `audio-*` events, and response text streaming;
+- selects the Wyoming interface via `?interface=<id>` query parameter; the interface boundary picks the fixed Agent Zero ctxID server-side.
+
+Next implementation step: W19 will re-point the DOM main-UI ASR/TTS extensions (`extensions/webui/chat-input-box-end/voqualizer-buttons.html` and the parts of `webui/conversation-mode.js` they consume) onto the same `WyomingWsClient` adapter, again without removing the legacy assets.
