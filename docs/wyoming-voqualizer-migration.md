@@ -168,3 +168,19 @@ Implemented scaffold:
 
 Next implementation step: wire `WyomingAsrAdapter` to the real Voqualizer/A0 ASR
 provider and route final transcripts into the Wyoming prompt path.
+
+
+### W5 prompt/assistant adapter scaffold
+
+Implemented scaffold:
+
+- `WyomingPromptAdapter` accepts `voqualizer-text-prompt` extension events;
+- client-supplied context is ignored; interface ctxID is authoritative;
+- incoming Wyoming `transcript` events can also enter the prompt path;
+- assistant response start/chunk/final extension events are emitted with generation metadata;
+- response-tool JSON envelopes are collapsed before final display text is emitted;
+- cancel/barge-in advances generation state.
+
+Next implementation step: replace the scaffold provider with real A0 context
+submission/streaming and then attach authoritative Wyoming TTS output to response
+chunks/finals.
