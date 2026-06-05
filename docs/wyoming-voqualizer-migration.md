@@ -359,3 +359,17 @@ Implemented scaffold:
 - old `api/ws_voqualizer.py` remains in-tree purely for reference.
 
 Next implementation step: add the shared browser-side Wyoming WS client adapter and re-point the standalone Voqualizer web UI plus the DOM main UI ASR/TTS extensions onto it (W17–W19).
+
+
+### W17 Shared browser-side Wyoming WS client adapter
+
+Implemented scaffold:
+
+- new `webui/wyoming/wyoming-ws-client.js` exposes `WyomingWsClient` / `createWyomingWsClient`;
+- connects to A0's `/ws` Socket.IO namespace with handler id `plugins/a0_voqualizer/ws_wyoming`;
+- speaks only Wyoming events: `wyoming_init`, `wyoming_event`, `wyoming_payload`, `wyoming_close`;
+- helpers cover text prompt submission, audio capture lifecycle (`audio-start`/`audio-chunk`/`audio-stop`), TTS cancel, generation IDs, and `event:<type>` dispatch;
+- payload bytes are carried as base64 in `payload_b64` matching the W16 handler contract;
+- the adapter is framework-agnostic and reusable from the standalone Voqualizer web UI and from the DOM main UI ASR/TTS extensions.
+
+Next implementation step: W18 will re-point the standalone Voqualizer web UI onto this adapter, and W19 will do the same for `webui/conversation-mode.js` and the DOM mic/speaker extension UI, while keeping legacy assets in-tree for reference.

@@ -1,0 +1,198 @@
+/**
+ * Shared browser-side Wyoming WS client adapter (W17).
+ *
+ * Speaks the small Wyoming-only protocol exposed by `api/ws_wyoming.py`:
+ *   - wyoming_init    -> bind to a configured Wyoming interface (ctxID fixed server-side)
+ *   - wyoming_event   -> Wyoming event envelope {type, data, payload_length, payload_b64?}
+ *   - wyoming_payload -> streamed binary chunk paired with previous wyoming_event
+ *   - wyoming_close   -> explicit teardown
+ *
+ * This adapter is intentionally framework-agnostic so both the standalone
+ * Voqualizer web UI (W18) and the DOM main-UI ASR/TTS extensions (W19) can
+ * consume the exact same Wyoming envelopes as any external Wyoming client.
+ *
+ * The old custom voqualizer_* WebSocket protocol is NOT used here. Legacy
+ * webui/conversation-mode.js and webui/voqualizer.js remain in-tree for
+ * reference only.
+ */
+import { io } from '/socket.io/socket.io.esm.min.js';
+
+const HANDLER_ID = 'plugins/a0_voqualizer/ws_wyoming';
+
+function _b64ToBytes(b64) {
+  if (!b64) return new Uint8Array(0);
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+function _bytesToB64(bytes) {
+  if (!bytes || !bytes.length) return '';
+  let s = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(s);
+}
+
+export class WyomingWsClient {
+  constructor({ interfaceId, url = '/ws', csrfToken = null, debug = false } = {}) {
+    if (!interfaceId) throw new Error('WyomingWsClient requires interfaceId');
+    this.interfaceId = String(interfaceId);
+    this.url = url;
+    this.csrfToken = csrfToken;
+    this.debug = !!debug;
+    this._socket = null;
+    this._connected = false;
+    this._initInfo = null;
+    this._handlers = new Map(); // event_type -> Set<handler>
+    this._activeGenerationId = null;
+    this._closed = false;
+    this._initPromise = null;
+  }
+
+  on(eventType, handler) {
+    if (typeof handler !== 'function') return () => {};
+    let bucket = this._handlers.get(eventType);
+    if (!bucket) {
+      bucket = new Set();
+      this._handlers.set(eventType, bucket);
+    }
+    bucket.add(handler);
+    return () => bucket.delete(handler);
+  }
+
+  _emitLocal(eventType, payload) {
+    const bucket = this._handlers.get(eventType);
+    if (!bucket) return;
+    for (const handler of bucket) {
+      try { handler(payload); }
+      catch (err) { if (this.debug) console.error('[wyoming] handler error', err); }
+    }
+  }
+
+  async connect() {
+    if (this._initPromise) return this._initPromise;
+    this._initPromise = new Promise((resolve, reject) => {
+      const socket = io(this.url, {
+        path: '/socket.io',
+        transports: ['websocket'],
+        auth: {
+          handlers: [HANDLER_ID],
+          csrf_token: this.csrfToken || undefined,
+          interface_id: this.interfaceId,
+        },
+      });
+      this._socket = socket;
+
+      socket.on('connect', async () => {
+        this._connected = true;
+        try {
+          const ack = await socket.emitWithAck('wyoming_init', { interface_id: this.interfaceId });
+          const info = (ack && ack.data && ack.data.info) || null;
+          this._initInfo = info;
+          this._emitLocal('open', { info });
+          resolve(info);
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      socket.on('disconnect', (reason) => {
+        this._connected = false;
+        this._emitLocal('close', { reason });
+      });
+
+      socket.on('connect_error', (err) => {
+        this._emitLocal('error', { kind: 'connect', error: err && (err.message || String(err)) });
+        if (this._initPromise && !this._initInfo) reject(err);
+      });
+
+      socket.on('wyoming_event', (envelope) => {
+        if (!envelope || typeof envelope !== 'object') return;
+        const ev = {
+          type: String(envelope.type || ''),
+          data: (envelope.data && typeof envelope.data === 'object') ? envelope.data : {},
+          payload: envelope.payload_b64 ? _b64ToBytes(envelope.payload_b64) : new Uint8Array(0),
+        };
+        this._emitLocal('event', ev);
+        this._emitLocal('event:' + ev.type, ev);
+      });
+    });
+    return this._initPromise;
+  }
+
+  async sendEvent(type, data = {}, payload = null) {
+    if (!this._connected || !this._socket) await this.connect();
+    const envelope = {
+      type: String(type),
+      data: data || {},
+      payload_length: payload ? payload.length : 0,
+    };
+    if (payload && payload.length) {
+      envelope.payload_b64 = _bytesToB64(payload);
+    }
+    return this._socket.emitWithAck('wyoming_event', envelope);
+  }
+
+  newGeneration(prefix = 'gen') {
+    const id = `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    this._activeGenerationId = id;
+    return id;
+  }
+
+  get activeGenerationId() { return this._activeGenerationId; }
+
+  isCurrentGeneration(eventData) {
+    if (!this._activeGenerationId) return true;
+    if (!eventData || typeof eventData !== 'object') return true;
+    const id = eventData.generation_id || eventData.generationId || null;
+    if (!id) return true;
+    return id === this._activeGenerationId;
+  }
+
+  // ----- Convenience helpers used by W18/W19 ---------------------------------
+
+  async submitText(text, { generationId = null } = {}) {
+    const gen = generationId || this.newGeneration('text');
+    return this.sendEvent('voqualizer-text-prompt', {
+      text: String(text || ''),
+      generation_id: gen,
+    });
+  }
+
+  async beginAudio({ rate = 16000, width = 2, channels = 1, utteranceId = null } = {}) {
+    const utt = utteranceId || this.newGeneration('utt');
+    await this.sendEvent('audio-start', { rate, width, channels, utterance_id: utt });
+    return utt;
+  }
+
+  async sendAudioChunk(pcmBytes) {
+    return this.sendEvent('audio-chunk', {}, pcmBytes);
+  }
+
+  async endAudio({ utteranceId = null } = {}) {
+    return this.sendEvent('audio-stop', { utterance_id: utteranceId });
+  }
+
+  async cancelTts() {
+    return this.sendEvent('voqualizer-control', { action: 'cancel_tts' });
+  }
+
+  async close() {
+    if (this._closed) return;
+    this._closed = true;
+    if (this._socket) {
+      try { await this._socket.emitWithAck('wyoming_close', {}); } catch (_) {}
+      try { this._socket.disconnect(); } catch (_) {}
+    }
+  }
+}
+
+export function createWyomingWsClient(opts) {
+  return new WyomingWsClient(opts);
+}
+
+export default WyomingWsClient;
