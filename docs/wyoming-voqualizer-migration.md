@@ -296,3 +296,16 @@ Implemented scaffold:
 Next implementation step: wire `WyomingWsBridge` into a plugin API endpoint and
 begin migrating the standalone Voqualizer web UI to use the bridge as just
 another Wyoming client.
+
+
+### W14 Wyoming WS bridge API endpoint scaffold
+
+Implemented scaffold:
+
+- `api/wyoming_ws.py` exposes the JSON status/diagnostics handler `WyomingWs`;
+- a transport-agnostic helper `run_wyoming_ws_bridge_session(interface_id, recv, send)` lets a host WS layer mount a `WyomingWsBridge` session bound to one configured Wyoming interface;
+- the handler supports `status` (default), `list`, and `describe` actions for diagnostics;
+- if the runtime is not started, all actions return a clear not-started status instead of failing;
+- old `api/ws_voqualizer.py` remains for reference and is not used by this endpoint.
+
+Next implementation step: wire the host framework WS layer to call `run_wyoming_ws_bridge_session(...)` for the configured Wyoming WS route, then migrate the standalone Voqualizer web UI to use this endpoint as just another Wyoming client.
