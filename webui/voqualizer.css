@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-tts-vu-obvious-bars-2026-06-04-78 */
+/* voq-mobile-version: m8-tts-vu-idle-bars-visible-2026-06-04-79 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -970,12 +970,27 @@ body {
   transform-origin: bottom center;
   opacity: calc(0.70 + (0.30 * var(--voqualizer-tts-vu-level, 0)));
 }
-.voqualizer-tts-vu-bar-1 { transform: scaleY(var(--voqualizer-tts-vu-bar-1, 0.25)); }
-.voqualizer-tts-vu-bar-2 { transform: scaleY(var(--voqualizer-tts-vu-bar-2, 0.35)); }
-.voqualizer-tts-vu-bar-3 { transform: scaleY(var(--voqualizer-tts-vu-bar-3, 0.20)); }
+.voqualizer-tts-vu-bar-1 { transform: scaleY(var(--voqualizer-tts-vu-bar-1, 0.32)); }
+.voqualizer-tts-vu-bar-2 { transform: scaleY(var(--voqualizer-tts-vu-bar-2, 0.44)); }
+.voqualizer-tts-vu-bar-3 { transform: scaleY(var(--voqualizer-tts-vu-bar-3, 0.28)); }
 .voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu-bar-1 { animation: voq-tts-vu-bars 520ms ease-in-out infinite alternate; }
 .voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu-bar-2 { animation: voq-tts-vu-bars 430ms ease-in-out infinite alternate-reverse; }
 .voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu-bar-3 { animation: voq-tts-vu-bars 610ms ease-in-out infinite alternate; }
+
+.voqualizer-speaker.voqualizer-tts-vu-idle .voqualizer-tts-vu,
+.voqualizer-speaker.voqualizer-tts-on .voqualizer-tts-vu,
+#voqualizer-speaker-button[aria-pressed="true"] .voqualizer-tts-vu {
+  opacity: max(var(--voqualizer-tts-vu-opacity, 0), 0.58);
+  --voqualizer-tts-vu-level: max(var(--voqualizer-tts-vu-level, 0), 0.20);
+  --voqualizer-tts-vu-bar-1: max(var(--voqualizer-tts-vu-bar-1, 0), 0.32);
+  --voqualizer-tts-vu-bar-2: max(var(--voqualizer-tts-vu-bar-2, 0), 0.44);
+  --voqualizer-tts-vu-bar-3: max(var(--voqualizer-tts-vu-bar-3, 0), 0.28);
+}
+.voqualizer-speaker.voqualizer-tts-vu-idle .voqualizer-tts-vu-bar,
+.voqualizer-speaker.voqualizer-tts-on .voqualizer-tts-vu-bar,
+#voqualizer-speaker-button[aria-pressed="true"] .voqualizer-tts-vu-bar {
+  opacity: 0.92;
+}
 @keyframes voq-tts-vu-bars {
   from { filter: brightness(0.85); }
   to { filter: brightness(1.35); transform: scaleY(calc(0.42 + (0.58 * var(--voqualizer-tts-vu-level, 0)))); }

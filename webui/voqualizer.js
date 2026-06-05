@@ -28,15 +28,15 @@ import {
   STATE_TTS_READY,
   STATE_STOPPING,
   STATE_ERROR,
-} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-vu-obvious-bars-2026-06-04-78';
+} from '/plugins/a0_voqualizer/webui/conversation-mode.js?v=m8-tts-vu-idle-bars-visible-2026-06-04-79';
 // ASR finals from the store's socket (voqualizer_asr_final) and partials
 // (voqualizer_asr_partial) are routed back into submitPrompt(pageState) via
 // the store's onAsrFinal hook so the M3/M4/M5/M7 typed-prompt + /poll +
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-vu-obvious-bars';
-const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-obvious-bars-2026-06-04-78';
+const PAGE_VERSION = 'm8-tts-vu-idle-bars-visible';
+const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-idle-bars-visible-2026-06-04-79';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
@@ -585,7 +585,7 @@ function buildAsrDebugLines() {
     .filter((url) => /voqualizer|conversation-mode/.test(url));
   const lines = [
     '===VOQ_ASR_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-obvious-bars-2026-06-04-78'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-idle-bars-visible-2026-06-04-79'))}`,
     `page_version=${p.version}`,
     `state=${c.state} desired=${c.desiredMode} phase=${c.lastConnectPhase} reason=${c.lastTransitionReason}`,
     `session=${!!c.sessionId} token=${!!c.bearerToken} capturing=${c.capturing}`,
@@ -680,7 +680,7 @@ function buildTtsDebugLines() {
   const ack = p.lastDirectTtsAck || null;
   const lines = [
     '===VOQ_TTS_LINES===',
-    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-obvious-bars-2026-06-04-78'))}`,
+    `cache_ok=${assets.some((url) => url.includes('m8-tts-vu-idle-bars-visible-2026-06-04-79'))}`,
     `page_version=${p.version}`,
     `tts_enabled=${p.ttsEnabled} button_pressed=${speaker?.getAttribute('aria-pressed')} data_enabled=${speaker?.getAttribute('data-tts-enabled')}`,
     `button_class=${JSON.stringify(speaker?.className || '')}`,
@@ -703,7 +703,7 @@ function buildTtsDebugLines() {
     `chunk_count=${p.ttsChunkCount || 0} chunk_at=${p.lastTtsChunkAt || 0} chunk_bytes=${p.lastTtsChunkBytes || 0} chunk_codec=${p.lastTtsChunkCodec || ''} chunk_rate=${p.lastTtsChunkSampleRate || ''}`,
     `duplicate_chunks=${p.duplicateTtsChunkCount || 0} duplicate_utt=${p.lastDuplicateTtsChunkUtteranceId || ''}`,
     `playback_at=${p.lastPlaybackStartAt || 0} playback_ms=${p.lastPlaybackDurationMs || 0} playback_utt=${p.lastPlaybackUtteranceId || ''} playback_error=${p.lastPlaybackError || ''}`,
-    `tts_vu=${p.ttsVuLevel || 0} tts_vu_at=${p.lastTtsVuAt || 0} tts_vu_decay=${p.lastTtsVuDecayAt || 0} tts_vu_clear=${p.lastTtsVuClearAt || 0} tts_vu_hold=${p.lastTtsVuHoldMs || 0} tts_vu_delay=${p.lastTtsVuPlaybackDelayMs || 0} tts_vu_source=${p.lastTtsVuSource || ""} tts_vu_target=${p.lastTtsVuTargetFound === false ? "false" : "true"} tts_vu_element=${p.lastTtsVuElementFound === false ? "false" : "true"} tts_vu_el_level=${p.lastTtsVuElementLevel || 0} tts_vu_el_opacity=${p.lastTtsVuElementOpacity || ""} tts_vu_visual_active=${p.lastTtsVuVisualActive ? "true" : "false"} tts_vu_display=${p.lastTtsVuComputedDisplay || ""} tts_vu_visibility=${p.lastTtsVuComputedVisibility || ""} tts_vu_rect=${p.lastTtsVuRect || ""}`,
+    `tts_vu=${p.ttsVuLevel || 0} tts_vu_at=${p.lastTtsVuAt || 0} tts_vu_decay=${p.lastTtsVuDecayAt || 0} tts_vu_clear=${p.lastTtsVuClearAt || 0} tts_vu_hold=${p.lastTtsVuHoldMs || 0} tts_vu_delay=${p.lastTtsVuPlaybackDelayMs || 0} tts_vu_source=${p.lastTtsVuSource || ""} tts_vu_target=${p.lastTtsVuTargetFound === false ? "false" : "true"} tts_vu_element=${p.lastTtsVuElementFound === false ? "false" : "true"} tts_vu_el_level=${p.lastTtsVuElementLevel || 0} tts_vu_el_opacity=${p.lastTtsVuElementOpacity || ""} tts_vu_visual_active=${p.lastTtsVuVisualActive ? "true" : "false"} tts_vu_display=${p.lastTtsVuComputedDisplay || ""} tts_vu_visibility=${p.lastTtsVuComputedVisibility || ""} tts_vu_rect=${p.lastTtsVuRect || ""} tts_vu_idle=${p.lastTtsVuIdleEnabled ? "true" : "false"} tts_vu_bars=${p.lastTtsVuBarCount || 0}`,
     `audio_state=${p.audioContextState || ''} audio_create=${p.lastAudioContextCreateAt || 0} audio_create_reason=${p.lastAudioContextCreateReason || ''} audio_create_error=${p.lastAudioContextError || ''}`,
     `audio_resume=${p.lastAudioResumeAt || 0} audio_resume_reason=${p.lastAudioResumeReason || ''} audio_resume_error=${p.lastAudioResumeError || ''}`,
     `stale_socket_event=${p.lastStaleTtsSocketEvent || ''} stale_socket_at=${p.lastStaleTtsSocketEventAt || 0}`,
@@ -1218,7 +1218,7 @@ function updateTtsButton() {
   button.dataset.ttsState = state;
   button.setAttribute('aria-pressed', tts.enabled ? 'true' : 'false');
   button.setAttribute('aria-label', tts.enabled ? 'Speak responses (on)' : 'Speak responses (off)');
-  button.setAttribute('title', state === 'off' ? 'TTS off — click to speak assistant responses' : state === 'speaking' ? 'Speaking — click to stop and mute' : state === 'error' ? 'TTS error — click to retry/enable' : 'TTS on — click to mute assistant responses');
+  button.setAttribute('title', state === 'off' ? 'TTS off — click to speak assistant responses' : state === 'speaking' ? 'Speaking — click to stop and mute' : state === 'error' ? 'TTS error — click to retry/enable' : 'TTS on — click to mute assistant responses');  ensureTtsVuIdleVisual();
 }
 
 async function pollOnce(contextId, logFrom) {
@@ -2010,6 +2010,31 @@ function getTtsVuElement(speaker = null) {
   return vuEl;
 }
 
+function ensureTtsVuIdleVisual() {
+  const speaker = document.getElementById('voqualizer-speaker-button');
+  if (!speaker) return;
+  const vuEl = getTtsVuElement(speaker);
+  const enabled = !!tts.enabled || speaker.getAttribute('aria-pressed') === 'true' || speaker.dataset.enabled === 'true';
+  speaker.classList.toggle('voqualizer-tts-vu-idle', enabled && !speaker.classList.contains('voqualizer-tts-playing'));
+  speaker.dataset.ttsVuIdle = enabled && !speaker.classList.contains('voqualizer-tts-playing') ? 'true' : 'false';
+  if (vuEl) {
+    vuEl.dataset.present = 'true';
+    vuEl.dataset.idle = enabled ? 'true' : 'false';
+    if (enabled && !speaker.classList.contains('voqualizer-tts-playing')) {
+      vuEl.style.setProperty('--voqualizer-tts-vu-level', '0.20');
+      vuEl.style.setProperty('--voqualizer-tts-vu-opacity', '0.58');
+      vuEl.style.setProperty('--voqualizer-tts-vu-bar-1', '0.32');
+      vuEl.style.setProperty('--voqualizer-tts-vu-bar-2', '0.44');
+      vuEl.style.setProperty('--voqualizer-tts-vu-bar-3', '0.28');
+    }
+  }
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastTtsVuIdleEnsureAt = Date.now();
+    globalThis.__voqualizer_page.lastTtsVuIdleEnabled = enabled;
+    globalThis.__voqualizer_page.lastTtsVuBarCount = vuEl ? vuEl.querySelectorAll('.voqualizer-tts-vu-bar').length : 0;
+  }
+}
+
 function setTtsVuVisual(level, opacity = 0.98) {
   const speaker = document.getElementById('voqualizer-speaker-button');
   if (!speaker) {
@@ -2026,7 +2051,9 @@ function setTtsVuVisual(level, opacity = 0.98) {
   speaker.style.setProperty('--voqualizer-tts-vu-level', String(vu));
   speaker.style.setProperty('--voqualizer-tts-vu-opacity', visibleOpacity);
   speaker.classList.toggle('voqualizer-tts-playing', active);
+  speaker.classList.toggle('voqualizer-tts-vu-idle', !active && !!tts.enabled);
   speaker.dataset.ttsVuActive = active ? 'true' : 'false';
+  speaker.dataset.ttsVuIdle = !active && !!tts.enabled ? 'true' : 'false';
   speaker.dataset.ttsVuLevel = String(vu);
   if (vuEl) {
     vuEl.style.setProperty('--voqualizer-tts-vu-level', String(vu));
@@ -2108,16 +2135,27 @@ function clearTtsVu() {
     speaker.style.setProperty('--voqualizer-tts-vu-level', '0');
     speaker.style.setProperty('--voqualizer-tts-vu-opacity', '0');
     speaker.classList.remove('voqualizer-tts-playing');
+    speaker.classList.toggle('voqualizer-tts-vu-idle', !!tts.enabled);
     speaker.dataset.ttsVuActive = 'false';
+    speaker.dataset.ttsVuIdle = tts.enabled ? 'true' : 'false';
     speaker.dataset.ttsVuLevel = '0';
     if (vuEl) {
       vuEl.style.setProperty('--voqualizer-tts-vu-level', '0');
       vuEl.style.setProperty('--voqualizer-tts-vu-opacity', '0');
-      vuEl.style.setProperty('--voqualizer-tts-vu-bar-1', '0');
-      vuEl.style.setProperty('--voqualizer-tts-vu-bar-2', '0');
-      vuEl.style.setProperty('--voqualizer-tts-vu-bar-3', '0');
-      vuEl.dataset.level = '0';
+      if (tts.enabled) {
+        vuEl.style.setProperty('--voqualizer-tts-vu-level', '0.20');
+        vuEl.style.setProperty('--voqualizer-tts-vu-opacity', '0.58');
+        vuEl.style.setProperty('--voqualizer-tts-vu-bar-1', '0.32');
+        vuEl.style.setProperty('--voqualizer-tts-vu-bar-2', '0.44');
+        vuEl.style.setProperty('--voqualizer-tts-vu-bar-3', '0.28');
+      } else {
+        vuEl.style.setProperty('--voqualizer-tts-vu-bar-1', '0');
+        vuEl.style.setProperty('--voqualizer-tts-vu-bar-2', '0');
+        vuEl.style.setProperty('--voqualizer-tts-vu-bar-3', '0');
+      }
+      vuEl.dataset.level = tts.enabled ? '0.20' : '0';
       vuEl.dataset.active = 'false';
+      vuEl.dataset.idle = tts.enabled ? 'true' : 'false';
     }
   }
   if (globalThis.__voqualizer_page) {
@@ -3054,6 +3092,9 @@ function initVoqualizerPage() {
     lastTtsVuComputedDisplay: "",
     lastTtsVuComputedVisibility: "",
     lastTtsVuRect: "",
+    lastTtsVuIdleEnsureAt: 0,
+    lastTtsVuIdleEnabled: false,
+    lastTtsVuBarCount: 0,
     audioContextState: '',
     lastStatus: 'Ready',
     lastStatusLevel: 'info',
