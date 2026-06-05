@@ -1,4 +1,4 @@
-/* voq-mobile-version: m8-tts-vu-playback-queue-2026-06-04-80 */
+/* voq-mobile-version: m8-tts-vu-simple-playback-2026-06-04-81 */
 :root {
   color-scheme: dark;
   --voq-bg: #05070b;
@@ -927,73 +927,42 @@ body {
 
 .voqualizer-tts-vu {
   position: absolute;
-  inset: -3px;
+  inset: 3px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   opacity: var(--voqualizer-tts-vu-opacity, 0);
   pointer-events: none;
-  z-index: 8;
-  background:
-    radial-gradient(circle, rgba(34, 197, 94, 0.20) 0 42%, transparent 44%),
-    conic-gradient(from 180deg,
-      rgba(34, 197, 94, 1) 0deg,
-      rgba(134, 239, 172, 1) calc(350deg * var(--voqualizer-tts-vu-level, 0)),
-      rgba(20, 83, 45, 0.18) calc(350deg * var(--voqualizer-tts-vu-level, 0)),
-      rgba(20, 83, 45, 0.18) 360deg);
+  z-index: 4;
+  background: rgba(22, 163, 74, calc(0.08 + (0.20 * var(--voqualizer-tts-vu-level, 0))));
   box-shadow:
-    0 0 0 3px rgba(74, 222, 128, calc(0.55 + (0.40 * var(--voqualizer-tts-vu-level, 0)))) inset,
-    0 0 calc(18px + (24px * var(--voqualizer-tts-vu-level, 0))) rgba(34, 197, 94, 1);
-  transform: scale(calc(1.00 + (0.12 * var(--voqualizer-tts-vu-level, 0))));
-  transform-origin: center;
-  transition: transform 140ms ease-out, opacity 260ms ease-out, box-shadow 160ms ease-out;
-}
-.voqualizer-tts-vu::after {
-  content: '';
-  position: absolute;
-  inset: 10px;
-  border-radius: 50%;
-  background: rgba(6, 10, 18, 0.68);
-  z-index: 1;
+    0 0 0 2px rgba(74, 222, 128, calc(0.35 + (0.55 * var(--voqualizer-tts-vu-level, 0)))) inset,
+    0 0 calc(8px + (18px * var(--voqualizer-tts-vu-level, 0))) rgba(34, 197, 94, 0.85);
+  transition: opacity 180ms linear, box-shadow 120ms linear, background 120ms linear;
 }
 .voqualizer-tts-vu-bar {
   position: relative;
-  z-index: 2;
-  width: 4px;
-  min-height: 7px;
-  height: calc(8px + (18px * var(--voqualizer-tts-vu-level, 0)));
+  width: 5px;
+  height: 22px;
   border-radius: 999px;
   background: #86efac;
-  box-shadow: 0 0 8px rgba(134, 239, 172, 1);
+  box-shadow: 0 0 7px rgba(134, 239, 172, 0.95);
   transform-origin: bottom center;
-  opacity: calc(0.70 + (0.30 * var(--voqualizer-tts-vu-level, 0)));
+  transition: transform 90ms linear, opacity 90ms linear;
+  opacity: calc(0.58 + (0.42 * var(--voqualizer-tts-vu-level, 0)));
 }
-.voqualizer-tts-vu-bar-1 { transform: scaleY(var(--voqualizer-tts-vu-bar-1, 0.32)); }
-.voqualizer-tts-vu-bar-2 { transform: scaleY(var(--voqualizer-tts-vu-bar-2, 0.44)); }
-.voqualizer-tts-vu-bar-3 { transform: scaleY(var(--voqualizer-tts-vu-bar-3, 0.28)); }
-.voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu-bar-1 { animation: voq-tts-vu-bars 980ms ease-in-out infinite alternate; }
-.voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu-bar-2 { animation: voq-tts-vu-bars 820ms ease-in-out infinite alternate-reverse; }
-.voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu-bar-3 { animation: voq-tts-vu-bars 1120ms ease-in-out infinite alternate; }
-
+.voqualizer-tts-vu-bar-1 { transform: scaleY(var(--voqualizer-tts-vu-bar-1, 0.25)); }
+.voqualizer-tts-vu-bar-2 { transform: scaleY(var(--voqualizer-tts-vu-bar-2, 0.38)); }
+.voqualizer-tts-vu-bar-3 { transform: scaleY(var(--voqualizer-tts-vu-bar-3, 0.22)); }
 .voqualizer-speaker.voqualizer-tts-vu-idle .voqualizer-tts-vu,
 .voqualizer-speaker.voqualizer-tts-on .voqualizer-tts-vu,
 #voqualizer-speaker-button[aria-pressed="true"] .voqualizer-tts-vu {
-  opacity: max(var(--voqualizer-tts-vu-opacity, 0), 0.58);
-  --voqualizer-tts-vu-level: max(var(--voqualizer-tts-vu-level, 0), 0.20);
-  --voqualizer-tts-vu-bar-1: max(var(--voqualizer-tts-vu-bar-1, 0), 0.32);
-  --voqualizer-tts-vu-bar-2: max(var(--voqualizer-tts-vu-bar-2, 0), 0.44);
-  --voqualizer-tts-vu-bar-3: max(var(--voqualizer-tts-vu-bar-3, 0), 0.28);
+  opacity: max(var(--voqualizer-tts-vu-opacity, 0), 0.50);
 }
-.voqualizer-speaker.voqualizer-tts-vu-idle .voqualizer-tts-vu-bar,
-.voqualizer-speaker.voqualizer-tts-on .voqualizer-tts-vu-bar,
-#voqualizer-speaker-button[aria-pressed="true"] .voqualizer-tts-vu-bar {
-  opacity: 0.92;
-}
-@keyframes voq-tts-vu-bars {
-  from { filter: brightness(0.85); }
-  to { filter: brightness(1.35); transform: scaleY(calc(0.42 + (0.58 * var(--voqualizer-tts-vu-level, 0)))); }
+.voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu {
+  opacity: 1;
 }
 .voqualizer-speaker .material-symbols-outlined,
 .voqualizer-speaker .voq-text-fallback { position: relative; z-index: 9; }
@@ -1090,7 +1059,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .voqualizer-connecting { animation: none; }
   .voqualizer-mic-vu, .voqualizer-tts-vu { transition: none; }
-  .voqualizer-speaker.voqualizer-tts-playing .voqualizer-tts-vu-bar { animation: none; }
 }
 
 .voq-action-button.voq-send-success {
