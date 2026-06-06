@@ -21,6 +21,36 @@ from .wyoming_server import (
 
 
 DEFAULT_INTERFACE_CONFIG = Path(__file__).resolve().parents[1] / "config" / "wyoming_interfaces.json"
+PLACEHOLDER_CTXID_PREFIXES = ("REPLACE_WITH_", "PLACEHOLDER", "TODO", "CTXID_HERE")
+
+
+def validate_runtime_interfaces(interfaces: list[WyomingInterface]) -> list[str]:
+    """Return non-fatal runtime config validation warnings/errors.
+
+    The runtime must not accidentally bind live TCP ports when a copied example
+    config still contains placeholder ctxIDs. Treat those as startup-blocking
+    validation errors, but keep the API status path diagnostic-friendly.
+    """
+    errors: list[str] = []
+    seen_ports: set[tuple[str, int]] = set()
+    seen_ids: set[str] = set()
+    for iface in interfaces:
+        if iface.id in seen_ids:
+            errors.append(f"duplicate interface id: {iface.id}")
+        seen_ids.add(iface.id)
+        if not iface.enabled:
+            continue
+        ctxid = str(iface.ctxid or "").strip()
+        if not ctxid:
+            errors.append(f"enabled interface {iface.id} is missing ctxid")
+        if any(ctxid.upper().startswith(prefix) for prefix in PLACEHOLDER_CTXID_PREFIXES):
+            errors.append(f"enabled interface {iface.id} has placeholder ctxid: {ctxid}")
+        port_key = (str(iface.bind_host or "0.0.0.0"), int(iface.bind_port or 0))
+        if port_key in seen_ports:
+            errors.append(f"duplicate enabled bind endpoint: {port_key[0]}:{port_key[1]}")
+        seen_ports.add(port_key)
+    return errors
+
 
 
 @dataclass(slots=True)
@@ -47,7 +77,7 @@ class WyomingVoqualizerRuntime:
         # all agree on lifecycle state.
         self._started = False
         self._lock = asyncio.Lock()
-        self.errors: list[str] = []
+        self.errors: list[str] = validate_runtime_interfaces(self.interfaces)
         # W20/W21: replace scaffold runtimes with live-bound ASR/prompt/TTS runtimes.
         for iface in self.enabled_interfaces:
             try:
@@ -61,6 +91,8 @@ class WyomingVoqualizerRuntime:
         async with self._lock:
             if self.running:
                 return
+            if self.errors:
+                raise RuntimeError("Wyoming runtime config validation failed: " + "; ".join(self.errors))
             try:
                 await self.tcp_manager.start()
                 self.running = True

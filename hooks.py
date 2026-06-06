@@ -147,6 +147,26 @@ def get_wyoming_runtime() -> WyomingVoqualizerRuntime | None:
     return _wyoming_runtime
 
 
+def validate_wyoming_config(config_path: str | Path | None = None) -> dict[str, Any]:
+    path = Path(config_path) if config_path is not None else wyoming_config_path()
+    if not path.exists():
+        return {"ok": False, "exists": False, "config_path": str(path), "errors": ["config file does not exist"]}
+    try:
+        runtime = load_wyoming_runtime(path)
+        errors = list(runtime.errors)
+        return {
+            "ok": not errors,
+            "exists": True,
+            "config_path": str(path),
+            "configured_interfaces": len(runtime.interfaces),
+            "enabled_interfaces": len(runtime.enabled_interfaces),
+            "interface_ids": [iface.id for iface in runtime.enabled_interfaces],
+            "errors": errors,
+        }
+    except Exception as exc:  # noqa: BLE001 - diagnostic helper
+        return {"ok": False, "exists": True, "config_path": str(path), "errors": [str(exc)]}
+
+
 def wyoming_runtime_status() -> dict[str, Any]:
     runtime = get_wyoming_runtime()
     dependency_status: dict[str, Any] = {}
@@ -162,12 +182,14 @@ def wyoming_runtime_status() -> dict[str, Any]:
             "running": False,
             "config_path": str(wyoming_config_path()),
             "dependency_status": dependency_status,
+            "validation": validate_wyoming_config(),
             "message": "Wyoming runtime has not been started",
         }
     status = runtime.status_dict()
     status["configured"] = True
     status["config_path"] = str(wyoming_config_path())
     status["dependency_status"] = dependency_status
+    status["validation"] = validate_wyoming_config()
     return status
 
 
@@ -177,6 +199,9 @@ async def start_wyoming_runtime(config_path: str | Path | None = None) -> Wyomin
     async with _wyoming_lock:
         path = Path(config_path) if config_path is not None else wyoming_config_path()
         if not path.exists():
+            return None
+        validation = validate_wyoming_config(path)
+        if not validation.get("ok"):
             return None
         if _wyoming_runtime is not None and _wyoming_runtime.running:
             return _wyoming_runtime

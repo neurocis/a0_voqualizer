@@ -27,6 +27,9 @@ class WyomingStatus(ApiHandler):
             runtime_status = _attach_live_provider_status(hooks.wyoming_runtime_status())
             runtime_status["bootstrap"] = bootstrap_status
             return runtime_status
+        if action == "validate":
+            config_path = (input or {}).get("config_path") or hooks.wyoming_config_path()
+            return _attach_live_provider_status(hooks.validate_wyoming_config(config_path))
         if action == "start":
             runtime = await hooks.start_wyoming_runtime()
             status = _attach_live_provider_status(hooks.wyoming_runtime_status())
@@ -46,5 +49,5 @@ class WyomingStatus(ApiHandler):
         return {
             "error": "unsupported_action",
             "message": f"Unsupported Wyoming status action: {action}",
-            "supported_actions": ["status", "bootstrap", "start", "stop", "smoke"],
+            "supported_actions": ["status", "bootstrap", "validate", "start", "stop", "smoke"],
         }

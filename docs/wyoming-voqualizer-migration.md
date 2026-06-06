@@ -599,3 +599,15 @@ Implemented:
 - page exposes `window.voqualizerWyomingSmoke()` and expands `window.voqualizerWyomingDebug()` to include client snapshot plus rendered diagnostics;
 - DOM main-UI Wyoming extension exposes `window.voqualizerWyomingDomSmoke()` and stores the latest smoke report;
 - cache-busts bumped for standalone and DOM clients.
+
+
+### W37 runtime config validation guard
+
+Implemented:
+
+- runtime validates enabled Wyoming interfaces before binding TCP ports;
+- placeholder ctxIDs such as `REPLACE_WITH_*`, `PLACEHOLDER`, `TODO`, and `CTXID_HERE` block startup;
+- duplicate enabled bind endpoints and duplicate interface ids are reported;
+- `hooks.validate_wyoming_config()` exposes validation for admin/browser diagnostics;
+- `api/wyoming_status.py` supports `action=validate`;
+- status payloads include validation results so browser smoke UX can show config problems before live startup.
