@@ -578,3 +578,13 @@ Implemented:
 - supports direct `{ok,data,error}` result items, aggregated `{results:[...]}`, nested `{data:{results:[...]}}`, and direct data payloads;
 - `wyoming_init` now reads normalized `info`, preventing browser clients from missing init info when the framework wraps handler returns;
 - `sendEvent()` returns normalized ACK data while preserving error propagation.
+
+
+### W35 browser CSRF handshake alignment
+
+Implemented:
+
+- shared Wyoming browser WS client now fetches a CSRF token before Socket.IO connect;
+- uses `/webui/js/api.js#getCsrfToken()` when available, with `/api/csrf_token` as a safe fallback;
+- Socket.IO auth now uses an async callback so `csrf_token` and `handlers` are always supplied together;
+- standalone and DOM Wyoming clients received cache-bust bumps so hard refresh loads the repaired client.

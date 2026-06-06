@@ -66,3 +66,8 @@ def test_dom_extension_uses_shared_interface_selection_fallback():
     src = NEW.read_text()
     assert 'a0_voqualizer_wyoming_interface' in src
     assert "params.get('wyoming')" in src
+
+
+def test_dom_extension_uses_w35_csrf_cache_bust():
+    src = NEW.read_text()
+    assert 'w35-csrf-dom-2026-06-05-1' in src

@@ -28,6 +28,22 @@ function _b64ToBytes(b64) {
 }
 
 
+
+async function _fetchCsrfTokenSafe() {
+  try {
+    const mod = await import('/webui/js/api.js');
+    if (mod && typeof mod.getCsrfToken === 'function') {
+      return await mod.getCsrfToken();
+    }
+  } catch (_) {}
+  try {
+    const res = await fetch('/api/csrf_token', { method: 'POST', credentials: 'same-origin' });
+    const json = await res.json();
+    return json && (json.token || json.csrf_token || json.csrfToken) || '';
+  } catch (_) {}
+  return '';
+}
+
 function _extractAckData(ack) {
   if (!ack || typeof ack !== 'object') return ack || {};
   // WsManager canonical result item: { ok, data, error, handlerId, ... }
@@ -137,10 +153,13 @@ export class WyomingWsClient {
       const socket = io(this.url, {
         path: '/socket.io',
         transports: ['websocket'],
-        auth: {
-          handlers: [HANDLER_ID],
-          csrf_token: this.csrfToken || undefined,
-          interface_id: this.interfaceId,
+        auth: async (cb) => {
+          const csrf = this.csrfToken || await _fetchCsrfTokenSafe();
+          cb({
+            handlers: [HANDLER_ID],
+            csrf_token: csrf || undefined,
+            interface_id: this.interfaceId,
+          });
         },
       });
       this._socket = socket;

@@ -68,3 +68,8 @@ def test_new_page_has_interface_selector_and_discovery():
     assert "action: 'interfaces'" in src
     assert '/api/plugins/a0_voqualizer/wyoming_ws' in src
     assert 'a0_voqualizer_wyoming_interface' in src
+
+
+def test_new_page_uses_w35_csrf_cache_bust():
+    src = NEW.read_text()
+    assert 'w35-csrf-2026-06-05-1' in src

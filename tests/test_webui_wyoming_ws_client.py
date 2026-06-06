@@ -77,3 +77,13 @@ def test_wyoming_ws_client_normalizes_framework_ack_shapes():
     assert 'Array.isArray(ack.data.results)' in src
     assert 'const ackData = _extractAckData(ack)' in src
     assert 'return _extractAckData(ack)' in src
+
+
+def test_wyoming_ws_client_fetches_csrf_for_socket_auth():
+    src = CLIENT.read_text()
+    assert 'async function _fetchCsrfTokenSafe' in src
+    assert "/webui/js/api.js" in src
+    assert 'getCsrfToken' in src
+    assert "/api/csrf_token" in src
+    assert 'auth: async (cb)' in src
+    assert 'csrf_token: csrf || undefined' in src
