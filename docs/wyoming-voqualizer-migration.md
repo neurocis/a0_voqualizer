@@ -498,3 +498,13 @@ Implemented:
 - standalone Wyoming page exposes `window.voqualizerWyomingDebug()`;
 - DOM main UI Wyoming extension exposes `window.voqualizerWyomingDomDebug()`;
 - both browser surfaces close the Wyoming client defensively on unload where practical.
+
+
+### W27 Wyoming browser control cancellation
+
+Implemented:
+
+- `WyomingVoqualizerPipeline` now handles browser `voqualizer-control` actions;
+- `cancel`, `cancel_tts`, `barge_in`, `stop`, and `stop_tts` normalize to the interface-scoped Wyoming cancel path;
+- unsupported control actions return `error` with `unsupported_control_action`;
+- this fixes the W17/W18/W19 `cancelTts()` helper path while preserving the canonical Wyoming event stream.

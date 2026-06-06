@@ -98,3 +98,38 @@ def test_pipeline_source_avoids_old_voqualizer_socket_protocol():
     assert 'audio-start' in source
     assert 'audio-chunk' in source
     assert 'voqualizer-response-final' in source
+
+
+def test_pipeline_voqualizer_control_cancel_tts_maps_to_cancel():
+    proto = importlib.import_module('helpers.wyoming_protocol')
+    wi = importlib.import_module('helpers.wyoming_interfaces')
+    ws = importlib.import_module('helpers.wyoming_server')
+    wp = importlib.import_module('helpers.wyoming_pipeline')
+    interface = wi.load_interfaces([{'id': 'hero', 'name': 'Hero', 'ctxid': 'ctx-hero', 'bind_port': 10701}])[0]
+    session = ws.WyomingInterfaceRuntime(interface).create_session()
+    pipeline = wp.WyomingVoqualizerPipeline()
+
+    async def run():
+        replies = await pipeline.handle_event(session, proto.event('voqualizer-control', action='cancel_tts'))
+        assert [r.type for r in replies] == ['voqualizer-generation-cancelled', 'audio-stop']
+        assert replies[0].data['reason'] == 'cancel_tts'
+        assert replies[1].data['reason'] == 'cancel_tts'
+
+    asyncio.run(run())
+
+
+def test_pipeline_voqualizer_control_unknown_action_errors():
+    proto = importlib.import_module('helpers.wyoming_protocol')
+    wi = importlib.import_module('helpers.wyoming_interfaces')
+    ws = importlib.import_module('helpers.wyoming_server')
+    wp = importlib.import_module('helpers.wyoming_pipeline')
+    interface = wi.load_interfaces([{'id': 'hero', 'name': 'Hero', 'ctxid': 'ctx-hero', 'bind_port': 10701}])[0]
+    session = ws.WyomingInterfaceRuntime(interface).create_session()
+    pipeline = wp.WyomingVoqualizerPipeline()
+
+    async def run():
+        replies = await pipeline.handle_event(session, proto.event('voqualizer-control', action='dance'))
+        assert replies[0].type == 'error'
+        assert replies[0].data['code'] == 'unsupported_control_action'
+
+    asyncio.run(run())

@@ -67,6 +67,21 @@ class WyomingVoqualizerPipeline:
             tts_replies = await self.tts.handle_event(session, incoming)
             return await self._post_process(session, tts_replies, synthesize_finals=False)
 
+        if incoming.type == "voqualizer-control":
+            action = str(incoming.data.get("action") or "").strip().lower()
+            if action in {"cancel", "cancel_tts", "barge_in", "stop", "stop_tts"}:
+                # Browser clients expose cancelTts() as a Wyoming control event;
+                # normalize it to the same interface-scoped cancel path used by
+                # native Wyoming cancel/pause-satellite events.
+                incoming = event(
+                    "cancel",
+                    reason=str(incoming.data.get("reason") or action or "client_cancel"),
+                    source="voqualizer-control",
+                )
+            else:
+                self.debug.unsupported_events += 1
+                return [event("error", code="unsupported_control_action", message=f"Unsupported control action: {action}")]
+
         if incoming.type in {"cancel", "voqualizer-cancel", "pause-satellite"}:
             # Cancel all three adapters so barge-in clears ASR/prompt/TTS state for
             # this interface/session only.
