@@ -72,20 +72,24 @@
     client.on('error', (err) => setStatus(`error: ${err?.error || 'unknown'}`));
 
     let currentAssistantBubble = null;
+    function isCurrent(ev) { return client.isCurrentGeneration(ev?.data || {}); }
 
     client.on('event:transcript', (ev) => {
       const text = String(ev.data?.text || '');
       if (!text) return;
       addBubble('user', text);
     });
-    client.on('event:voqualizer-response-start', () => {
+    client.on('event:voqualizer-response-start', (ev) => {
+      if (!isCurrent(ev)) return;
       currentAssistantBubble = addBubble('assistant', '');
     });
     client.on('event:voqualizer-response-chunk', (ev) => {
+      if (!isCurrent(ev)) return;
       if (!currentAssistantBubble) currentAssistantBubble = addBubble('assistant', '');
       currentAssistantBubble.textContent += String(ev.data?.text || '');
     });
     client.on('event:voqualizer-response-final', (ev) => {
+      if (!isCurrent(ev)) return;
       if (!currentAssistantBubble) currentAssistantBubble = addBubble('assistant', '');
       const finalText = String(ev.data?.text || '');
       if (finalText) currentAssistantBubble.textContent = finalText;
@@ -99,11 +103,13 @@
       return audioCtx;
     }
     let nextStart = 0;
-    client.on('event:audio-start', () => {
+    client.on('event:audio-start', (ev) => {
+      if (!isCurrent(ev)) return;
       const ctx = ensureAudio();
       nextStart = Math.max(ctx.currentTime, nextStart);
     });
     client.on('event:audio-chunk', (ev) => {
+      if (!isCurrent(ev)) return;
       const ctx = ensureAudio();
       const pcm = ev.payload;
       if (!pcm || !pcm.length) return;
@@ -118,7 +124,7 @@
       src.start(startAt);
       nextStart = startAt + buf.duration;
     });
-    client.on('event:audio-stop', () => {});
+    client.on('event:audio-stop', (ev) => { if (!isCurrent(ev)) return; });
 
     window.addEventListener('beforeunload', () => {
       try { client.close(); } catch (_) {}

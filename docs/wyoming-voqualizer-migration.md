@@ -508,3 +508,13 @@ Implemented:
 - `cancel`, `cancel_tts`, `barge_in`, `stop`, and `stop_tts` normalize to the interface-scoped Wyoming cancel path;
 - unsupported control actions return `error` with `unsupported_control_action`;
 - this fixes the W17/W18/W19 `cancelTts()` helper path while preserving the canonical Wyoming event stream.
+
+
+### W28 browser stale-generation guards
+
+Implemented:
+
+- shared browser client now counts `stale_generation_drops`;
+- standalone Wyoming page ignores stale response/audio events using `client.isCurrentGeneration(...)`;
+- DOM main UI Wyoming extension ignores stale audio events before playback;
+- diagnostics snapshots expose the stale-drop counter for field debugging.

@@ -95,8 +95,11 @@
           const ta = document.querySelector('textarea[name="message"], textarea#message, textarea');
           if (ta) ta.value = (ta.value ? ta.value + ' ' : '') + text;
         });
-        c.on('event:audio-start', () => this._ensureAudio());
-        c.on('event:audio-chunk', (ev) => this._playPcmChunk(ev.payload));
+        c.on('event:audio-start', (ev) => { if (this._isCurrent(ev)) this._ensureAudio(); });
+        c.on('event:audio-chunk', (ev) => { if (this._isCurrent(ev)) this._playPcmChunk(ev.payload); });
+      },
+      _isCurrent(ev) {
+        return !this.client || this.client.isCurrentGeneration(ev?.data || {});
       },
       _ensureAudio() {
         if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });

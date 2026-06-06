@@ -53,3 +53,10 @@ def test_dom_extension_exposes_debug_snapshot():
     src = NEW.read_text()
     assert 'window.voqualizerWyomingDomDebug' in src
     assert 'client.snapshot()' in src
+
+
+def test_dom_extension_filters_stale_audio_generations():
+    src = NEW.read_text()
+    assert '_isCurrent(ev)' in src
+    assert 'client.isCurrentGeneration' in src
+    assert 'if (this._isCurrent(ev)) this._playPcmChunk' in src

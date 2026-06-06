@@ -64,5 +64,6 @@ def test_wyoming_ws_client_exposes_debug_snapshot():
         'last_in_type',
         'last_out_type',
         'last_generation_id',
+        'stale_generation_drops',
     ):
         assert required in src, required

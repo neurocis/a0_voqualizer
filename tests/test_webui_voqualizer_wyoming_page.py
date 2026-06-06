@@ -53,3 +53,10 @@ def test_new_page_exposes_debug_snapshot():
     assert 'window.voqualizerWyomingDebug' in src
     assert 'client.snapshot()' in src
     assert 'beforeunload' in src
+
+
+def test_new_page_filters_stale_generations():
+    src = NEW.read_text()
+    assert 'function isCurrent(ev)' in src
+    assert 'client.isCurrentGeneration' in src
+    assert 'if (!isCurrent(ev)) return;' in src

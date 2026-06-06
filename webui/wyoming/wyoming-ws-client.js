@@ -63,6 +63,7 @@ export class WyomingWsClient {
       last_out_type: '',
       last_error: '',
       last_generation_id: '',
+      stale_generation_drops: 0,
     };
   }
 
@@ -199,7 +200,9 @@ export class WyomingWsClient {
     if (!eventData || typeof eventData !== 'object') return true;
     const id = eventData.generation_id || eventData.generationId || null;
     if (!id) return true;
-    return id === this._activeGenerationId;
+    const ok = id === this._activeGenerationId;
+    if (!ok) this._stats.stale_generation_drops += 1;
+    return ok;
   }
 
   // ----- Convenience helpers used by W18/W19 ---------------------------------
