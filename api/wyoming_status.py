@@ -5,6 +5,7 @@ from python.helpers.api import ApiHandler, Request, Response
 
 from usr.plugins.a0_voqualizer.helpers.wyoming_live_providers import live_provider_status  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_smoke_diagnostics import smoke_report  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.wyoming_config_init import init_wyoming_config  # noqa: E402
 
 
 def _attach_live_provider_status(status: dict) -> dict:
@@ -30,6 +31,18 @@ class WyomingStatus(ApiHandler):
         if action == "validate":
             config_path = (input or {}).get("config_path") or hooks.wyoming_config_path()
             return _attach_live_provider_status(hooks.validate_wyoming_config(config_path))
+        if action == "init_config":
+            payload = input or {}
+            return _attach_live_provider_status(init_wyoming_config(
+                ctxid=str(payload.get("ctxid") or ""),
+                interface_id=str(payload.get("interface_id") or "default"),
+                name=str(payload.get("name") or "Voqualizer Wyoming"),
+                bind_host=str(payload.get("bind_host") or "127.0.0.1"),
+                bind_port=int(payload.get("bind_port") or 10701),
+                enabled=bool(payload.get("enabled", True)),
+                config_path=payload.get("config_path") or hooks.wyoming_config_path(),
+                overwrite=bool(payload.get("overwrite") or False),
+            ))
         if action == "start":
             runtime = await hooks.start_wyoming_runtime()
             status = _attach_live_provider_status(hooks.wyoming_runtime_status())
@@ -49,5 +62,5 @@ class WyomingStatus(ApiHandler):
         return {
             "error": "unsupported_action",
             "message": f"Unsupported Wyoming status action: {action}",
-            "supported_actions": ["status", "bootstrap", "validate", "start", "stop", "smoke"],
+            "supported_actions": ["status", "bootstrap", "validate", "init_config", "start", "stop", "smoke"],
         }

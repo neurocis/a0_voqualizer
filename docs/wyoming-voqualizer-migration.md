@@ -611,3 +611,14 @@ Implemented:
 - `hooks.validate_wyoming_config()` exposes validation for admin/browser diagnostics;
 - `api/wyoming_status.py` supports `action=validate`;
 - status payloads include validation results so browser smoke UX can show config problems before live startup.
+
+
+### W38 safe config initializer
+
+Implemented:
+
+- `helpers/wyoming_config_init.py` creates a concrete `config/wyoming_interfaces.json` from explicit ctxID/interface input;
+- placeholder ctxIDs are rejected before writing;
+- existing config files are preserved unless `overwrite=true` is supplied;
+- `api/wyoming_status.py` supports `action=init_config` for admin/setup flows;
+- the initializer writes one enabled Wyoming interface bound 1:1 to the provided Agent Zero ctxID.
