@@ -27,6 +27,33 @@ function _b64ToBytes(b64) {
   return out;
 }
 
+
+function _extractAckData(ack) {
+  if (!ack || typeof ack !== 'object') return ack || {};
+  // WsManager canonical result item: { ok, data, error, handlerId, ... }
+  if (Object.prototype.hasOwnProperty.call(ack, 'ok')) {
+    if (ack.ok) return (ack.data && typeof ack.data === 'object') ? ack.data : {};
+    const err = new Error((ack.error && (ack.error.error || ack.error.message || ack.error.code)) || 'Wyoming WS error');
+    err.details = ack.error || ack;
+    throw err;
+  }
+  // Aggregated route result: { results: [{ ok, data, error, ... }] }
+  if (Array.isArray(ack.results) && ack.results.length) {
+    return _extractAckData(ack.results[0]);
+  }
+  // Some framework paths return { data: { results: [...] } } or { data: {...} }.
+  if (ack.data && typeof ack.data === 'object') {
+    if (Array.isArray(ack.data.results) && ack.data.results.length) {
+      return _extractAckData(ack.data.results[0]);
+    }
+    if (Object.prototype.hasOwnProperty.call(ack.data, 'ok')) {
+      return _extractAckData(ack.data);
+    }
+    return ack.data;
+  }
+  return ack;
+}
+
 function _bytesToB64(bytes) {
   if (!bytes || !bytes.length) return '';
   let s = '';
@@ -122,7 +149,8 @@ export class WyomingWsClient {
         this._connected = true;
         try {
           const ack = await socket.emitWithAck('wyoming_init', { interface_id: this.interfaceId });
-          const info = (ack && ack.data && ack.data.info) || null;
+          const ackData = _extractAckData(ack);
+          const info = (ackData && ackData.info) || null;
           this._initInfo = info;
           this._stats.init_acks += 1;
           this._emitLocal('open', { info });
@@ -179,7 +207,8 @@ export class WyomingWsClient {
     const gen = envelope.data && (envelope.data.generation_id || envelope.data.generationId || envelope.data.utterance_id);
     if (gen) this._stats.last_generation_id = String(gen);
     try {
-      return await this._socket.emitWithAck('wyoming_event', envelope);
+      const ack = await this._socket.emitWithAck('wyoming_event', envelope);
+      return _extractAckData(ack);
     } catch (err) {
       this._recordError('send', err);
       throw err;

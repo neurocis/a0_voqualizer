@@ -568,3 +568,13 @@ Implemented:
 - `api/ws_wyoming.py` now resolves the Wyoming runtime directly through plugin `hooks.get_wyoming_runtime()`;
 - removed fragile import of a nonexistent/private `_get_runtime` symbol from `api/wyoming_status.py`;
 - strengthened handler tests so this import/lookup regression is caught.
+
+
+### W34 browser ACK envelope normalization
+
+Implemented:
+
+- shared browser Wyoming client now normalizes framework `WsResult` ACK envelopes;
+- supports direct `{ok,data,error}` result items, aggregated `{results:[...]}`, nested `{data:{results:[...]}}`, and direct data payloads;
+- `wyoming_init` now reads normalized `info`, preventing browser clients from missing init info when the framework wraps handler returns;
+- `sendEvent()` returns normalized ACK data while preserving error propagation.

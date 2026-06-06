@@ -67,3 +67,13 @@ def test_wyoming_ws_client_exposes_debug_snapshot():
         'stale_generation_drops',
     ):
         assert required in src, required
+
+
+def test_wyoming_ws_client_normalizes_framework_ack_shapes():
+    src = CLIENT.read_text()
+    assert 'function _extractAckData' in src
+    assert "Object.prototype.hasOwnProperty.call(ack, 'ok')" in src
+    assert 'Array.isArray(ack.results)' in src
+    assert 'Array.isArray(ack.data.results)' in src
+    assert 'const ackData = _extractAckData(ack)' in src
+    assert 'return _extractAckData(ack)' in src
