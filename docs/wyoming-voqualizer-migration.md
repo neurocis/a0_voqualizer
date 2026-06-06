@@ -465,3 +465,14 @@ python3 tools/wyoming_smoke.py --config config/wyoming_interfaces.json --interfa
 ```
 
 Next implementation step: add a real Agent Zero context prompt submitter injection so `voqualizer-text-prompt` can produce true assistant responses instead of the current safe echo submitter.
+
+
+### W24 Agent Zero context prompt submitter hook
+
+Implemented:
+
+- `helpers/wyoming_a0_prompt_submitter.py` bridges Wyoming prompt events into the fixed Agent Zero ctxID;
+- tries canonical Agent Zero context shapes defensively;
+- `build_agent_context_submitter(allow_echo_fallback=True)` is now the default submitter in `wyoming_live_providers.py`;
+- safe echo remains only as fallback when live framework context API is unavailable;
+- old `api/ws_voqualizer.py` remains reference-only.

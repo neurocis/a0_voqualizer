@@ -22,6 +22,7 @@ from .wyoming_a0_adapters import (
 )
 from .wyoming_pipeline import WyomingVoqualizerPipeline
 from .wyoming_server import WyomingInterfaceRuntime
+from .wyoming_a0_prompt_submitter import build_agent_context_submitter
 from .wyoming_interfaces import WyomingInterface
 
 
@@ -167,7 +168,7 @@ def bind_live_providers_to_runtime(
     config = cfg if cfg is not None else _safe_load_config()
     asr_factory = build_live_asr_factory(config)
     tts_factory = build_live_tts_factory(config)
-    submitter = prompt_submitter or _default_prompt_submitter
+    submitter = prompt_submitter or build_agent_context_submitter(allow_echo_fallback=True)
     pipeline = WyomingVoqualizerPipeline(
         asr_adapter=build_a0_asr_adapter(asr_factory),
         prompt_adapter=build_a0_prompt_adapter(submitter),
@@ -197,4 +198,5 @@ def live_provider_status(cfg: dict | None = None) -> dict[str, Any]:
             "type": tts_spec.get("type"),
             "configured": bool(tts_spec),
         },
+        "prompt_submitter": "agent_context_with_echo_fallback",
     }
