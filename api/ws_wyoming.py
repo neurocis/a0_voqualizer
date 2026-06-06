@@ -37,7 +37,13 @@ from helpers.print_style import PrintStyle
 
 from usr.plugins.a0_voqualizer.helpers.wyoming_protocol import WyomingEvent
 from usr.plugins.a0_voqualizer.helpers.wyoming_ws_bridge import WyomingWsBridge
-from usr.plugins.a0_voqualizer.api.wyoming_status import _get_runtime
+
+
+def _get_runtime():
+    """Resolve the plugin-level Wyoming runtime without importing admin internals."""
+    from usr.plugins.a0_voqualizer import hooks
+
+    return hooks.get_wyoming_runtime()
 
 
 class WsWyoming(WsHandler):

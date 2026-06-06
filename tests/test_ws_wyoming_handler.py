@@ -62,6 +62,13 @@ def test_handle_text_envelope_strips_client_supplied_ctxid_and_interface_id():
 
 
 def test_ws_wyoming_handler_accepts_running_runtime_flag():
-    source = HANDLER.read_text()
+    source = API.read_text()
     assert 'runtime_started = bool(getattr(runtime, "running", False) or getattr(runtime, "_started", False))' in source
     assert 'WYOMING_RUNTIME_NOT_STARTED' in source
+
+
+def test_ws_wyoming_handler_defines_local_runtime_lookup_not_admin_private_import():
+    source = API.read_text()
+    assert 'def _get_runtime()' in source
+    assert 'hooks.get_wyoming_runtime()' in source
+    assert 'from usr.plugins.a0_voqualizer.api.wyoming_status import _get_runtime' not in source

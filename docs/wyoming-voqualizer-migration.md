@@ -559,3 +559,12 @@ Implemented:
 - CLI `tools/wyoming_smoke.py` now delegates to the shared helper;
 - `api/wyoming_status.py` supports `action=smoke` with optional `interface_id`, `tcp_describe`, and `timeout`;
 - smoke reports validate interface config, report fixed ctxID bindings, live provider status, and optional TCP `describe`/`info` round-trip.
+
+
+### W33 WS handler runtime lookup repair
+
+Implemented:
+
+- `api/ws_wyoming.py` now resolves the Wyoming runtime directly through plugin `hooks.get_wyoming_runtime()`;
+- removed fragile import of a nonexistent/private `_get_runtime` symbol from `api/wyoming_status.py`;
+- strengthened handler tests so this import/lookup regression is caught.
