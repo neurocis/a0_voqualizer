@@ -13,7 +13,7 @@ def test_smoke_diagnostics_helper_exists_and_avoids_legacy_protocol():
     src = HELPER.read_text()
     for forbidden in ('voqualizer_init', 'voqualizer_user_text', 'voqualizer_audio_chunk', 'voqualizer_tts_chunk', 'ack_fallback'):
         assert forbidden not in src, forbidden
-    for required in ('smoke_report', 'interface_report', 'tcp_describe', 'read_event_from_stream', 'write_event_to_stream'):
+    for required in ('smoke_report', 'interface_report', 'tcp_describe', 'read_event_from_stream', 'write_event_to_stream', 'load_interfaces'):
         assert required in src, required
 
 

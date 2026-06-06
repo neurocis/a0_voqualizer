@@ -5,7 +5,9 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from .wyoming_interfaces import load_interfaces_from_file
+import json
+
+from .wyoming_interfaces import load_interfaces
 from .wyoming_live_providers import live_provider_status
 from .wyoming_protocol import event, read_event_from_stream, write_event_to_stream
 
@@ -38,7 +40,9 @@ async def tcp_describe(host: str, port: int, *, timeout: float = 3.0) -> dict[st
 def interface_report(config_path: str | Path) -> dict[str, Any]:
     """Load interface config and return a JSON-safe smoke report."""
     path = Path(config_path)
-    interfaces = load_interfaces_from_file(path)
+    raw = json.loads(path.read_text())
+    records = raw.get("interfaces", raw) if isinstance(raw, dict) else raw
+    interfaces = load_interfaces(records)
     enabled = [iface for iface in interfaces if iface.enabled]
     return {
         "ok": True,
