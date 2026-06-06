@@ -60,3 +60,11 @@ def test_new_page_filters_stale_generations():
     assert 'function isCurrent(ev)' in src
     assert 'client.isCurrentGeneration' in src
     assert 'if (!isCurrent(ev)) return;' in src
+
+
+def test_new_page_has_interface_selector_and_discovery():
+    src = NEW.read_text()
+    assert 'voq-wyoming-interface' in src
+    assert "action: 'interfaces'" in src
+    assert '/api/plugins/a0_voqualizer/wyoming_ws' in src
+    assert 'a0_voqualizer_wyoming_interface' in src

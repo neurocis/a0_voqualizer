@@ -30,6 +30,7 @@
   <div id="voq-wyoming-app" class="voqualizer-app">
     <header class="voq-header">
       <span class="voq-brand">Voqualizer</span>
+      <select id="voq-wyoming-interface" aria-label="Wyoming interface" title="Wyoming interface"></select>
       <span id="voq-wyoming-status">disconnected</span>
     </header>
     <main id="voq-wyoming-transcript" aria-live="polite"></main>
@@ -44,7 +45,7 @@
     import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w18-wyoming-2026-06-05-1';
 
     const params = new URLSearchParams(location.search);
-    const interfaceId = params.get('interface') || 'default';
+    const interfaceSelect = document.getElementById('voq-wyoming-interface');
     const statusEl = document.getElementById('voq-wyoming-status');
     const transcriptEl = document.getElementById('voq-wyoming-transcript');
     const inputEl = document.getElementById('voq-wyoming-input');
@@ -62,8 +63,46 @@
       return div;
     }
 
-    const client = createWyomingWsClient({ interfaceId, debug: true });
+    async function discoverInterfaces() {
+      try {
+        const res = await fetch('/api/plugins/a0_voqualizer/wyoming_ws', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'interfaces' }),
+        });
+        const data = await res.json();
+        const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
+        const requested = params.get('interface') || localStorage.getItem('a0_voqualizer_wyoming_interface') || data.default_interface_id || 'default';
+        interfaceSelect.innerHTML = '';
+        for (const item of interfaces) {
+          const opt = document.createElement('option');
+          opt.value = item.id;
+          opt.textContent = `${item.name || item.id}${item.enabled ? '' : ' (disabled)'}`;
+          opt.disabled = !item.enabled;
+          interfaceSelect.appendChild(opt);
+        }
+        if (!interfaces.some(i => i.id === requested)) {
+          const opt = document.createElement('option');
+          opt.value = requested;
+          opt.textContent = requested;
+          interfaceSelect.appendChild(opt);
+        }
+        interfaceSelect.value = requested;
+        return requested;
+      } catch (_) {
+        const fallback = params.get('interface') || localStorage.getItem('a0_voqualizer_wyoming_interface') || 'default';
+        interfaceSelect.innerHTML = `<option value="${fallback}">${fallback}</option>`;
+        return fallback;
+      }
+    }
+
+    const interfaceId = await discoverInterfaces();
+    let client = createWyomingWsClient({ interfaceId, debug: true });
     window.voqualizerWyomingDebug = () => client.snapshot();
+    interfaceSelect.addEventListener('change', () => {
+      localStorage.setItem('a0_voqualizer_wyoming_interface', interfaceSelect.value);
+      location.href = `${location.pathname}?interface=${encodeURIComponent(interfaceSelect.value)}`;
+    });
 
     client.on('open', ({ info }) => {
       setStatus(`connected · ${info?.data?.name || interfaceId}`);

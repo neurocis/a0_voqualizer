@@ -518,3 +518,14 @@ Implemented:
 - standalone Wyoming page ignores stale response/audio events using `client.isCurrentGeneration(...)`;
 - DOM main UI Wyoming extension ignores stale audio events before playback;
 - diagnostics snapshots expose the stale-drop counter for field debugging.
+
+
+### W29 Wyoming browser interface discovery
+
+Implemented:
+
+- `api/wyoming_ws.py` now supports `action=interfaces` and returns browser-safe interface descriptors;
+- descriptors include id/name/enabled/running/bind/capability fields but never expose ctxID;
+- standalone Wyoming page has an interface selector backed by `/api/plugins/a0_voqualizer/wyoming_ws`;
+- selected interface persists to `localStorage`;
+- DOM main UI Wyoming extension uses the same persisted interface fallback when no `data-wyoming-interface` or `?wyoming=` is supplied.

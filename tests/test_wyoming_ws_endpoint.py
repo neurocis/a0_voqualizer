@@ -35,3 +35,11 @@ def test_wyoming_ws_endpoint_source_avoids_old_custom_websocket_protocol():
     for forbidden in ('voqualizer_init', 'voqualizer_audio_chunk', 'voqualizer_tts_chunk', 'voqualizer_user_text', 'ack_fallback'):
         assert forbidden not in source
     assert 'Wyoming' in source
+
+
+def test_wyoming_ws_endpoint_supports_interface_discovery_payload():
+    source = API.read_text()
+    assert 'def _interface_payloads' in source
+    assert 'default_interface_id' in source
+    assert 'action in {"list", "interfaces"}' in source
+    assert 'capabilities' in source

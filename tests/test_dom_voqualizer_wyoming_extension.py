@@ -60,3 +60,9 @@ def test_dom_extension_filters_stale_audio_generations():
     assert '_isCurrent(ev)' in src
     assert 'client.isCurrentGeneration' in src
     assert 'if (this._isCurrent(ev)) this._playPcmChunk' in src
+
+
+def test_dom_extension_uses_shared_interface_selection_fallback():
+    src = NEW.read_text()
+    assert 'a0_voqualizer_wyoming_interface' in src
+    assert "params.get('wyoming')" in src

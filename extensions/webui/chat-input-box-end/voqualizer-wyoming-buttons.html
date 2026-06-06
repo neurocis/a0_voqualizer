@@ -53,7 +53,7 @@
     const attr = rootEl?.getAttribute?.('data-wyoming-interface');
     if (attr && attr.trim()) return attr.trim();
     const params = new URLSearchParams(location.search);
-    return params.get('wyoming') || 'default';
+    return params.get('wyoming') || localStorage.getItem('a0_voqualizer_wyoming_interface') || 'default';
   }
 
   document.addEventListener('alpine:init', () => {

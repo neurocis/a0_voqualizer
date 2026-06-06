@@ -44,6 +44,34 @@ async def run_wyoming_ws_bridge_session(interface_id: str, recv: WsRecv, send: W
     return bridge.snapshot()
 
 
+def _interface_payloads(runtime) -> list[dict[str, Any]]:
+    """Return browser-safe interface descriptors for configured Wyoming clients."""
+    payloads: list[dict[str, Any]] = []
+    interfaces = getattr(runtime, "interfaces", []) or []
+    running_ids = set((getattr(getattr(runtime, "manager", None), "runtimes", {}) or {}).keys())
+    for interface in interfaces:
+        payloads.append({
+            "id": interface.id,
+            "name": interface.name,
+            "enabled": bool(interface.enabled),
+            "running": interface.id in running_ids,
+            "bind_host": interface.bind_host,
+            "bind_port": interface.bind_port,
+            "capabilities": dict(interface.capabilities or {}),
+        })
+    return payloads
+
+
+def _default_interface_id(runtime) -> str:
+    for item in _interface_payloads(runtime):
+        if item.get("enabled") and item.get("running"):
+            return str(item.get("id") or "")
+    for item in _interface_payloads(runtime):
+        if item.get("enabled"):
+            return str(item.get("id") or "")
+    return ""
+
+
 class WyomingWs(ApiHandler):
     """JSON status/diagnostics endpoint for the Wyoming WS bridge.
 
@@ -69,11 +97,13 @@ class WyomingWs(ApiHandler):
                 "config_path": str(hooks.wyoming_config_path()),
             }
 
-        if action == "list":
+        if action in {"list", "interfaces"}:
+            interfaces = _interface_payloads(runtime)
             return {
                 "action": action,
                 "running": True,
-                "interfaces": runtime.manager.list_info(),
+                "interfaces": interfaces,
+                "default_interface_id": _default_interface_id(runtime),
             }
 
         if action == "describe":
@@ -103,12 +133,13 @@ class WyomingWs(ApiHandler):
             return {
                 "action": action,
                 "running": runtime.status().running,
-                "interfaces": runtime.manager.list_info(),
+                "interfaces": _interface_payloads(runtime),
+                "default_interface_id": _default_interface_id(runtime),
                 "config_path": str(hooks.wyoming_config_path()),
             }
 
         return {
             "error": "unsupported_action",
             "message": f"Unsupported Wyoming WS action: {action}",
-            "supported_actions": ["status", "list", "describe"],
+            "supported_actions": ["status", "list", "interfaces", "describe"],
         }
