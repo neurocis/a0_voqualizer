@@ -42,6 +42,10 @@ class WyomingVoqualizerRuntime:
         self.manager: WyomingInterfaceManager = build_wyoming_pipeline_manager(self.enabled_interfaces)
         self.tcp_manager = WyomingTcpInterfaceManager(self.manager)
         self.running = False
+        # Compatibility flag used by the framework Socket.IO handler. Keep it
+        # mirrored with `running` so runtime.status(), admin APIs, and WS init
+        # all agree on lifecycle state.
+        self._started = False
         self._lock = asyncio.Lock()
         self.errors: list[str] = []
         # W20/W21: replace scaffold runtimes with live-bound ASR/prompt/TTS runtimes.
@@ -60,6 +64,7 @@ class WyomingVoqualizerRuntime:
             try:
                 await self.tcp_manager.start()
                 self.running = True
+                self._started = True
             except Exception as exc:
                 self.errors.append(str(exc))
                 raise
@@ -72,6 +77,7 @@ class WyomingVoqualizerRuntime:
                 await self.tcp_manager.stop()
             finally:
                 self.running = False
+                self._started = False
 
     def status(self) -> WyomingRuntimeStatus:
         return WyomingRuntimeStatus(

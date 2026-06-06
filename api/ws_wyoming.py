@@ -116,7 +116,8 @@ class WsWyoming(WsHandler):
                 message="wyoming_init requires interface_id",
             )
         runtime = _get_runtime()
-        if runtime is None or not getattr(runtime, "_started", False):
+        runtime_started = bool(getattr(runtime, "running", False) or getattr(runtime, "_started", False))
+        if runtime is None or not runtime_started:
             return WsResult.error(
                 code="WYOMING_RUNTIME_NOT_STARTED",
                 message="Wyoming runtime is not started; configure interfaces first",

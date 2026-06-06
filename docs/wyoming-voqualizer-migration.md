@@ -529,3 +529,13 @@ Implemented:
 - standalone Wyoming page has an interface selector backed by `/api/plugins/a0_voqualizer/wyoming_ws`;
 - selected interface persists to `localStorage`;
 - DOM main UI Wyoming extension uses the same persisted interface fallback when no `data-wyoming-interface` or `?wyoming=` is supplied.
+
+
+### W30 runtime started flag alignment
+
+Implemented:
+
+- `WyomingVoqualizerRuntime` now mirrors `running` into `_started`;
+- `api/ws_wyoming.py` accepts either `runtime.running` or `_started` when allowing `wyoming_init`;
+- this fixes a live Socket.IO bridge init gap where the runtime could be started but rejected by the WS handler;
+- tests cover the mirrored lifecycle flag and handler source check.

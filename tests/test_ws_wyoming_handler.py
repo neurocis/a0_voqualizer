@@ -59,3 +59,9 @@ def test_handle_text_envelope_strips_client_supplied_ctxid_and_interface_id():
         assert replies[0].data.get('ctxid') == 'ctx-hero'
         assert replies[0].data.get('interface_id') == 'hero'
     asyncio.run(run())
+
+
+def test_ws_wyoming_handler_accepts_running_runtime_flag():
+    source = HANDLER.read_text()
+    assert 'runtime_started = bool(getattr(runtime, "running", False) or getattr(runtime, "_started", False))' in source
+    assert 'WYOMING_RUNTIME_NOT_STARTED' in source

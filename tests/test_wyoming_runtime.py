@@ -64,3 +64,22 @@ def test_runtime_source_avoids_old_custom_websocket_protocol():
     assert 'load_wyoming_runtime' in source
     assert 'build_wyoming_runtime_from_records' in source
     assert 'run_wyoming_runtime_forever' in source
+
+
+def test_runtime_started_alias_tracks_running_state():
+    rt = importlib.import_module('helpers.wyoming_runtime')
+    runtime = rt.build_wyoming_runtime_from_records([
+        {'id': 'hero', 'name': 'Hero', 'ctxid': 'ctx-hero', 'enabled': True, 'bind_host': '127.0.0.1', 'bind_port': 0},
+    ])
+
+    async def run():
+        assert runtime.running is False
+        assert runtime._started is False
+        await runtime.start()
+        assert runtime.running is True
+        assert runtime._started is True
+        await runtime.stop()
+        assert runtime.running is False
+        assert runtime._started is False
+
+    asyncio.run(run())
