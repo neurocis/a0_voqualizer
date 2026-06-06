@@ -35,3 +35,80 @@ def test_live_providers_default_to_agent_context_submitter():
     src = LIVE.read_text()
     assert 'build_agent_context_submitter' in src
     assert 'agent_context_with_echo_fallback' in src
+
+
+def test_streaming_submitter_uses_agent_stream_method(monkeypatch):
+    import sys
+    import types
+    mod = importlib.import_module('helpers.wyoming_a0_prompt_submitter')
+
+    class UserMessage:
+        def __init__(self, content=None):
+            self.content = content
+
+    class Context:
+        async def stream(self, message, metadata=None):
+            assert metadata['ctxid'] == 'ctx-stream'
+            async def gen():
+                yield {'delta': 'one '}
+                yield {'delta': 'two'}
+            return gen()
+
+    class AgentContext:
+        @staticmethod
+        def get(ctxid):
+            assert ctxid == 'ctx-stream'
+            return Context()
+
+    fake = types.ModuleType('agent')
+    fake.AgentContext = AgentContext
+    fake.UserMessage = UserMessage
+    monkeypatch.setitem(sys.modules, 'agent', fake)
+
+    async def run():
+        chunks = []
+        async for chunk in mod.stream_to_agent_context('hello', {'ctxid': 'ctx-stream'}):
+            chunks.append(chunk)
+        return chunks
+
+    assert asyncio.run(run()) == ['one ', 'two']
+
+
+def test_builder_stream_mode_returns_async_iterable(monkeypatch):
+    import sys
+    import types
+    mod = importlib.import_module('helpers.wyoming_a0_prompt_submitter')
+
+    class UserMessage:
+        def __init__(self, content=None):
+            self.content = content
+
+    class Context:
+        def ask_stream(self, text):
+            return ['a', 'b']
+
+    class AgentContext:
+        @staticmethod
+        def get(ctxid):
+            return Context()
+
+    fake = types.ModuleType('agent')
+    fake.AgentContext = AgentContext
+    fake.UserMessage = UserMessage
+    monkeypatch.setitem(sys.modules, 'agent', fake)
+
+    async def run():
+        submitter = mod.build_agent_context_submitter(stream=True)
+        result = await submitter('hello', {'ctxid': 'ctx-stream'})
+        chunks = []
+        async for chunk in result:
+            chunks.append(chunk)
+        return chunks
+
+    assert asyncio.run(run()) == ['a', 'b']
+
+
+def test_live_provider_status_reports_streaming_submitter():
+    src = LIVE.read_text()
+    assert 'stream=True' in src
+    assert 'agent_context_streaming_with_echo_fallback' in src

@@ -476,3 +476,14 @@ Implemented:
 - `build_agent_context_submitter(allow_echo_fallback=True)` is now the default submitter in `wyoming_live_providers.py`;
 - safe echo remains only as fallback when live framework context API is unavailable;
 - old `api/ws_voqualizer.py` remains reference-only.
+
+
+### W25 Agent Zero response streaming submitter
+
+Implemented:
+
+- `helpers/wyoming_a0_prompt_submitter.py` now exposes `stream_to_agent_context(...)`;
+- live prompt submission tries Agent Zero streaming method shapes (`stream`, `stream_async`, `communicate_stream`, `message_stream`, `submit_stream`, `ask_stream`);
+- chunks flow into existing `WyomingPromptAdapter` response chunk/final handling and then authoritative Wyoming TTS;
+- `wyoming_live_providers.py` now defaults to `build_agent_context_submitter(..., stream=True)` and reports `agent_context_streaming_with_echo_fallback`;
+- if live streaming is unavailable, the submitter falls back to single final text, then safe echo only if framework access fails.
