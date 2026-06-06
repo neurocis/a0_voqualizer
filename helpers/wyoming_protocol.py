@@ -28,6 +28,10 @@ class WyomingEvent:
         if self.data:
             header["data"] = self.data
         if self.payload:
+            # Wyoming-compatible clients commonly use payload_length for
+            # following binary bytes. Some older/proxy clients call the same
+            # field data_length; decoder accepts both while encoder emits the
+            # canonical payload_length.
             header["payload_length"] = len(self.payload)
         return header
 
@@ -66,9 +70,9 @@ def decode_header_line(line: bytes | str) -> tuple[str, dict[str, Any], int]:
     data = header.get("data") or {}
     if not isinstance(data, dict):
         raise WyomingProtocolError("Wyoming header data must be an object")
-    payload_length = header.get("payload_length", 0)
+    payload_length = header.get("payload_length", header.get("data_length", 0))
     if not isinstance(payload_length, int) or payload_length < 0:
-        raise WyomingProtocolError("Wyoming payload_length must be a non-negative integer")
+        raise WyomingProtocolError("Wyoming payload_length/data_length must be a non-negative integer")
     return event_type, data, payload_length
 
 

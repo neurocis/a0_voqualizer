@@ -539,3 +539,13 @@ Implemented:
 - `api/ws_wyoming.py` accepts either `runtime.running` or `_started` when allowing `wyoming_init`;
 - this fixes a live Socket.IO bridge init gap where the runtime could be started but rejected by the WS handler;
 - tests cover the mirrored lifecycle flag and handler source check.
+
+
+### W31 Wyoming length-field compatibility
+
+Implemented:
+
+- Wyoming encoder continues to emit canonical `payload_length`;
+- decoder accepts both `payload_length` and `data_length` as aliases for following binary bytes;
+- protocol errors now mention both field names for malformed length metadata;
+- this improves interop tolerance with browser/proxy clients while preserving deterministic canonical output.

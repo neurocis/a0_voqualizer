@@ -53,3 +53,18 @@ def test_wyoming_migration_doc_records_breaking_design():
     assert 'Multiple Wyoming interfaces may be active concurrently' in text
     assert 'Browser/mobile web UI is only one client' in text
     assert 'W0' in text and 'W7' in text
+
+
+def test_wyoming_decode_accepts_data_length_alias():
+    proto = load_module(PROTO, 'wyoming_protocol_under_test_data_length')
+    decoded = proto.decode_event(b'{"type":"audio-chunk","data_length":3}', b'abc')
+    assert decoded.type == 'audio-chunk'
+    assert decoded.payload == b'abc'
+
+
+def test_wyoming_encoder_emits_payload_length_not_data_length():
+    proto = load_module(PROTO, 'wyoming_protocol_under_test_payload_canonical')
+    encoded = proto.encode_event(proto.WyomingEvent('audio-chunk', {}, b'abc'))
+    header, _ = encoded.split(b'\n', 1)
+    assert b'payload_length' in header
+    assert b'data_length' not in header
