@@ -47,7 +47,7 @@
 </div>
 
 <script type="module">
-  import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w35-csrf-dom-2026-06-05-1';
+  import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w36-smoke-dom-2026-06-06-1';
 
   function _resolveInterfaceId(rootEl) {
     const attr = rootEl?.getAttribute?.('data-wyoming-interface');
@@ -74,8 +74,10 @@
         this._initialized = true;
         const interfaceId = _resolveInterfaceId(this.$root);
         try {
+          this.interfaceId = interfaceId;
           this.client = createWyomingWsClient({ interfaceId, debug: false });
           window.voqualizerWyomingDomDebug = () => this.client ? this.client.snapshot() : { connected: false, reason: 'no_client' };
+          window.voqualizerWyomingDomSmoke = () => this._smokeDiagnostics();
           this._wireEvents();
           await this.client.connect();
         } catch (err) {
@@ -125,6 +127,20 @@
         if (!this.ttsEnabled && this.client) {
           try { await this.client.cancelTts(); } catch (_) {}
         }
+        if (this.ttsEnabled) {
+          try { await this._smokeDiagnostics(); } catch (_) {}
+        }
+      },
+      async _smokeDiagnostics() {
+        const res = await fetch('/api/plugins/a0_voqualizer/wyoming_status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'smoke', interface_id: this.interfaceId || 'default', tcp_describe: false }),
+        });
+        const data = await res.json();
+        this.lastSmokeDiagnostics = data;
+        if (!data?.ok) this.statusText = `wyoming: smoke failed (${data?.error || 'unknown'})`;
+        return { client: this.client ? this.client.snapshot() : null, smoke: data };
       },
       async toggleMic() {
         if (this.micActive) {

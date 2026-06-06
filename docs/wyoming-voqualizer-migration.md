@@ -588,3 +588,14 @@ Implemented:
 - uses `/webui/js/api.js#getCsrfToken()` when available, with `/api/csrf_token` as a safe fallback;
 - Socket.IO auth now uses an async callback so `csrf_token` and `handlers` are always supplied together;
 - standalone and DOM Wyoming clients received cache-bust bumps so hard refresh loads the repaired client.
+
+
+### W36 browser smoke diagnostics UX
+
+Implemented:
+
+- standalone Wyoming page now has a `smoke` diagnostics button;
+- diagnostics call `/api/plugins/a0_voqualizer/wyoming_status` with `action=smoke`;
+- page exposes `window.voqualizerWyomingSmoke()` and expands `window.voqualizerWyomingDebug()` to include client snapshot plus rendered diagnostics;
+- DOM main-UI Wyoming extension exposes `window.voqualizerWyomingDomSmoke()` and stores the latest smoke report;
+- cache-busts bumped for standalone and DOM clients.

@@ -73,3 +73,14 @@ def test_new_page_has_interface_selector_and_discovery():
 def test_new_page_uses_w35_csrf_cache_bust():
     src = NEW.read_text()
     assert 'w35-csrf-2026-06-05-1' in src
+
+
+def test_new_page_exposes_smoke_diagnostics():
+    src = NEW.read_text()
+    assert 'id="voq-wyoming-smoke"' in src
+    assert 'id="voq-wyoming-diagnostics"' in src
+    assert 'window.voqualizerWyomingSmoke' in src
+    assert "action: 'smoke'" in src
+    assert '/api/plugins/a0_voqualizer/wyoming_status' in src
+    assert 'client.snapshot()' in src
+    assert 'w36-smoke-2026-06-06-1' in src

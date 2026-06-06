@@ -71,3 +71,13 @@ def test_dom_extension_uses_shared_interface_selection_fallback():
 def test_dom_extension_uses_w35_csrf_cache_bust():
     src = NEW.read_text()
     assert 'w35-csrf-dom-2026-06-05-1' in src
+
+
+def test_dom_extension_exposes_smoke_diagnostics():
+    src = NEW.read_text()
+    assert 'window.voqualizerWyomingDomSmoke' in src
+    assert 'async _smokeDiagnostics()' in src
+    assert "action: 'smoke'" in src
+    assert '/api/plugins/a0_voqualizer/wyoming_status' in src
+    assert 'lastSmokeDiagnostics' in src
+    assert 'w36-smoke-dom-2026-06-06-1' in src
