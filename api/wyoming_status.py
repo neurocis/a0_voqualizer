@@ -4,6 +4,7 @@ from __future__ import annotations
 from python.helpers.api import ApiHandler, Request, Response
 
 from usr.plugins.a0_voqualizer.helpers.wyoming_live_providers import live_provider_status  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.wyoming_smoke_diagnostics import smoke_report  # noqa: E402
 
 
 def _attach_live_provider_status(status: dict) -> dict:
@@ -36,8 +37,14 @@ class WyomingStatus(ApiHandler):
             status = _attach_live_provider_status(hooks.wyoming_runtime_status())
             status["stopped"] = True
             return status
+        if action == "smoke":
+            config_path = (input or {}).get("config_path") or hooks.wyoming_config_path()
+            interface_id = str((input or {}).get("interface_id") or "")
+            tcp = bool((input or {}).get("tcp_describe") or False)
+            timeout = float((input or {}).get("timeout") or 3.0)
+            return await smoke_report(config_path, interface_id=interface_id, tcp=tcp, timeout=timeout)
         return {
             "error": "unsupported_action",
             "message": f"Unsupported Wyoming status action: {action}",
-            "supported_actions": ["status", "bootstrap", "start", "stop"],
+            "supported_actions": ["status", "bootstrap", "start", "stop", "smoke"],
         }

@@ -549,3 +549,13 @@ Implemented:
 - decoder accepts both `payload_length` and `data_length` as aliases for following binary bytes;
 - protocol errors now mention both field names for malformed length metadata;
 - this improves interop tolerance with browser/proxy clients while preserving deterministic canonical output.
+
+
+### W32 shared/admin smoke diagnostics
+
+Implemented:
+
+- added `helpers/wyoming_smoke_diagnostics.py` as shared smoke-report logic;
+- CLI `tools/wyoming_smoke.py` now delegates to the shared helper;
+- `api/wyoming_status.py` supports `action=smoke` with optional `interface_id`, `tcp_describe`, and `timeout`;
+- smoke reports validate interface config, report fixed ctxID bindings, live provider status, and optional TCP `describe`/`info` round-trip.
