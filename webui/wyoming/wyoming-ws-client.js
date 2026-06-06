@@ -51,6 +51,19 @@ export class WyomingWsClient {
     this._activeGenerationId = null;
     this._closed = false;
     this._initPromise = null;
+    this._stats = {
+      connect_attempts: 0,
+      init_acks: 0,
+      events_in: 0,
+      events_out: 0,
+      payload_bytes_in: 0,
+      payload_bytes_out: 0,
+      errors: 0,
+      last_in_type: '',
+      last_out_type: '',
+      last_error: '',
+      last_generation_id: '',
+    };
   }
 
   on(eventType, handler) {
@@ -64,6 +77,22 @@ export class WyomingWsClient {
     return () => bucket.delete(handler);
   }
 
+  snapshot() {
+    return {
+      interface_id: this.interfaceId,
+      connected: this._connected,
+      closed: this._closed,
+      active_generation_id: this._activeGenerationId,
+      init_info: this._initInfo,
+      stats: { ...this._stats },
+    };
+  }
+
+  _recordError(kind, err) {
+    this._stats.errors += 1;
+    this._stats.last_error = `${kind}: ${err && (err.message || String(err)) || 'unknown'}`;
+  }
+
   _emitLocal(eventType, payload) {
     const bucket = this._handlers.get(eventType);
     if (!bucket) return;
@@ -75,6 +104,7 @@ export class WyomingWsClient {
 
   async connect() {
     if (this._initPromise) return this._initPromise;
+    this._stats.connect_attempts += 1;
     this._initPromise = new Promise((resolve, reject) => {
       const socket = io(this.url, {
         path: '/socket.io',
@@ -93,9 +123,11 @@ export class WyomingWsClient {
           const ack = await socket.emitWithAck('wyoming_init', { interface_id: this.interfaceId });
           const info = (ack && ack.data && ack.data.info) || null;
           this._initInfo = info;
+          this._stats.init_acks += 1;
           this._emitLocal('open', { info });
           resolve(info);
         } catch (err) {
+          this._recordError('init', err);
           reject(err);
         }
       });
@@ -106,6 +138,7 @@ export class WyomingWsClient {
       });
 
       socket.on('connect_error', (err) => {
+        this._recordError('connect', err);
         this._emitLocal('error', { kind: 'connect', error: err && (err.message || String(err)) });
         if (this._initPromise && !this._initInfo) reject(err);
       });
@@ -117,6 +150,11 @@ export class WyomingWsClient {
           data: (envelope.data && typeof envelope.data === 'object') ? envelope.data : {},
           payload: envelope.payload_b64 ? _b64ToBytes(envelope.payload_b64) : new Uint8Array(0),
         };
+        this._stats.events_in += 1;
+        this._stats.payload_bytes_in += ev.payload.length || 0;
+        this._stats.last_in_type = ev.type;
+        const gen = ev.data && (ev.data.generation_id || ev.data.generationId);
+        if (gen) this._stats.last_generation_id = String(gen);
         this._emitLocal('event', ev);
         this._emitLocal('event:' + ev.type, ev);
       });
@@ -134,12 +172,23 @@ export class WyomingWsClient {
     if (payload && payload.length) {
       envelope.payload_b64 = _bytesToB64(payload);
     }
-    return this._socket.emitWithAck('wyoming_event', envelope);
+    this._stats.events_out += 1;
+    this._stats.payload_bytes_out += payload ? payload.length : 0;
+    this._stats.last_out_type = envelope.type;
+    const gen = envelope.data && (envelope.data.generation_id || envelope.data.generationId || envelope.data.utterance_id);
+    if (gen) this._stats.last_generation_id = String(gen);
+    try {
+      return await this._socket.emitWithAck('wyoming_event', envelope);
+    } catch (err) {
+      this._recordError('send', err);
+      throw err;
+    }
   }
 
   newGeneration(prefix = 'gen') {
     const id = `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     this._activeGenerationId = id;
+    this._stats.last_generation_id = id;
     return id;
   }
 

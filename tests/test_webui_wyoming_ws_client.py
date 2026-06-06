@@ -48,3 +48,21 @@ def test_wyoming_ws_client_exposes_event_dispatcher():
     assert 'this._handlers' in src
     assert "_emitLocal('event'" in src
     assert "_emitLocal('event:'" in src
+
+
+def test_wyoming_ws_client_exposes_debug_snapshot():
+    src = CLIENT.read_text()
+    for required in (
+        'snapshot() {',
+        '_recordError',
+        'connect_attempts',
+        'init_acks',
+        'events_in',
+        'events_out',
+        'payload_bytes_in',
+        'payload_bytes_out',
+        'last_in_type',
+        'last_out_type',
+        'last_generation_id',
+    ):
+        assert required in src, required

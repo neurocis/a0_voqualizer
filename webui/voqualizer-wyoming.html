@@ -63,6 +63,7 @@
     }
 
     const client = createWyomingWsClient({ interfaceId, debug: true });
+    window.voqualizerWyomingDebug = () => client.snapshot();
 
     client.on('open', ({ info }) => {
       setStatus(`connected · ${info?.data?.name || interfaceId}`);
@@ -118,6 +119,10 @@
       nextStart = startAt + buf.duration;
     });
     client.on('event:audio-stop', () => {});
+
+    window.addEventListener('beforeunload', () => {
+      try { client.close(); } catch (_) {}
+    });
 
     sendBtn.addEventListener('click', async () => {
       const text = inputEl.value.trim();

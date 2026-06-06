@@ -75,6 +75,7 @@
         const interfaceId = _resolveInterfaceId(this.$root);
         try {
           this.client = createWyomingWsClient({ interfaceId, debug: false });
+          window.voqualizerWyomingDomDebug = () => this.client ? this.client.snapshot() : { connected: false, reason: 'no_client' };
           this._wireEvents();
           await this.client.connect();
         } catch (err) {

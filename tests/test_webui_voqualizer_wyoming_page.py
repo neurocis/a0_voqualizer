@@ -46,3 +46,10 @@ def test_new_page_uses_only_wyoming_protocol():
         "cancelTts",
     ):
         assert required in src, required
+
+
+def test_new_page_exposes_debug_snapshot():
+    src = NEW.read_text()
+    assert 'window.voqualizerWyomingDebug' in src
+    assert 'client.snapshot()' in src
+    assert 'beforeunload' in src

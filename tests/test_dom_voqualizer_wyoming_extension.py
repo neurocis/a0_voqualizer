@@ -47,3 +47,9 @@ def test_new_dom_extension_uses_only_wyoming_protocol():
         'data-wyoming-interface',
     ):
         assert required in src, required
+
+
+def test_dom_extension_exposes_debug_snapshot():
+    src = NEW.read_text()
+    assert 'window.voqualizerWyomingDomDebug' in src
+    assert 'client.snapshot()' in src

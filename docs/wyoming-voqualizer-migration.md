@@ -487,3 +487,14 @@ Implemented:
 - chunks flow into existing `WyomingPromptAdapter` response chunk/final handling and then authoritative Wyoming TTS;
 - `wyoming_live_providers.py` now defaults to `build_agent_context_submitter(..., stream=True)` and reports `agent_context_streaming_with_echo_fallback`;
 - if live streaming is unavailable, the submitter falls back to single final text, then safe echo only if framework access fails.
+
+
+### W26 browser client diagnostics
+
+Implemented:
+
+- shared `webui/wyoming/wyoming-ws-client.js` now exposes `snapshot()` diagnostics;
+- counters include connect attempts, init ACKs, events/payload bytes in/out, last event types, last generation id, and last error;
+- standalone Wyoming page exposes `window.voqualizerWyomingDebug()`;
+- DOM main UI Wyoming extension exposes `window.voqualizerWyomingDomDebug()`;
+- both browser surfaces close the Wyoming client defensively on unload where practical.
