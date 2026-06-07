@@ -754,3 +754,26 @@ Implemented:
 - Settings panel (`webui/config.html`) exposes a "Wyoming DOM integration" section with an x-model bound checkbox;
 - DOM main UI Wyoming extension (`extensions/webui/chat-input-box-end/voqualizer-wyoming-buttons.html`) checks the toggle in `init()` and hides itself + reports `wyoming: DOM ASR/TTS disabled` when off;
 - standalone Wyoming page, Wyoming TCP runtime, providers, admin diagnostics, and legacy reference assets remain unaffected.
+
+
+### Side quest repair: Settings Save path for DOM-only toggle
+
+Issue observed: the DOM-only ASR/TTS toggle appeared in setup, but saving from
+the standard A0 plugin Settings modal did not persist reliably.
+
+Root cause: `hooks.py` was loaded by A0 via `helpers.modules.import_module()` /
+`spec_from_file_location()`, so it had no package context. The Wyoming lifecycle
+rewrite had introduced a relative import (`from .helpers.wyoming_runtime ...`) at
+module import time. That import failure happened during `call_plugin_hook()` and
+blocked the standard `get_plugin_config` / `save_plugin_config` path used by the
+Settings modal.
+
+Repair: `hooks.py` now registers the plugin-local `helpers/` directory as a
+unique package named `a0_voqualizer_helpers` and imports
+`a0_voqualizer_helpers.wyoming_runtime`. This avoids both the missing package
+context problem and the framework top-level `helpers` namespace collision.
+
+Validation: a live A0 framework probe confirmed the modal-equivalent flow:
+load config → set `wyoming.dom_integration.enabled=false` → save config → reload
+config → helper status sees `enabled=false`. The local config was restored to
+`enabled=true` after the probe.

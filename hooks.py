@@ -19,7 +19,56 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .helpers.wyoming_runtime import DEFAULT_INTERFACE_CONFIG, WyomingVoqualizerRuntime, load_wyoming_runtime
+# Robust import for plugin-local helpers.
+#
+# Why this dance:
+# 1. hooks.py is loaded by helpers/modules.import_module via
+#    spec_from_file_location, so it has NO package context. Relative imports
+#    ("from .helpers...") raise ImportError immediately.
+# 2. The framework already owns the top-level package name "helpers"
+#    (/a0/helpers), so a plain "from helpers.wyoming_runtime import ..."
+#    resolves against the framework package and raises ModuleNotFoundError.
+# 3. Loading wyoming_runtime.py directly via spec_from_file_location works,
+#    BUT wyoming_runtime.py itself uses relative imports like
+#    "from .wyoming_interfaces import ...". Without a real parent package
+#    those relative imports also raise ImportError.
+#
+# Fix: register the plugin's helpers/ directory as a proper Python package
+# under a unique name ("a0_voqualizer_helpers") with submodule_search_locations
+# set. Then importlib.import_module("a0_voqualizer_helpers.wyoming_runtime")
+# uses the normal import machinery and all internal "from .wyoming_xxx import"
+# statements resolve correctly. This does not shadow the framework "helpers"
+# package, so call_plugin_hook -> get_plugin_config / save_plugin_config
+# (the standard A0 Settings modal Save path) keeps working.
+import importlib as _importlib
+import importlib.util as _importlib_util
+import sys as _sys
+
+_PLUGIN_DIR_PATH = Path(__file__).resolve().parent
+_PLUGIN_HELPERS_DIR = _PLUGIN_DIR_PATH / "helpers"
+_PLUGIN_HELPERS_PKG = "a0_voqualizer_helpers"
+
+if _PLUGIN_HELPERS_PKG not in _sys.modules:
+    _pkg_init = _PLUGIN_HELPERS_DIR / "__init__.py"
+    _pkg_spec = _importlib_util.spec_from_file_location(
+        _PLUGIN_HELPERS_PKG,
+        str(_pkg_init),
+        submodule_search_locations=[str(_PLUGIN_HELPERS_DIR)],
+    )
+    if _pkg_spec is None or _pkg_spec.loader is None:  # pragma: no cover
+        raise ImportError(
+            f"Could not register plugin helpers package at {_PLUGIN_HELPERS_DIR}"
+        )
+    _pkg = _importlib_util.module_from_spec(_pkg_spec)
+    _sys.modules[_PLUGIN_HELPERS_PKG] = _pkg
+    _pkg_spec.loader.exec_module(_pkg)
+
+_wyoming_runtime_module = _importlib.import_module(
+    f"{_PLUGIN_HELPERS_PKG}.wyoming_runtime"
+)
+DEFAULT_INTERFACE_CONFIG = _wyoming_runtime_module.DEFAULT_INTERFACE_CONFIG
+WyomingVoqualizerRuntime = _wyoming_runtime_module.WyomingVoqualizerRuntime
+load_wyoming_runtime = _wyoming_runtime_module.load_wyoming_runtime
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 STATUS_FILE = os.path.join(PLUGIN_DIR, ".dependency_status.json")
