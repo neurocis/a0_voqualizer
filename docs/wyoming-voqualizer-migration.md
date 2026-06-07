@@ -724,3 +724,12 @@ Implemented:
 - shared `helpers/wyoming_readiness.py` combines runtime status, validation, checklist, TCP probe status, and live provider status;
 - admin `wyoming_status` supports `action=readiness`;
 - standalone and DOM Wyoming browser surfaces expose readiness debug helpers and use readiness for visible checklist status.
+
+
+### W50 checkpoint status update
+
+Implemented:
+
+- refreshed `/a0/usr/projects/a0-voqualizer/STATUS.md` with current W0-W49 status, diagnostics surfaces, and next live-validation phase;
+- refreshed `/a0/usr/projects/a0-voqualizer/PLAN.md` with W51-W55 candidate milestones;
+- documented that retained legacy assets remain reference-only while Wyoming TCP/bridge paths are the active rewrite surfaces.
