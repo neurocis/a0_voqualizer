@@ -83,3 +83,17 @@ def test_runtime_started_alias_tracks_running_state():
         assert runtime._started is False
 
     asyncio.run(run())
+
+
+def test_load_interfaces_from_file_compatibility_helper(tmp_path):
+    import json
+    mod = __import__('helpers.wyoming_interfaces', fromlist=['load_interfaces_from_file'])
+    path = tmp_path / 'wyoming_interfaces.json'
+    path.write_text(json.dumps({'interfaces': [{
+        'id': 'hero', 'name': 'Hero', 'ctxid': 'ctx-real',
+        'enabled': True, 'bind_host': '127.0.0.1', 'bind_port': 10701,
+    }]}))
+    interfaces = mod.load_interfaces_from_file(path)
+    assert len(interfaces) == 1
+    assert interfaces[0].id == 'hero'
+    assert interfaces[0].ctxid == 'ctx-real'

@@ -733,3 +733,12 @@ Implemented:
 - refreshed `/a0/usr/projects/a0-voqualizer/STATUS.md` with current W0-W49 status, diagnostics surfaces, and next live-validation phase;
 - refreshed `/a0/usr/projects/a0-voqualizer/PLAN.md` with W51-W55 candidate milestones;
 - documented that retained legacy assets remain reference-only while Wyoming TCP/bridge paths are the active rewrite surfaces.
+
+
+### W51 live smoke capture tool
+
+Implemented:
+
+- `tools/wyoming_live_smoke_capture.py` captures validation, readiness, optional smoke, and optional TCP describe diagnostics in one JSON bundle;
+- the tool is browser/auth independent and explicitly reports that framework runtime state must be confirmed via admin `action=readiness`;
+- added deterministic tests covering placeholder detection and CLI output.

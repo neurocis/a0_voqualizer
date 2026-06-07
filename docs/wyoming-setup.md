@@ -188,3 +188,21 @@ DOM debug helper:
 ```js
 await window.voqualizerWyomingDomReadiness()
 ```
+
+
+## Live smoke capture bundle
+
+For a single CLI bundle suitable for pasting into an issue/chat, run:
+
+```bash
+python3 tools/wyoming_live_smoke_capture.py --config config/wyoming_interfaces.json --interface hero
+```
+
+After runtime startup, include TCP probing:
+
+```bash
+python3 tools/wyoming_live_smoke_capture.py --config config/wyoming_interfaces.json --interface hero --tcp-describe
+```
+
+The CLI cannot inspect the framework's in-memory runtime directly, so compare it
+with admin `{"action":"readiness"}` for authoritative runtime-started state.

@@ -5,6 +5,7 @@ kept independent of the old custom websocket runtime.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -58,3 +59,14 @@ def load_interfaces(raw: Iterable[dict[str, Any]]) -> list[WyomingInterface]:
             seen_ports.add(port_key)
         interfaces.append(iface)
     return interfaces
+
+
+def load_interfaces_from_file(path: str | Path) -> list[WyomingInterface]:
+    """Load Wyoming interface records from a JSON config file.
+
+    Compatibility helper used by runtime/bootstrap code. The config may be either
+    a raw list of interface records or an object with an `interfaces` list.
+    """
+    raw = json.loads(Path(path).read_text())
+    records = raw.get("interfaces", raw) if isinstance(raw, dict) else raw
+    return load_interfaces(records)
