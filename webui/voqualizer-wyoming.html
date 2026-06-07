@@ -40,6 +40,7 @@
       <button id="voq-wyoming-init-config" type="button">create config</button>
       <button id="voq-wyoming-validate" type="button">validate</button>
       <button id="voq-wyoming-start" type="button">start runtime</button>
+      <button id="voq-wyoming-checklist" type="button">live checklist</button>
     </section>
     <pre id="voq-wyoming-diagnostics" aria-live="polite" hidden></pre>
     <main id="voq-wyoming-transcript" aria-live="polite"></main>
@@ -69,6 +70,7 @@
     const initConfigBtn = document.getElementById('voq-wyoming-init-config');
     const validateBtn = document.getElementById('voq-wyoming-validate');
     const startBtn = document.getElementById('voq-wyoming-start');
+    const checklistBtn = document.getElementById('voq-wyoming-checklist');
 
     function setStatus(text) { statusEl.textContent = text; }
     function showDiagnostics(payload) {
@@ -109,6 +111,15 @@
     async function startRuntime() {
       const data = await wyomingStatusAction({ action: 'start' });
       showDiagnostics({ client: client.snapshot(), start: data });
+      return data;
+    }
+    async function runLiveChecklist({ tcpDescribe = false } = {}) {
+      const data = await wyomingStatusAction({
+        action: 'checklist',
+        interface_id: interfaceSelect.value || interfaceId,
+        tcp_describe: !!tcpDescribe,
+      });
+      showDiagnostics({ client: client.snapshot(), checklist: data });
       return data;
     }
     function addBubble(role, text) {
@@ -160,6 +171,7 @@
     window.voqualizerWyomingValidate = validateRuntimeConfig;
     window.voqualizerWyomingInitConfig = initRuntimeConfig;
     window.voqualizerWyomingStart = startRuntime;
+    window.voqualizerWyomingChecklist = runLiveChecklist;
     interfaceSelect.addEventListener('change', () => {
       localStorage.setItem('a0_voqualizer_wyoming_interface', interfaceSelect.value);
       location.href = `${location.pathname}?interface=${encodeURIComponent(interfaceSelect.value)}`;
@@ -273,6 +285,12 @@
         const data = await startRuntime();
         setStatus(data?.started ? 'runtime started' : `runtime not started: ${data?.message || data?.validation?.errors?.join('; ') || 'unknown'}`);
       } catch (err) { setStatus(`start failed: ${err?.message || err}`); }
+    });
+    checklistBtn.addEventListener('click', async () => {
+      try {
+        const data = await runLiveChecklist({ tcpDescribe: false });
+        setStatus(data?.ok ? 'live checklist ok' : 'live checklist has failures');
+      } catch (err) { setStatus(`checklist failed: ${err?.message || err}`); }
     });
     micBtn.addEventListener('click', async () => {
       micBtn.disabled = true;

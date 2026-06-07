@@ -144,3 +144,21 @@ The same checklist is available through the admin endpoint:
 ```json
 {"action":"checklist","interface_id":"hero","tcp_describe":false}
 ```
+
+
+## Browser live checklist helpers
+
+The standalone Wyoming page exposes:
+
+```js
+await window.voqualizerWyomingChecklist({ tcpDescribe: false })
+```
+
+The DOM main UI extension exposes:
+
+```js
+await window.voqualizerWyomingDomChecklist({ tcpDescribe: false })
+```
+
+Use `tcpDescribe: true` only after the Wyoming runtime has started and the TCP
+interface is expected to be listening.

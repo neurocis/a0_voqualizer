@@ -103,3 +103,15 @@ def test_new_page_exposes_setup_init_validate_start_controls():
         'w41-setup-2026-06-06-1',
     ):
         assert marker in src, marker
+
+
+def test_new_page_exposes_live_checklist_controls():
+    src = NEW.read_text()
+    for marker in (
+        'id="voq-wyoming-checklist"',
+        "action: 'checklist'",
+        'window.voqualizerWyomingChecklist',
+        'runLiveChecklist',
+        'w47-checklist-2026-06-06-1',
+    ):
+        assert marker in src, marker

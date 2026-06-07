@@ -97,3 +97,15 @@ def test_dom_extension_exposes_validate_and_start_diagnostics():
         'w40-dom-status-2026-06-06-1',
     ):
         assert marker in src, marker
+
+
+def test_dom_extension_exposes_live_checklist_helper():
+    src = DOM.read_text()
+    for marker in (
+        'window.voqualizerWyomingDomChecklist',
+        "action: 'checklist'",
+        'runDomLiveChecklist',
+        'voqualizerWyomingDomLastChecklist',
+        'w47-checklist-2026-06-06-1',
+    ):
+        assert marker in src, marker

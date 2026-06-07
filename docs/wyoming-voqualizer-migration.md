@@ -696,3 +696,13 @@ Implemented:
 - `tools/wyoming_live_checklist.py` now delegates to the shared helper;
 - `api/wyoming_status.py` supports `action=checklist` with optional `interface_id`, `tcp_describe`, and `timeout`;
 - setup docs document the admin checklist payload.
+
+
+### W47 browser checklist diagnostics
+
+Implemented:
+
+- standalone Wyoming page includes a live-checklist setup button;
+- standalone debug surface exposes `window.voqualizerWyomingChecklist({tcpDescribe})`;
+- DOM main UI extension exposes `window.voqualizerWyomingDomChecklist({tcpDescribe})` and records the last checklist in debug output;
+- both use the W46 admin `action=checklist` instead of duplicating validation logic in browser JavaScript.
