@@ -659,3 +659,12 @@ Example:
 python3 tools/wyoming_init_config.py --ctxid REAL_CTXID --interface hero --bind-host 127.0.0.1 --bind-port 10701
 python3 tools/wyoming_smoke.py --config config/wyoming_interfaces.json --interface hero --tcp-describe
 ```
+
+
+### W43 setup guide and project checkpoint
+
+Implemented:
+
+- `docs/wyoming-setup.md` documents CLI setup, admin validation/start actions, TCP smoke diagnostics, browser/DOM debug globals, and external Wyoming client entry points;
+- project checkpoint files updated under `/a0/usr/projects/a0-voqualizer/`;
+- documentation preserves the 1:1 interface → ctxID rule and legacy-reference-only policy.
