@@ -7,6 +7,7 @@ from usr.plugins.a0_voqualizer.helpers.wyoming_live_providers import live_provid
 from usr.plugins.a0_voqualizer.helpers.wyoming_smoke_diagnostics import smoke_report  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_config_init import init_wyoming_config  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_live_checklist import run_live_checklist  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.wyoming_readiness import readiness_snapshot  # noqa: E402
 
 
 def _attach_live_provider_status(status: dict) -> dict:
@@ -66,8 +67,22 @@ class WyomingStatus(ApiHandler):
             tcp = bool((input or {}).get("tcp_describe") or False)
             timeout = float((input or {}).get("timeout") or 3.0)
             return await run_live_checklist(config_path, interface_id=interface_id, tcp_describe=tcp, timeout=timeout)
+        if action == "readiness":
+            config_path = (input or {}).get("config_path") or hooks.wyoming_config_path()
+            interface_id = str((input or {}).get("interface_id") or "")
+            tcp = bool((input or {}).get("tcp_describe") or False)
+            timeout = float((input or {}).get("timeout") or 3.0)
+            return await readiness_snapshot(
+                config_path=config_path,
+                interface_id=interface_id,
+                tcp_describe=tcp,
+                timeout=timeout,
+                runtime_status_provider=hooks.wyoming_runtime_status,
+                validate_provider=hooks.validate_wyoming_config,
+                live_provider_status=live_provider_status,
+            )
         return {
             "error": "unsupported_action",
             "message": f"Unsupported Wyoming status action: {action}",
-            "supported_actions": ["status", "bootstrap", "validate", "init_config", "start", "stop", "smoke", "checklist"],
+            "supported_actions": ["status", "bootstrap", "validate", "init_config", "start", "stop", "smoke", "checklist", "readiness"],
         }

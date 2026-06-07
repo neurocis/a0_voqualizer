@@ -124,6 +124,15 @@
       showDiagnostics({ client: client.snapshot(), checklist: data });
       return data;
     }
+    async function runReadinessSnapshot({ tcpDescribe = false } = {}) {
+      const data = await wyomingStatusAction({
+        action: 'readiness',
+        interface_id: interfaceSelect.value || interfaceId,
+        tcp_describe: !!tcpDescribe,
+      });
+      showDiagnostics({ client: client.snapshot(), readiness: data });
+      return data;
+    }
     function addBubble(role, text) {
       const div = document.createElement('div');
       div.className = `voq-bubble ${role}`;
@@ -174,6 +183,7 @@
     window.voqualizerWyomingInitConfig = initRuntimeConfig;
     window.voqualizerWyomingStart = startRuntime;
     window.voqualizerWyomingChecklist = runLiveChecklist;
+    window.voqualizerWyomingReadiness = runReadinessSnapshot;
     interfaceSelect.addEventListener('change', () => {
       localStorage.setItem('a0_voqualizer_wyoming_interface', interfaceSelect.value);
       location.href = `${location.pathname}?interface=${encodeURIComponent(interfaceSelect.value)}`;
@@ -290,8 +300,8 @@
     });
     async function handleChecklistClick() {
       try {
-        const data = await runLiveChecklist({ tcpDescribe: false });
-        setStatus(data?.ok ? 'live checklist ok' : 'live checklist has failures');
+        const data = await runReadinessSnapshot({ tcpDescribe: false });
+        setStatus(data?.ready_for_browser ? 'ready for browser' : (data?.ok ? 'readiness ok; runtime may not be started' : 'readiness has blockers'));
       } catch (err) { setStatus(`checklist failed: ${err?.message || err}`); }
     }
     checklistBtn.addEventListener('click', handleChecklistClick);

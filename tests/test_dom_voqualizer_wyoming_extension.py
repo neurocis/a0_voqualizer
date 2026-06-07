@@ -106,7 +106,7 @@ def test_dom_extension_exposes_live_checklist_helper():
         "action: 'checklist'",
         'runDomLiveChecklist',
         'voqualizerWyomingDomLastChecklist',
-        'w48-visible-checklist-2026-06-06-1',
+        'w49-readiness-2026-06-06-1',
     ):
         assert marker in src, marker
 
@@ -119,6 +119,18 @@ def test_dom_extension_has_visible_checklist_button():
         'async runChecklist()',
         'async _checklistDiagnostics',
         'lastChecklist',
-        'w48-visible-checklist-2026-06-06-1',
+        'w49-readiness-2026-06-06-1',
+    ):
+        assert marker in src, marker
+
+
+def test_dom_extension_exposes_readiness_snapshot_helper():
+    src = NEW.read_text()
+    for marker in (
+        "action: 'readiness'",
+        'async _readinessSnapshot',
+        'window.voqualizerWyomingDomReadiness',
+        'lastReadiness',
+        'w49-readiness-2026-06-06-1',
     ):
         assert marker in src, marker

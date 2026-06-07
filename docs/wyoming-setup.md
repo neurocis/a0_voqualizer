@@ -167,3 +167,24 @@ interface is expected to be listening.
 Both the standalone Wyoming page and DOM main UI extension include visible
 checklist buttons. They call the same admin `action=checklist` path as the CLI
 and debug globals.
+
+
+## Consolidated readiness snapshot
+
+For a single browser/admin-friendly snapshot, call:
+
+```json
+{"action":"readiness","interface_id":"hero","tcp_describe":false}
+```
+
+Standalone debug helper:
+
+```js
+await window.voqualizerWyomingReadiness({ tcpDescribe: false })
+```
+
+DOM debug helper:
+
+```js
+await window.voqualizerWyomingDomReadiness()
+```

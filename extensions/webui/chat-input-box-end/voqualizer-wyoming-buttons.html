@@ -168,6 +168,12 @@
         window.voqualizerWyomingDomLastChecklist = data;
         return { client: this.client ? this.client.snapshot() : null, checklist: data };
       },
+      async _readinessSnapshot({ tcpDescribe = false } = {}) {
+        const data = await this._wyomingStatusAction({ action: 'readiness', interface_id: this.interfaceId || 'default', tcp_describe: !!tcpDescribe });
+        this.lastReadiness = data;
+        window.voqualizerWyomingDomLastReadiness = data;
+        return { client: this.client ? this.client.snapshot() : null, readiness: data };
+      },
       async _startRuntime() {
         const data = await this._wyomingStatusAction({ action: 'start' });
         this.lastStartStatus = data;
@@ -175,8 +181,8 @@
         return { client: this.client ? this.client.snapshot() : null, start: data };
       },
       async runChecklist() {
-        const result = await this._checklistDiagnostics({ tcpDescribe: false });
-        this.statusText = result?.checklist?.ok ? 'wyoming: checklist ok' : 'wyoming: checklist has failures';
+        const result = await this._readinessSnapshot({ tcpDescribe: false });
+        this.statusText = result?.readiness?.ready_for_browser ? 'wyoming: ready' : (result?.readiness?.ok ? 'wyoming: readiness ok' : 'wyoming: readiness blockers');
         return result;
       },
       async toggleMic() {

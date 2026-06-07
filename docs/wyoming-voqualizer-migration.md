@@ -715,3 +715,12 @@ Implemented:
 - standalone Wyoming page now has an always-visible header checklist button in addition to setup-panel diagnostics;
 - DOM main UI Wyoming extension now has a visible checklist button;
 - both controls call the W46 shared admin checklist path and retain debug globals.
+
+
+### W49 readiness snapshot
+
+Implemented:
+
+- shared `helpers/wyoming_readiness.py` combines runtime status, validation, checklist, TCP probe status, and live provider status;
+- admin `wyoming_status` supports `action=readiness`;
+- standalone and DOM Wyoming browser surfaces expose readiness debug helpers and use readiness for visible checklist status.
