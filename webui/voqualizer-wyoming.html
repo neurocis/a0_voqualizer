@@ -32,6 +32,7 @@
       <span class="voq-brand">Voqualizer</span>
       <select id="voq-wyoming-interface" aria-label="Wyoming interface" title="Wyoming interface"></select>
       <button id="voq-wyoming-smoke" type="button" aria-label="Run Wyoming smoke diagnostics" title="Run Wyoming smoke diagnostics">smoke</button>
+      <button id="voq-wyoming-checklist-main" type="button" aria-label="Run Wyoming live checklist" title="Run Wyoming live checklist">checklist</button>
       <span id="voq-wyoming-status">disconnected</span>
     </header>
     <section id="voq-wyoming-setup" aria-label="Wyoming setup" hidden>
@@ -63,6 +64,7 @@
     const micBtn = document.getElementById('voq-wyoming-mic');
     const ttsBtn = document.getElementById('voq-wyoming-tts');
     const smokeBtn = document.getElementById('voq-wyoming-smoke');
+    const checklistMainBtn = document.getElementById('voq-wyoming-checklist-main');
     const diagnosticsEl = document.getElementById('voq-wyoming-diagnostics');
     const setupEl = document.getElementById('voq-wyoming-setup');
     const ctxidEl = document.getElementById('voq-wyoming-ctxid');
@@ -286,12 +288,14 @@
         setStatus(data?.started ? 'runtime started' : `runtime not started: ${data?.message || data?.validation?.errors?.join('; ') || 'unknown'}`);
       } catch (err) { setStatus(`start failed: ${err?.message || err}`); }
     });
-    checklistBtn.addEventListener('click', async () => {
+    async function handleChecklistClick() {
       try {
         const data = await runLiveChecklist({ tcpDescribe: false });
         setStatus(data?.ok ? 'live checklist ok' : 'live checklist has failures');
       } catch (err) { setStatus(`checklist failed: ${err?.message || err}`); }
-    });
+    }
+    checklistBtn.addEventListener('click', handleChecklistClick);
+    checklistMainBtn.addEventListener('click', handleChecklistClick);
     micBtn.addEventListener('click', async () => {
       micBtn.disabled = true;
       try {

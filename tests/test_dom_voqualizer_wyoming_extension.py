@@ -106,6 +106,19 @@ def test_dom_extension_exposes_live_checklist_helper():
         "action: 'checklist'",
         'runDomLiveChecklist',
         'voqualizerWyomingDomLastChecklist',
-        'w47-checklist-2026-06-06-1',
+        'w48-visible-checklist-2026-06-06-1',
+    ):
+        assert marker in src, marker
+
+
+def test_dom_extension_has_visible_checklist_button():
+    src = NEW.read_text()
+    for marker in (
+        'voqualizer-wyoming-checklist-button',
+        '@click="runChecklist()"',
+        'async runChecklist()',
+        'async _checklistDiagnostics',
+        'lastChecklist',
+        'w48-visible-checklist-2026-06-06-1',
     ):
         assert marker in src, marker

@@ -162,3 +162,8 @@ await window.voqualizerWyomingDomChecklist({ tcpDescribe: false })
 
 Use `tcpDescribe: true` only after the Wyoming runtime has started and the TCP
 interface is expected to be listening.
+
+
+Both the standalone Wyoming page and DOM main UI extension include visible
+checklist buttons. They call the same admin `action=checklist` path as the CLI
+and debug globals.

@@ -112,6 +112,14 @@ def test_new_page_exposes_live_checklist_controls():
         "action: 'checklist'",
         'window.voqualizerWyomingChecklist',
         'runLiveChecklist',
-        'w47-checklist-2026-06-06-1',
+        'w48-visible-checklist-2026-06-06-1',
     ):
         assert marker in src, marker
+
+
+def test_new_page_has_always_visible_checklist_button():
+    src = NEW.read_text()
+    assert 'id="voq-wyoming-checklist-main"' in src
+    assert 'handleChecklistClick' in src
+    assert 'checklistMainBtn.addEventListener' in src
+    assert 'w48-visible-checklist-2026-06-06-1' in src

@@ -706,3 +706,12 @@ Implemented:
 - standalone debug surface exposes `window.voqualizerWyomingChecklist({tcpDescribe})`;
 - DOM main UI extension exposes `window.voqualizerWyomingDomChecklist({tcpDescribe})` and records the last checklist in debug output;
 - both use the W46 admin `action=checklist` instead of duplicating validation logic in browser JavaScript.
+
+
+### W48 visible checklist controls
+
+Implemented:
+
+- standalone Wyoming page now has an always-visible header checklist button in addition to setup-panel diagnostics;
+- DOM main UI Wyoming extension now has a visible checklist button;
+- both controls call the W46 shared admin checklist path and retain debug globals.
