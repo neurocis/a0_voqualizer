@@ -75,6 +75,27 @@
                     </div>
                 </div>
 
+                <div class="section-title">Wyoming DOM integration</div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">DOM main UI ASR/TTS integration</div>
+                        <div class="field-description">
+                            Enables the Wyoming ASR/TTS buttons in the main chat input row. Disabling this only stops
+                            the DOM integration; the standalone Voqualizer page, Wyoming TCP runtime, providers, and
+                            legacy reference assets remain available.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <label class="toggle">
+                            <input type="checkbox"
+                                x-init="config.wyoming = config.wyoming || {}; config.wyoming.dom_integration = config.wyoming.dom_integration || { enabled: true }"
+                                x-model="config.wyoming.dom_integration.enabled" />
+                            <span class="toggler"></span>
+                        </label>
+                    </div>
+                </div>
+
                 <div class="section-title">Default providers</div>
 
                 <div class="field">

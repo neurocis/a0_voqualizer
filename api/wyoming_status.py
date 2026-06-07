@@ -8,6 +8,10 @@ from usr.plugins.a0_voqualizer.helpers.wyoming_smoke_diagnostics import smoke_re
 from usr.plugins.a0_voqualizer.helpers.wyoming_config_init import init_wyoming_config  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_live_checklist import run_live_checklist  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_readiness import readiness_snapshot  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.wyoming_dom_settings import (  # noqa: E402
+    dom_integration_status,
+    set_dom_integration_enabled,
+)
 
 
 def _attach_live_provider_status(status: dict) -> dict:
@@ -81,8 +85,13 @@ class WyomingStatus(ApiHandler):
                 validate_provider=hooks.validate_wyoming_config,
                 live_provider_status=live_provider_status,
             )
+        if action == "dom_integration":
+            payload = input or {}
+            if "enabled" in payload:
+                return set_dom_integration_enabled(bool(payload.get("enabled")))
+            return dom_integration_status()
         return {
             "error": "unsupported_action",
             "message": f"Unsupported Wyoming status action: {action}",
-            "supported_actions": ["status", "bootstrap", "validate", "init_config", "start", "stop", "smoke", "checklist", "readiness"],
+            "supported_actions": ["status", "bootstrap", "validate", "init_config", "start", "stop", "smoke", "checklist", "readiness", "dom_integration"],
         }

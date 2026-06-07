@@ -206,3 +206,29 @@ python3 tools/wyoming_live_smoke_capture.py --config config/wyoming_interfaces.j
 
 The CLI cannot inspect the framework's in-memory runtime directly, so compare it
 with admin `{"action":"readiness"}` for authoritative runtime-started state.
+
+
+## DOM-only ASR/TTS integration toggle (side quest)
+
+Voqualizer setup includes a toggle for the main UI DOM ASR/TTS integration only:
+
+```yaml
+wyoming:
+  dom_integration:
+    enabled: true
+```
+
+When disabled, the DOM main UI Wyoming buttons do not connect or capture/play
+audio. This does **not** disable the standalone Wyoming page, the Wyoming TCP
+runtime, provider runtime, admin diagnostics, or retained legacy reference
+assets.
+
+Admin probe / set:
+
+```json
+{"action":"dom_integration"}
+{"action":"dom_integration","enabled":false}
+```
+
+The Settings panel (`webui/config.html`) exposes a "DOM main UI ASR/TTS
+integration" checkbox under the "Wyoming DOM integration" section.

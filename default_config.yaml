@@ -95,3 +95,12 @@ behavior:
   auto_spawn_context: true
   # Sentence-boundary chunking of LLM token deltas before TTS synthesis
   sentence_chunking: true
+
+# --- Wyoming rewrite (W11+) ---
+wyoming:
+  # DOM main UI ASR/TTS integration toggle (DOM-only).
+  # Disabling this only stops the main chat input ASR/TTS buttons from
+  # connecting; standalone Wyoming page, TCP runtime, providers, and legacy
+  # reference assets are unaffected.
+  dom_integration:
+    enabled: true

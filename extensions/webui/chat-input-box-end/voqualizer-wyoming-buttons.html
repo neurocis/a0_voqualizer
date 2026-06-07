@@ -55,7 +55,7 @@
 </div>
 
 <script type="module">
-  import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w40-dom-status-2026-06-06-1';
+  import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=side-dom-toggle-2026-06-07-1';
 
   function _resolveInterfaceId(rootEl) {
     const attr = rootEl?.getAttribute?.('data-wyoming-interface');
@@ -81,6 +81,19 @@
         if (this._initialized) return;
         this._initialized = true;
         const interfaceId = _resolveInterfaceId(this.$root);
+        // DOM-only toggle check (side quest). Disables only the DOM ASR/TTS
+        // integration; standalone page, TCP runtime, and providers are unaffected.
+        try {
+          const domStatus = await this._fetchDomIntegrationStatus();
+          this.lastDomIntegrationStatus = domStatus;
+          window.voqualizerWyomingDomIntegrationStatus = domStatus;
+          if (domStatus && domStatus.enabled === false) {
+            this.statusText = 'wyoming: DOM ASR/TTS disabled';
+            this.$root?.setAttribute?.('data-wyoming-dom-disabled', 'true');
+            this.$root && (this.$root.style.display = 'none');
+            return;
+          }
+        } catch (_) { /* fall through and try to connect anyway */ }
         try {
           this.interfaceId = interfaceId;
           this.client = createWyomingWsClient({ interfaceId, debug: false });
@@ -93,6 +106,18 @@
         } catch (err) {
           this.statusText = `wyoming: connect failed (${err?.message || err})`;
           try { await this._validateRuntimeConfig(); } catch (_) {}
+        }
+      },
+      async _fetchDomIntegrationStatus() {
+        try {
+          const res = await fetch('/api/plugins/a0_voqualizer/wyoming_status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'dom_integration' }),
+          });
+          return await res.json();
+        } catch (err) {
+          return { ok: false, enabled: true, error: String(err?.message || err), fallback: 'enabled' };
         }
       },
       _wireEvents() {

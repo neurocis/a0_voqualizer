@@ -742,3 +742,15 @@ Implemented:
 - `tools/wyoming_live_smoke_capture.py` captures validation, readiness, optional smoke, and optional TCP describe diagnostics in one JSON bundle;
 - the tool is browser/auth independent and explicitly reports that framework runtime state must be confirmed via admin `action=readiness`;
 - added deterministic tests covering placeholder detection and CLI output.
+
+
+### Side quest: DOM-only ASR/TTS integration toggle
+
+Implemented:
+
+- `default_config.yaml` adds `wyoming.dom_integration.enabled: true`;
+- `helpers/wyoming_dom_settings.py` resolves the toggle from `config.json` then `default_config.yaml` with a safe `True` fallback;
+- admin `wyoming_status` supports `action="dom_integration"` for read and `{"action":"dom_integration","enabled":false}` for write;
+- Settings panel (`webui/config.html`) exposes a "Wyoming DOM integration" section with an x-model bound checkbox;
+- DOM main UI Wyoming extension (`extensions/webui/chat-input-box-end/voqualizer-wyoming-buttons.html`) checks the toggle in `init()` and hides itself + reports `wyoming: DOM ASR/TTS disabled` when off;
+- standalone Wyoming page, Wyoming TCP runtime, providers, admin diagnostics, and legacy reference assets remain unaffected.
