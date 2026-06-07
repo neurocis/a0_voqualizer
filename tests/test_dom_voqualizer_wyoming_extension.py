@@ -81,3 +81,19 @@ def test_dom_extension_exposes_smoke_diagnostics():
     assert '/api/plugins/a0_voqualizer/wyoming_status' in src
     assert 'lastSmokeDiagnostics' in src
     assert 'w36-smoke-dom-2026-06-06-1' in src
+
+
+def test_dom_extension_exposes_validate_and_start_diagnostics():
+    src = NEW.read_text()
+    for marker in (
+        'window.voqualizerWyomingDomValidate',
+        'window.voqualizerWyomingDomStart',
+        'async _validateRuntimeConfig()',
+        'async _startRuntime()',
+        "action: 'validate'",
+        "action: 'start'",
+        'lastValidation',
+        'lastStartStatus',
+        'w40-dom-status-2026-06-06-1',
+    ):
+        assert marker in src, marker

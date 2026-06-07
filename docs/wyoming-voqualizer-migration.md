@@ -622,3 +622,13 @@ Implemented:
 - existing config files are preserved unless `overwrite=true` is supplied;
 - `api/wyoming_status.py` supports `action=init_config` for admin/setup flows;
 - the initializer writes one enabled Wyoming interface bound 1:1 to the provided Agent Zero ctxID.
+
+
+### W40 DOM setup/status diagnostics
+
+Implemented:
+
+- DOM main-UI Wyoming extension now exposes `window.voqualizerWyomingDomValidate()` and `window.voqualizerWyomingDomStart()`;
+- connect failures trigger validation so missing config/placeholder ctxID errors can be copied from the browser console;
+- DOM debug snapshot now includes last smoke and validation diagnostics;
+- DOM client cache-bust updated for setup/status diagnostics.
