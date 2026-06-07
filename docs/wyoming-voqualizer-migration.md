@@ -677,3 +677,12 @@ Implemented:
 - README now advertises the breaking Wyoming rewrite status near the top;
 - README points operators to `docs/wyoming-setup.md`, CLI config initializer, smoke diagnostics, admin endpoint, browser bridge, standalone page, and DOM extension;
 - README explicitly keeps the legacy custom websocket assets as reference-only while the Wyoming protocol is authoritative.
+
+
+### W45 live checklist runner
+
+Implemented:
+
+- `tools/wyoming_live_checklist.py` summarizes local live-validation steps as JSON;
+- checks config load, enabled interfaces, placeholder ctxIDs, optional TCP `describe/info`, and provider status availability;
+- setup guide now documents the checklist before/after runtime start.

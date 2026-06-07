@@ -119,3 +119,22 @@ External devices should connect to the configured TCP host/port, for example:
 ```
 
 Use Wyoming `describe` first and expect an `info` response.
+
+
+## 8. Live checklist runner
+
+After creating config, run the checklist without TCP first:
+
+```bash
+python3 tools/wyoming_live_checklist.py --config config/wyoming_interfaces.json --interface hero
+```
+
+After starting the runtime, include TCP describe:
+
+```bash
+python3 tools/wyoming_live_checklist.py --config config/wyoming_interfaces.json --interface hero --tcp-describe
+```
+
+The checklist reports per-step JSON for config load, enabled interface presence,
+real ctxID validation, TCP `describe/info`, provider status availability, and
+next recommended actions.

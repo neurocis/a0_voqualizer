@@ -34,3 +34,10 @@ def test_setup_doc_avoids_retired_custom_ws_event_names():
     src = DOC.read_text()
     for forbidden in ('voqualizer_init', 'voqualizer_user_text', 'voqualizer_audio_chunk', 'voqualizer_tts_chunk', 'ack_fallback'):
         assert forbidden not in src, forbidden
+
+
+def test_setup_doc_mentions_live_checklist_runner():
+    src = DOC.read_text()
+    assert 'tools/wyoming_live_checklist.py' in src
+    assert '--tcp-describe' in src
+    assert 'real ctxID validation' in src
