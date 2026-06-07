@@ -9,6 +9,38 @@ to the client. It supports barge-in, codec negotiation, session resume,
 bounded-queue backpressure, per-session bearer-token authorization, browser
 settings/tester UIs, and portable mobile/VoIP reference clients.
 
+
+## Wyoming rewrite status
+
+`a0_voqualizer` is currently undergoing a breaking Wyoming-protocol migration.
+The new authoritative architecture exposes one or more Wyoming-compatible TCP
+interfaces, with each enabled interface mapped 1:1 to exactly one fixed Agent
+Zero ctxID. Browser and DOM main-UI clients connect through the Wyoming-over-
+Socket.IO bridge as secondary Wyoming clients.
+
+The legacy custom `voqualizer_*` WebSocket API, old standalone UI, and old DOM
+extension assets remain in-tree for reference while feature parity is rebuilt.
+They are not the target compatibility protocol for the rewrite.
+
+Current Wyoming setup entry points:
+
+- Setup guide: `docs/wyoming-setup.md`
+- Migration log: `docs/wyoming-voqualizer-migration.md`
+- Config initializer: `tools/wyoming_init_config.py`
+- Smoke diagnostics: `tools/wyoming_smoke.py`
+- Admin endpoint: `/api/plugins/a0_voqualizer/wyoming_status`
+- Browser Socket.IO handler: `plugins/a0_voqualizer/ws_wyoming`
+- Standalone Wyoming page: `webui/voqualizer-wyoming.html`
+- DOM Wyoming extension: `extensions/webui/chat-input-box-end/voqualizer-wyoming-buttons.html`
+
+Minimal setup:
+
+```bash
+cd /a0/usr/plugins/a0_voqualizer
+python3 tools/wyoming_init_config.py --ctxid REAL_AGENT_ZERO_CTXID --interface hero --bind-host 127.0.0.1 --bind-port 10701
+python3 tools/wyoming_smoke.py --config config/wyoming_interfaces.json --interface hero --tcp-describe
+```
+
 ## Current status
 
 M1–M8.4 functionality is implemented, and v0.1.0 release-candidate packaging is in place:

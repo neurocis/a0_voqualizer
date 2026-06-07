@@ -668,3 +668,12 @@ Implemented:
 - `docs/wyoming-setup.md` documents CLI setup, admin validation/start actions, TCP smoke diagnostics, browser/DOM debug globals, and external Wyoming client entry points;
 - project checkpoint files updated under `/a0/usr/projects/a0-voqualizer/`;
 - documentation preserves the 1:1 interface → ctxID rule and legacy-reference-only policy.
+
+
+### W44 README Wyoming rewrite notice
+
+Implemented:
+
+- README now advertises the breaking Wyoming rewrite status near the top;
+- README points operators to `docs/wyoming-setup.md`, CLI config initializer, smoke diagnostics, admin endpoint, browser bridge, standalone page, and DOM extension;
+- README explicitly keeps the legacy custom websocket assets as reference-only while the Wyoming protocol is authoritative.
