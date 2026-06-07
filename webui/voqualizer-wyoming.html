@@ -34,6 +34,13 @@
       <button id="voq-wyoming-smoke" type="button" aria-label="Run Wyoming smoke diagnostics" title="Run Wyoming smoke diagnostics">smoke</button>
       <span id="voq-wyoming-status">disconnected</span>
     </header>
+    <section id="voq-wyoming-setup" aria-label="Wyoming setup" hidden>
+      <input id="voq-wyoming-ctxid" type="text" placeholder="Agent Zero ctxID" autocomplete="off">
+      <input id="voq-wyoming-interface-id" type="text" placeholder="interface id" value="default" autocomplete="off">
+      <button id="voq-wyoming-init-config" type="button">create config</button>
+      <button id="voq-wyoming-validate" type="button">validate</button>
+      <button id="voq-wyoming-start" type="button">start runtime</button>
+    </section>
     <pre id="voq-wyoming-diagnostics" aria-live="polite" hidden></pre>
     <main id="voq-wyoming-transcript" aria-live="polite"></main>
     <footer class="voq-composer">
@@ -44,7 +51,7 @@
     </footer>
   </div>
   <script type="module">
-    import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w36-smoke-2026-06-06-1';
+    import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w41-setup-2026-06-06-1';
 
     const params = new URLSearchParams(location.search);
     const interfaceSelect = document.getElementById('voq-wyoming-interface');
@@ -56,21 +63,52 @@
     const ttsBtn = document.getElementById('voq-wyoming-tts');
     const smokeBtn = document.getElementById('voq-wyoming-smoke');
     const diagnosticsEl = document.getElementById('voq-wyoming-diagnostics');
+    const setupEl = document.getElementById('voq-wyoming-setup');
+    const ctxidEl = document.getElementById('voq-wyoming-ctxid');
+    const setupInterfaceEl = document.getElementById('voq-wyoming-interface-id');
+    const initConfigBtn = document.getElementById('voq-wyoming-init-config');
+    const validateBtn = document.getElementById('voq-wyoming-validate');
+    const startBtn = document.getElementById('voq-wyoming-start');
 
     function setStatus(text) { statusEl.textContent = text; }
     function showDiagnostics(payload) {
       diagnosticsEl.hidden = false;
       diagnosticsEl.textContent = JSON.stringify(payload, null, 2);
     }
-    async function runSmokeDiagnostics() {
-      const payload = { action: 'smoke', interface_id: interfaceSelect.value || interfaceId, tcp_describe: false };
+    async function wyomingStatusAction(payload) {
       const res = await fetch('/api/plugins/a0_voqualizer/wyoming_status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      return await res.json();
+    }
+    async function runSmokeDiagnostics() {
+      const payload = { action: 'smoke', interface_id: interfaceSelect.value || interfaceId, tcp_describe: false };
+      const data = await wyomingStatusAction(payload);
       showDiagnostics({ client: client.snapshot(), smoke: data });
+      return data;
+    }
+    async function validateRuntimeConfig() {
+      const data = await wyomingStatusAction({ action: 'validate' });
+      setupEl.hidden = !!data?.ok;
+      showDiagnostics({ client: client.snapshot(), validation: data });
+      return data;
+    }
+    async function initRuntimeConfig() {
+      const data = await wyomingStatusAction({
+        action: 'init_config',
+        ctxid: ctxidEl.value.trim(),
+        interface_id: setupInterfaceEl.value.trim() || 'default',
+        overwrite: false,
+      });
+      showDiagnostics({ client: client.snapshot(), init_config: data });
+      if (data?.ok) setupEl.hidden = true;
+      return data;
+    }
+    async function startRuntime() {
+      const data = await wyomingStatusAction({ action: 'start' });
+      showDiagnostics({ client: client.snapshot(), start: data });
       return data;
     }
     function addBubble(role, text) {
@@ -119,6 +157,9 @@
     let client = createWyomingWsClient({ interfaceId, debug: true });
     window.voqualizerWyomingDebug = () => ({ client: client.snapshot(), diagnostics: diagnosticsEl?.textContent || '' });
     window.voqualizerWyomingSmoke = runSmokeDiagnostics;
+    window.voqualizerWyomingValidate = validateRuntimeConfig;
+    window.voqualizerWyomingInitConfig = initRuntimeConfig;
+    window.voqualizerWyomingStart = startRuntime;
     interfaceSelect.addEventListener('change', () => {
       localStorage.setItem('a0_voqualizer_wyoming_interface', interfaceSelect.value);
       location.href = `${location.pathname}?interface=${encodeURIComponent(interfaceSelect.value)}`;
@@ -215,6 +256,24 @@
         setStatus(`smoke failed: ${err?.message || err}`);
       }
     });
+    validateBtn.addEventListener('click', async () => {
+      try {
+        const data = await validateRuntimeConfig();
+        setStatus(data?.ok ? 'config valid' : `config invalid: ${(data?.errors || [data?.error || 'unknown']).join('; ')}`);
+      } catch (err) { setStatus(`validate failed: ${err?.message || err}`); }
+    });
+    initConfigBtn.addEventListener('click', async () => {
+      try {
+        const data = await initRuntimeConfig();
+        setStatus(data?.ok ? 'config created' : `config init failed: ${data?.error || 'unknown'}`);
+      } catch (err) { setStatus(`config init failed: ${err?.message || err}`); }
+    });
+    startBtn.addEventListener('click', async () => {
+      try {
+        const data = await startRuntime();
+        setStatus(data?.started ? 'runtime started' : `runtime not started: ${data?.message || data?.validation?.errors?.join('; ') || 'unknown'}`);
+      } catch (err) { setStatus(`start failed: ${err?.message || err}`); }
+    });
     micBtn.addEventListener('click', async () => {
       micBtn.disabled = true;
       try {
@@ -247,6 +306,7 @@
       await client.connect();
     } catch (err) {
       setStatus(`connect failed: ${err?.message || err}`);
+      try { await validateRuntimeConfig(); } catch (_) { setupEl.hidden = false; }
     }
   </script>
 </body>

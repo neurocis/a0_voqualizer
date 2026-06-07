@@ -632,3 +632,13 @@ Implemented:
 - connect failures trigger validation so missing config/placeholder ctxID errors can be copied from the browser console;
 - DOM debug snapshot now includes last smoke and validation diagnostics;
 - DOM client cache-bust updated for setup/status diagnostics.
+
+
+### W41 standalone setup/status controls
+
+Implemented:
+
+- standalone Wyoming page exposes setup controls for ctxID/interface initialization;
+- setup calls `wyoming_status` actions `init_config`, `validate`, and `start`;
+- connect failures trigger validation display so placeholder/missing config errors are visible in-browser;
+- debug globals now include `window.voqualizerWyomingInitConfig()`, `window.voqualizerWyomingValidate()`, and `window.voqualizerWyomingStart()`.

@@ -84,3 +84,22 @@ def test_new_page_exposes_smoke_diagnostics():
     assert '/api/plugins/a0_voqualizer/wyoming_status' in src
     assert 'client.snapshot()' in src
     assert 'w36-smoke-2026-06-06-1' in src
+
+
+def test_new_page_exposes_setup_init_validate_start_controls():
+    src = NEW.read_text()
+    for marker in (
+        'id="voq-wyoming-setup"',
+        'id="voq-wyoming-ctxid"',
+        'id="voq-wyoming-init-config"',
+        'id="voq-wyoming-validate"',
+        'id="voq-wyoming-start"',
+        "action: 'init_config'",
+        "action: 'validate'",
+        "action: 'start'",
+        'window.voqualizerWyomingInitConfig',
+        'window.voqualizerWyomingValidate',
+        'window.voqualizerWyomingStart',
+        'w41-setup-2026-06-06-1',
+    ):
+        assert marker in src, marker
