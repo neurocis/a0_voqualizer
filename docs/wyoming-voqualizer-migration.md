@@ -686,3 +686,13 @@ Implemented:
 - `tools/wyoming_live_checklist.py` summarizes local live-validation steps as JSON;
 - checks config load, enabled interfaces, placeholder ctxIDs, optional TCP `describe/info`, and provider status availability;
 - setup guide now documents the checklist before/after runtime start.
+
+
+### W46 admin checklist action
+
+Implemented:
+
+- shared `helpers/wyoming_live_checklist.py` powers both CLI and admin diagnostics;
+- `tools/wyoming_live_checklist.py` now delegates to the shared helper;
+- `api/wyoming_status.py` supports `action=checklist` with optional `interface_id`, `tcp_describe`, and `timeout`;
+- setup docs document the admin checklist payload.

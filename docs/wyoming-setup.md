@@ -138,3 +138,9 @@ python3 tools/wyoming_live_checklist.py --config config/wyoming_interfaces.json 
 The checklist reports per-step JSON for config load, enabled interface presence,
 real ctxID validation, TCP `describe/info`, provider status availability, and
 next recommended actions.
+
+The same checklist is available through the admin endpoint:
+
+```json
+{"action":"checklist","interface_id":"hero","tcp_describe":false}
+```

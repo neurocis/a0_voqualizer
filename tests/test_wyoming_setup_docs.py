@@ -41,3 +41,9 @@ def test_setup_doc_mentions_live_checklist_runner():
     assert 'tools/wyoming_live_checklist.py' in src
     assert '--tcp-describe' in src
     assert 'real ctxID validation' in src
+
+
+def test_setup_doc_mentions_admin_checklist_action():
+    src = DOC.read_text()
+    assert '{"action":"checklist"}' in src
+    assert '"tcp_describe":false' in src
