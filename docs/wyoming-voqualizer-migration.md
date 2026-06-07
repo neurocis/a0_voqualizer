@@ -642,3 +642,20 @@ Implemented:
 - setup calls `wyoming_status` actions `init_config`, `validate`, and `start`;
 - connect failures trigger validation display so placeholder/missing config errors are visible in-browser;
 - debug globals now include `window.voqualizerWyomingInitConfig()`, `window.voqualizerWyomingValidate()`, and `window.voqualizerWyomingStart()`.
+
+
+### W42 CLI config initializer
+
+Implemented:
+
+- `tools/wyoming_init_config.py` provides a browser-independent setup path for external Wyoming clients/admins;
+- requires explicit `--ctxid` and writes one enabled Wyoming interface by default;
+- refuses placeholder ctxIDs and existing configs unless `--overwrite` is passed;
+- emits JSON reports with `ok`, `config_path`, interface id, ctxID, and bind endpoint.
+
+Example:
+
+```bash
+python3 tools/wyoming_init_config.py --ctxid REAL_CTXID --interface hero --bind-host 127.0.0.1 --bind-port 10701
+python3 tools/wyoming_smoke.py --config config/wyoming_interfaces.json --interface hero --tcp-describe
+```
