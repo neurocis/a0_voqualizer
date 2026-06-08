@@ -232,3 +232,28 @@ Admin probe / set:
 
 The Settings panel (`webui/config.html`) exposes a "DOM main UI ASR/TTS
 integration" checkbox under the "Wyoming DOM integration" section.
+
+
+## Live admin capture (W52)
+
+`tools/wyoming_live_admin_capture.py` talks to the running Agent Zero framework's
+`wyoming_status` admin endpoint over HTTP and bundles `status`, `dom_integration`,
+`validate`, `readiness`, `smoke`, and `checklist` action responses into a single
+JSON document. Unlike the W51 on-disk smoke capture, this reflects the actual
+live runtime state as the framework sees it.
+
+Examples:
+
+```bash
+# Anonymous probe (expect HTTP 302 -> /login per action):
+python3 tools/wyoming_live_admin_capture.py --host 127.0.0.1 --port 80
+
+# Authenticated probe using a browser session cookie + CSRF token:
+python3 tools/wyoming_live_admin_capture.py \
+  --host 127.0.0.1 --port 80 \
+  --cookie 'session=...' --csrf-token '...' \
+  --interface-id hero --tcp-describe
+```
+
+The output includes a `blockers` list and `next_actions` to guide remediation
+(framework unreachable, auth required, 500s, etc.).

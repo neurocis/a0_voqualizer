@@ -878,3 +878,16 @@ Repair:
 - defensive `voqualizerCleanupChatInputBoxEndLoading()` actively removes any
   remaining `.loading` div in that slot at module load, again after 250ms and
   1500ms, and through a short-lived MutationObserver that disconnects after 15s.
+
+
+### W52 live admin capture tool
+
+Implemented:
+
+- new `tools/wyoming_live_admin_capture.py`;
+- HTTP client for the live `wyoming_status` admin endpoint;
+- bundles `status`, `dom_integration`, `validate`, `readiness`, `smoke`, and `checklist`;
+- supports `--cookie` and `--csrf-token` for authenticated capture;
+- emits structured `blockers` and `next_actions` for triage;
+- `tests/test_wyoming_live_admin_capture_tool.py` covers connection failure, auth redirect, full-success bundling, and CLI exit codes;
+- docs updated in `docs/wyoming-setup.md`.
