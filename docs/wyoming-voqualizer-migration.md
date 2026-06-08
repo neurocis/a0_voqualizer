@@ -795,3 +795,22 @@ Follow-up after the DOM-only toggle landed:
 - Scope unchanged: standalone Voqualizer page, Wyoming TCP runtime, providers,
   and retained legacy reference files remain available; only the DOM main UI
   ASR/TTS surface is disabled when the toggle is off.
+
+
+### Side quest follow-up 2: restore native buttons and remove DOM artifact
+
+After the DOM-only toggle hid both Voqualizer DOM extensions:
+
+- A0's native mic/speaker icons did not return because the legacy extension's
+  CSS always hid `#microphone-button`, `#speaker-button`, etc., regardless of
+  toggle state.
+- An empty placeholder element remained below the chat input row because the
+  legacy host element was only set to `display:none` instead of being removed,
+  so its un-moved x-move-after host left a visible gap.
+
+Repair:
+
+- Native-button-hiding CSS is now gated on a `body.voqualizer-dom-active` class;
+  the class is only set when the DOM ASR/TTS integration is actually enabled.
+- When the toggle is OFF, both legacy and Wyoming host elements call
+  `$el.remove()` so no empty extension placeholder remains in the layout.

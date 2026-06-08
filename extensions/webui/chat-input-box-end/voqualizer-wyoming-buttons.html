@@ -89,8 +89,8 @@
           window.voqualizerWyomingDomIntegrationStatus = domStatus;
           if (domStatus && domStatus.enabled === false) {
             this.statusText = 'wyoming: DOM ASR/TTS disabled';
-            this.$root?.setAttribute?.('data-wyoming-dom-disabled', 'true');
-            this.$root && (this.$root.style.display = 'none');
+            // Remove the host element so no empty Wyoming row remains below the chat bar.
+            try { this.$root?.remove?.(); } catch (_) { if (this.$root) this.$root.style.display = 'none'; }
             return;
           }
         } catch (_) { /* fall through and try to connect anyway */ }

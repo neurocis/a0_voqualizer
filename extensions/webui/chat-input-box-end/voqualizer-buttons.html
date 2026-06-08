@@ -32,10 +32,14 @@
       const data = await res.json();
       window.voqualizerLegacyDomIntegrationStatus = data;
       if (data && data.enabled === false) {
-        $el.setAttribute('data-wyoming-dom-disabled', 'true');
-        $el.style.display = 'none';
+        // Toggle OFF: do NOT activate the CSS that hides A0 native mic/speaker buttons,
+        // and remove the legacy host element entirely so no empty placeholder remains
+        // below the chat input row.
+        try { $el.remove(); } catch (_) { $el.style.display = 'none'; }
         return; // do not initialize legacy buttons
       }
+      // Toggle ON: activate the gated CSS that hides A0 native mic/speaker buttons.
+      try { document.body.classList.add('voqualizer-dom-active'); } catch (_) {}
     } catch (e) { /* fall through and init normally */ }
     init();
   })()"
@@ -79,11 +83,11 @@
 <style>
   /* Hide A0's native speech/mic buttons and the superordinates speech toggle
      — Voqualizer replaces all speech controls */
-  #microphone-button,
-  #stop-speech,
-  #progress-bar-stop-speech,
-  .a0-sup-prompt-speech-anchor,
-  .a0-sup-prompt-speech-button {
+  body.voqualizer-dom-active #microphone-button,
+  body.voqualizer-dom-active #stop-speech,
+  body.voqualizer-dom-active #progress-bar-stop-speech,
+  body.voqualizer-dom-active .a0-sup-prompt-speech-anchor,
+  body.voqualizer-dom-active .a0-sup-prompt-speech-button {
     display: none !important;
   }
 
