@@ -862,3 +862,19 @@ Repair:
 - replaced invalid optional-chain assignments with guarded normal assignments;
 - added a regression test that extracts `<script type="module">` blocks from the
   DOM extension HTML and runs `node --check` against them.
+
+
+### Side quest follow-up 6: cleanup stray framework .loading div
+
+The persistent artifact below the chat input was a framework `div.loading`
+placeholder inside `x-extension#chat-input-box-end`, left behind by a failed
+or slow inline module load. Confirmed via console snapshot showing a
+`div.loading` with `display: block` as the last child of the extension slot.
+
+Repair:
+
+- targeted CSS hides any `div.loading` inside `x-extension#chat-input-box-end`
+  (narrow scope so unrelated UI loading indicators are unaffected);
+- defensive `voqualizerCleanupChatInputBoxEndLoading()` actively removes any
+  remaining `.loading` div in that slot at module load, again after 250ms and
+  1500ms, and through a short-lived MutationObserver that disconnects after 15s.

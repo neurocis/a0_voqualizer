@@ -50,7 +50,7 @@
   })()"
   x-move-after="#send-button"
   data-a0-voqualizer-buttons="1"
-  data-voqualizer-dom-toggle-guard="side-dom-toggle-2026-06-07-1"
+  data-voqualizer-dom-toggle-guard="side-dom-toggle-2026-06-07-3"
   class="voqualizer-buttons-row"
 >
   <button
@@ -121,6 +121,14 @@
   /* Safety net: collapse only Voqualizer-disabled roots. Do not hide/remove
      the parent x-component because moved nodes may resolve ancestors in the
      core chat input tree. */
+  x-extension[id="chat-input-box-end"] x-component > div.loading {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
   [data-a0-voqualizer-buttons][data-wyoming-dom-disabled="true"],
   .voqualizer-wyoming-buttons[data-wyoming-dom-disabled="true"] {
     display: none !important;
@@ -268,6 +276,33 @@
   } from '/plugins/a0_voqualizer/webui/conversation-mode.js';
 
   registerVoqualizerStore();
+
+  // Side quest: defensive cleanup of orphan framework .loading divs left in
+  // x-extension#chat-input-box-end when an inline module fails or a stale
+  // legacy custom-protocol child remains. Runs once at module load and again
+  // on a short delay to catch the slow framework retries.
+  function voqualizerCleanupChatInputBoxEndLoading() {
+    try {
+      const slot = document.querySelector('x-extension#chat-input-box-end');
+      if (!slot) return;
+      slot.querySelectorAll('div.loading').forEach((el) => {
+        try { el.remove(); } catch (_) { el.style.display = 'none'; }
+      });
+    } catch (_) { /* no-op */ }
+  }
+  voqualizerCleanupChatInputBoxEndLoading();
+  setTimeout(voqualizerCleanupChatInputBoxEndLoading, 250);
+  setTimeout(voqualizerCleanupChatInputBoxEndLoading, 1500);
+  // Observe future mutations briefly so the slot stays clean during slow extension retries.
+  try {
+    const slot = document.querySelector('x-extension#chat-input-box-end');
+    if (slot && !slot.__voqLoadingObserver) {
+      const obs = new MutationObserver(() => voqualizerCleanupChatInputBoxEndLoading());
+      obs.observe(slot, { childList: true, subtree: true });
+      slot.__voqLoadingObserver = obs;
+      setTimeout(() => { try { obs.disconnect(); slot.__voqLoadingObserver = null; } catch (_) {} }, 15000);
+    }
+  } catch (_) {}
 
   window.a0VoqualizerButtons = function () {
     return {

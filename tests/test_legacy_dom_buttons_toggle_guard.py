@@ -47,3 +47,10 @@ def test_legacy_dom_buttons_do_not_remove_core_x_component_ancestor():
     assert "closest('x-component')" not in src
     assert '$el.remove()' not in src
     assert '$el.hidden = true' in src
+
+
+def test_legacy_dom_extension_cleans_orphan_loading_div_in_chat_input_box_end():
+    src = LEGACY.read_text()
+    assert 'voqualizerCleanupChatInputBoxEndLoading' in src
+    assert "x-extension#chat-input-box-end" in src
+    assert "div.loading" in src
