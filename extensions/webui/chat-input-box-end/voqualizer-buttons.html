@@ -35,7 +35,7 @@
         // Toggle OFF: do NOT activate the CSS that hides A0 native mic/speaker buttons,
         // and remove the legacy host element entirely so no empty placeholder remains
         // below the chat input row.
-        try { $el.remove(); } catch (_) { $el.style.display = 'none'; }
+        try { ($el.closest('x-component') || $el).remove(); } catch (_) { $el.style.display = 'none'; }
         return; // do not initialize legacy buttons
       }
       // Toggle ON: activate the gated CSS that hides A0 native mic/speaker buttons.
@@ -109,6 +109,20 @@
   x-extension[id="chat-input-box-end"],
   [id="chat-input-box-end"] {
     display: contents;
+  }
+
+
+
+  /* Safety net: if a framework/cache race leaves a disabled component wrapper
+     in place, collapse it completely so it cannot create a row below the chat bar. */
+  x-extension[id="chat-input-box-end"] > x-component:has([data-wyoming-dom-disabled="true"]),
+  x-extension[id="chat-input-box-end"] [data-wyoming-dom-disabled="true"] {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
   }
 
   .voqualizer-button {

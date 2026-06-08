@@ -22,10 +22,11 @@ def test_legacy_dom_buttons_check_dom_integration_toggle_before_init():
         "action: 'dom_integration'",
         '/api/plugins/a0_voqualizer/wyoming_status',
         'voqualizerLegacyDomIntegrationStatus',
-        "$el.remove()",
+        "$el.closest('x-component')",
         'return; // do not initialize legacy buttons',
         "document.body.classList.add('voqualizer-dom-active')",
         "body.voqualizer-dom-active #microphone-button",
+        "x-component:has([data-wyoming-dom-disabled=\"true\"])",
     ):
         assert marker in src, marker
 

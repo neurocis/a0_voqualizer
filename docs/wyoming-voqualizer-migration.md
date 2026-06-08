@@ -814,3 +814,19 @@ Repair:
   the class is only set when the DOM ASR/TTS integration is actually enabled.
 - When the toggle is OFF, both legacy and Wyoming host elements call
   `$el.remove()` so no empty extension placeholder remains in the layout.
+
+
+### Side quest follow-up 3: remove extension wrapper artifact
+
+The remaining artifact below the prompt input came from the framework extension
+wrapper, not the visible Voqualizer button div. Plugin HTML is wrapped in an
+`x-component` inside the `x-extension` slot; removing only the inner div left the
+wrapper/style/script nodes behind, so the `chat-input-box-end` extension slot was
+still non-empty and could occupy layout.
+
+Repair:
+
+- disabled legacy and Wyoming DOM paths now remove the closest `x-component`
+  wrapper, falling back to the root element if needed;
+- added defensive CSS to collapse any disabled wrapper that survives a cache or
+  framework timing race.
