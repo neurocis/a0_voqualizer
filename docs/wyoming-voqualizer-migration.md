@@ -935,3 +935,13 @@ Corrected the migration target: `webui/voqualizer.html` is now the Wyoming web
 interface. The older custom-protocol page is retained only as
 `webui/voqualizer-legacy-reference.html`, and `voqualizer-wyoming.html` remains
 as a compatibility alias for earlier links.
+
+
+### W57 UI-preserving Wyoming protocol migration
+
+Corrected W56: the canonical `voqualizer.html` must preserve the polished
+standalone visual layout and controls. Restored the existing HTML/CSS/DOM shape
+from the legacy reference and moved the Wyoming migration into `voqualizer.js` as
+the primary transport. Existing send, context picker, mic/speaker controls,
+stream bubbles, word/TTS handling, and diagnostics remain in place while prompt
+submit/response/audio events route through the Wyoming web interface.

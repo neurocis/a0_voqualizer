@@ -1,411 +1,175 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
   <title>Voqualizer</title>
-  <link rel="stylesheet" href="/plugins/a0_voqualizer/webui/voqualizer.css?v=w18-wyoming-2026-06-05-1">
-  <style>
-    /* W18 — minimal additions for the Wyoming-based standalone page.
-       The bulk of the look-and-feel is reused from the legacy stylesheet kept
-       for reference. This file lives alongside webui/voqualizer.html and does
-       NOT replace it; the legacy standalone page is retained as a reference
-       implementation per the breaking-rewrite plan. */
-    #voq-wyoming-status {
-      font-size: 0.85rem;
-      opacity: 0.7;
-      padding: 4px 12px;
-    }
-    #voq-wyoming-transcript {
-      padding: 12px;
-      overflow-y: auto;
-      flex: 1;
-    }
-    .voq-bubble { padding: 8px 12px; border-radius: 8px; margin: 6px 0; }
-    .voq-bubble.user { background: rgba(80, 160, 255, 0.15); }
-    .voq-bubble.assistant { background: rgba(120, 200, 120, 0.15); }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+  <link rel="stylesheet" href="/plugins/a0_voqualizer/webui/voqualizer.css?v=w57-preserve-ui-wyoming-protocol-2026-06-08-1" />
+  <script type="module" src="/plugins/a0_voqualizer/webui/voqualizer.js?v=w57-preserve-ui-wyoming-protocol-2026-06-08-1"></script>
 </head>
 <body>
-  <div id="voq-wyoming-app" class="voqualizer-app">
-    <header class="voq-header">
-      <span class="voq-brand">Voqualizer</span>
-      <select id="voq-wyoming-interface" aria-label="Wyoming interface" title="Wyoming interface"></select>
-      <button id="voq-wyoming-smoke" type="button" aria-label="Run Wyoming smoke diagnostics" title="Run Wyoming smoke diagnostics">smoke</button>
-      <button id="voq-wyoming-checklist-main" type="button" aria-label="Run Wyoming live checklist" title="Run Wyoming live checklist">checklist</button>
-      <button id="voq-wyoming-capture" type="button" aria-label="Capture Wyoming diagnostics" title="Capture Wyoming diagnostics">capture</button>
-      <span id="voq-wyoming-status">disconnected</span>
+  <div class="voq-app" data-voqualizer-page="standalone">
+    <header class="voq-topbar" aria-label="Voqualizer top bar">
+      <select id="voq-context-select" class="voq-context-select" aria-label="Select Voqualizer context" hidden aria-hidden="true">
+        <option value="" selected>Context / Agent Name</option>
+      </select>
+      <div class="voq-brand-row" aria-hidden="true">
+        <img class="voq-brand-logo" src="/public/splash.jpg" alt="Agent Zero" />
+        <span id="voq-header-context-name" class="voq-brand-text" title="Voqualizer">Voqualizer</span>
+      </div>
+      <nav class="voq-topbar-actions" aria-label="Voqualizer page actions">
+        <button
+          type="button"
+          id="voq-fullscreen-button"
+          class="voq-icon-button voq-fullscreen-button"
+          aria-label="Toggle fullscreen"
+          title="Toggle fullscreen"
+          aria-pressed="false"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">fullscreen</span>
+          <span class="voq-text-fallback">fullscreen</span>
+        </button>
+        <div class="voq-context-menu-wrap">
+          <button
+            type="button"
+            id="voq-context-menu-button"
+            class="voq-icon-button voq-context-menu-button"
+            aria-label="Select Voqualizer context"
+            title="Select Voqualizer context"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-controls="voq-context-menu"
+          >
+            <span class="material-symbols-outlined voq-material" aria-hidden="true">menu</span>
+            <span class="voq-text-fallback">contexts</span>
+          </button>
+          <ul id="voq-context-menu" class="voq-context-menu" role="listbox" aria-label="Voqualizer contexts" hidden></ul>
+        </div>
+        <button
+          type="button"
+          id="voq-asr-debug-button"
+          class="voq-icon-button voq-asr-debug-button"
+          aria-label="Copy ASR debug state"
+          title="Copy ASR debug state"
+          hidden
+          aria-hidden="true"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">bug_report</span>
+          <span class="voq-text-fallback">copy asr debug</span>
+        </button>
+        <button
+          type="button"
+          id="voq-tts-debug-button"
+          class="voq-icon-button voq-tts-debug-button"
+          aria-label="Copy TTS debug state"
+          title="Copy TTS debug state"
+          hidden
+          aria-hidden="true"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">volume_up</span>
+          <span class="voq-text-fallback">copy tts debug</span>
+        </button>
+        <a
+          id="voq-logout-button"
+          class="voq-icon-button voq-logout-button"
+          href="/logout"
+          aria-label="Log out of Agent Zero"
+          title="Log out"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">logout</span>
+          <span class="voq-text-fallback">logout</span>
+        </a>
+      </nav>
     </header>
-    <section id="voq-wyoming-setup" aria-label="Wyoming setup" hidden>
-      <input id="voq-wyoming-ctxid" type="text" placeholder="Agent Zero ctxID" autocomplete="off">
-      <input id="voq-wyoming-interface-id" type="text" placeholder="interface id" value="default" autocomplete="off">
-      <button id="voq-wyoming-init-config" type="button">create config</button>
-      <button id="voq-wyoming-validate" type="button">validate</button>
-      <button id="voq-wyoming-start" type="button">start runtime</button>
-      <button id="voq-wyoming-checklist" type="button">live checklist</button>
-    </section>
-    <pre id="voq-wyoming-diagnostics" aria-live="polite" hidden></pre>
-    <main id="voq-wyoming-transcript" aria-live="polite"></main>
-    <footer class="voq-composer">
-      <button id="voq-wyoming-tts" type="button" aria-label="TTS">🔊</button>
-      <button id="voq-wyoming-mic" type="button" aria-label="Mic">🎤</button>
-      <input id="voq-wyoming-input" type="text" placeholder="Send message…" autocomplete="off">
-      <button id="voq-wyoming-send" type="button" aria-label="Send">➤</button>
+
+    <div id="voq-status" class="voq-status" role="status" aria-live="polite" aria-atomic="true">Ready</div>
+
+    <div class="voq-chat-wrap">
+      <main
+        id="voq-chat"
+        class="voq-chat"
+        role="log"
+        aria-label="Voqualizer chat transcript"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-atomic="false"
+        tabindex="0"
+      >
+        <section class="voq-empty-state" aria-label="Empty chat state">
+          <div class="voq-orb" aria-hidden="true">◌</div>
+          <h1>Voqualizer</h1>
+          <p>Speak or type to an A0 context. Minimal, dark, and focused.</p>
+        </section>
+      </main>
+      <button id="voq-jump-latest" class="voq-jump-latest" type="button" hidden>Jump to latest</button>
+    </div>
+
+    <footer class="voq-composer" aria-label="Voqualizer prompt composer">
+      <div class="voq-prompt-shell">
+        <textarea
+          id="voq-prompt-input"
+          class="voq-prompt-input"
+          rows="1"
+          placeholder="Type or speak…"
+          aria-label="Prompt input / text window"
+          aria-describedby="voq-status voq-input-help"
+          autocomplete="off"
+          spellcheck="true"
+        ></textarea>
+        <button
+          id="voq-prompt-clear"
+          class="voq-prompt-clear"
+          type="button"
+          aria-label="Clear prompt text"
+          title="Clear prompt"
+          hidden
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <p id="voq-input-help" class="voq-sr-only">Press Enter to send. Press Shift Enter for a new line.</p>
+      <div class="voq-actions" aria-label="Prompt actions">
+        <div class="voqualizer-buttons-row" data-voqualizer-standalone-buttons="1">
+          <button
+            type="button"
+            id="voqualizer-speaker-button"
+            class="voq-action-button voqualizer-button voqualizer-speaker"
+            aria-label="Voqualizer TTS is on. Click to mute TTS for this chat."
+            title="Voqualizer TTS is on. Click to mute TTS for this chat."
+            aria-pressed="true"
+          >
+            <span class="voqualizer-tts-vu" aria-hidden="true">
+              <span class="voqualizer-tts-vu-bar voqualizer-tts-vu-bar-1"></span>
+              <span class="voqualizer-tts-vu-bar voqualizer-tts-vu-bar-2"></span>
+              <span class="voqualizer-tts-vu-bar voqualizer-tts-vu-bar-3"></span>
+            </span>
+            <span class="material-symbols-outlined voq-material" aria-hidden="true">graphic_eq</span>
+            <span class="voq-text-fallback">tts</span>
+          </button>
+          <button
+            type="button"
+            id="voqualizer-mic-button"
+            class="voq-action-button voqualizer-button voqualizer-mic voqualizer-idle"
+            aria-label="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
+            title="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
+            aria-pressed="false"
+          >
+            <span class="voqualizer-mic-vu" aria-hidden="true"></span>
+            <span class="material-symbols-outlined voq-material" aria-hidden="true">mic</span>
+            <span class="voqualizer-button-ring" aria-hidden="true"></span>
+            <span class="voq-text-fallback">asr</span>
+          </button>
+        </div>
+        <button id="voq-send-button" class="voq-action-button" type="button" aria-label="Send prompt" title="Send">
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">send</span>
+          <span class="voq-text-fallback">send</span>
+        </button>
+      </div>
     </footer>
   </div>
-  <script type="module">
-    import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w56-canonical-wyoming-2026-06-08-1';
-
-    const params = new URLSearchParams(location.search);
-    const interfaceSelect = document.getElementById('voq-wyoming-interface');
-    const statusEl = document.getElementById('voq-wyoming-status');
-    const transcriptEl = document.getElementById('voq-wyoming-transcript');
-    const inputEl = document.getElementById('voq-wyoming-input');
-    const sendBtn = document.getElementById('voq-wyoming-send');
-    const micBtn = document.getElementById('voq-wyoming-mic');
-    const ttsBtn = document.getElementById('voq-wyoming-tts');
-    const smokeBtn = document.getElementById('voq-wyoming-smoke');
-    const checklistMainBtn = document.getElementById('voq-wyoming-checklist-main');
-    const captureBtn = document.getElementById('voq-wyoming-capture');
-    const diagnosticsEl = document.getElementById('voq-wyoming-diagnostics');
-    const setupEl = document.getElementById('voq-wyoming-setup');
-    const ctxidEl = document.getElementById('voq-wyoming-ctxid');
-    const setupInterfaceEl = document.getElementById('voq-wyoming-interface-id');
-    const initConfigBtn = document.getElementById('voq-wyoming-init-config');
-    const validateBtn = document.getElementById('voq-wyoming-validate');
-    const startBtn = document.getElementById('voq-wyoming-start');
-    const checklistBtn = document.getElementById('voq-wyoming-checklist');
-
-    function setStatus(text) { statusEl.textContent = text; }
-    function showDiagnostics(payload) {
-      diagnosticsEl.hidden = false;
-      diagnosticsEl.textContent = JSON.stringify(payload, null, 2);
-    }
-    async function wyomingStatusAction(payload) {
-      const res = await fetch('/api/plugins/a0_voqualizer/wyoming_status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      return await res.json();
-    }
-    async function runSmokeDiagnostics() {
-      const payload = { action: 'smoke', interface_id: interfaceSelect.value || interfaceId, tcp_describe: false };
-      const data = await wyomingStatusAction(payload);
-      showDiagnostics({ client: client.snapshot(), smoke: data });
-      return data;
-    }
-    async function captureLiveAdminDiagnostics() {
-      const data = await wyomingStatusAction({
-        action: 'live_admin_capture',
-        interface_id: interfaceSelect.value || interfaceId,
-        tcp_describe: false,
-      });
-      showDiagnostics({ client: client.snapshot(), live_admin_capture: data });
-      return data;
-    }
-    async function validateRuntimeConfig() {
-      const data = await wyomingStatusAction({ action: 'validate' });
-      setupEl.hidden = !!data?.ok;
-      showDiagnostics({ client: client.snapshot(), validation: data });
-      return data;
-    }
-    async function initRuntimeConfig() {
-      const data = await wyomingStatusAction({
-        action: 'init_config',
-        ctxid: ctxidEl.value.trim(),
-        interface_id: setupInterfaceEl.value.trim() || 'default',
-        overwrite: false,
-      });
-      showDiagnostics({ client: client.snapshot(), init_config: data });
-      if (data?.ok) setupEl.hidden = true;
-      return data;
-    }
-    async function startRuntime() {
-      const data = await wyomingStatusAction({ action: 'start' });
-      showDiagnostics({ client: client.snapshot(), start: data });
-      return data;
-    }
-    async function runLiveChecklist({ tcpDescribe = false } = {}) {
-      const data = await wyomingStatusAction({
-        action: 'checklist',
-        interface_id: interfaceSelect.value || interfaceId,
-        tcp_describe: !!tcpDescribe,
-      });
-      showDiagnostics({ client: client.snapshot(), checklist: data });
-      return data;
-    }
-    async function runReadinessSnapshot({ tcpDescribe = false } = {}) {
-      const data = await wyomingStatusAction({
-        action: 'readiness',
-        interface_id: interfaceSelect.value || interfaceId,
-        tcp_describe: !!tcpDescribe,
-      });
-      showDiagnostics({ client: client.snapshot(), readiness: data });
-      return data;
-    }
-    function getCurrentA0ContextId() {
-      try { if (typeof globalThis.getContext === 'function') return String(globalThis.getContext() || '').trim(); } catch (_) {}
-      try {
-        const selected = globalThis.Alpine?.store?.('chats')?.selectedContext;
-        if (selected?.id) return String(selected.id).trim();
-      } catch (_) {}
-      try {
-        const qs = new URLSearchParams(location.search);
-        return String(qs.get('ctxid') || qs.get('context') || '').trim();
-      } catch (_) {}
-      return '';
-    }
-    async function configureWebInterfaceFromCurrentContext({ start = true } = {}) {
-      const ctxid = getCurrentA0ContextId();
-      ctxidEl.value = ctxid || ctxidEl.value || '';
-      setupInterfaceEl.value = setupInterfaceEl.value || 'web';
-      if (!ctxid) {
-        setupEl.hidden = false;
-        const data = { ok: false, error: 'current_context_unavailable', message: 'Open Voqualizer from an active Agent Zero chat or pass ?ctxid=...' };
-        showDiagnostics({ client: client?.snapshot?.() || null, web_configure: data });
-        return data;
-      }
-      const configured = await wyomingStatusAction({ action: 'web_configure', ctxid, interface_id: setupInterfaceEl.value.trim() || 'web', overwrite: true });
-      let started = null;
-      if (configured?.ok && start) started = await startRuntime();
-      showDiagnostics({ client: client?.snapshot?.() || null, web_configure: configured, start: started });
-      if (configured?.ok) setupEl.hidden = true;
-      return { ok: !!configured?.ok, configured, started };
-    }
-
-    function addBubble(role, text) {
-      const div = document.createElement('div');
-      div.className = `voq-bubble ${role}`;
-      div.textContent = text;
-      transcriptEl.appendChild(div);
-      transcriptEl.scrollTop = transcriptEl.scrollHeight;
-      return div;
-    }
-
-    async function discoverInterfaces() {
-      try {
-        const res = await fetch('/api/plugins/a0_voqualizer/wyoming_ws', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'interfaces' }),
-        });
-        const data = await res.json();
-        const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
-        const requested = params.get('interface') || localStorage.getItem('a0_voqualizer_wyoming_interface') || data.default_interface_id || 'default';
-        interfaceSelect.innerHTML = '';
-        for (const item of interfaces) {
-          const opt = document.createElement('option');
-          opt.value = item.id;
-          opt.textContent = `${item.name || item.id}${item.enabled ? '' : ' (disabled)'}`;
-          opt.disabled = !item.enabled;
-          interfaceSelect.appendChild(opt);
-        }
-        if (!interfaces.some(i => i.id === requested)) {
-          const opt = document.createElement('option');
-          opt.value = requested;
-          opt.textContent = requested;
-          interfaceSelect.appendChild(opt);
-        }
-        interfaceSelect.value = requested;
-        return requested;
-      } catch (_) {
-        const fallback = params.get('interface') || localStorage.getItem('a0_voqualizer_wyoming_interface') || 'default';
-        interfaceSelect.innerHTML = `<option value="${fallback}">${fallback}</option>`;
-        return fallback;
-      }
-    }
-
-    const interfaceId = await discoverInterfaces();
-    let client = createWyomingWsClient({ interfaceId, debug: true });
-    window.voqualizerWyomingDebug = () => ({ client: client.snapshot(), diagnostics: diagnosticsEl?.textContent || '' });
-    window.voqualizerWyomingSmoke = runSmokeDiagnostics;
-    window.voqualizerWyomingCapture = captureLiveAdminDiagnostics;
-    window.voqualizerWyomingValidate = validateRuntimeConfig;
-    window.voqualizerWyomingInitConfig = initRuntimeConfig;
-    window.voqualizerWyomingStart = startRuntime;
-    window.voqualizerWyomingConfigureWeb = configureWebInterfaceFromCurrentContext;
-    window.voqualizerWyomingChecklist = runLiveChecklist;
-    window.voqualizerWyomingReadiness = runReadinessSnapshot;
-    interfaceSelect.addEventListener('change', () => {
-      localStorage.setItem('a0_voqualizer_wyoming_interface', interfaceSelect.value);
-      location.href = `${location.pathname}?interface=${encodeURIComponent(interfaceSelect.value)}`;
-    });
-
-    client.on('open', ({ info }) => {
-      setStatus(`connected · ${info?.data?.name || interfaceId}`);
-    });
-    client.on('close', () => setStatus('disconnected'));
-    client.on('error', (err) => setStatus(`error: ${err?.error || 'unknown'}`));
-
-    let currentAssistantBubble = null;
-    function isCurrent(ev) { return client.isCurrentGeneration(ev?.data || {}); }
-
-    client.on('event:transcript', (ev) => {
-      const text = String(ev.data?.text || '');
-      if (!text) return;
-      addBubble('user', text);
-    });
-    client.on('event:voqualizer-response-start', (ev) => {
-      if (!isCurrent(ev)) return;
-      currentAssistantBubble = addBubble('assistant', '');
-    });
-    client.on('event:voqualizer-response-chunk', (ev) => {
-      if (!isCurrent(ev)) return;
-      if (!currentAssistantBubble) currentAssistantBubble = addBubble('assistant', '');
-      currentAssistantBubble.textContent += String(ev.data?.text || '');
-    });
-    client.on('event:voqualizer-response-final', (ev) => {
-      if (!isCurrent(ev)) return;
-      if (!currentAssistantBubble) currentAssistantBubble = addBubble('assistant', '');
-      const finalText = String(ev.data?.text || '');
-      if (finalText) currentAssistantBubble.textContent = finalText;
-      currentAssistantBubble = null;
-    });
-
-    // TTS audio: forward to a single AudioContext for playback.
-    let audioCtx = null;
-    function ensureAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-      return audioCtx;
-    }
-    let nextStart = 0;
-    client.on('event:audio-start', (ev) => {
-      if (!isCurrent(ev)) return;
-      const ctx = ensureAudio();
-      nextStart = Math.max(ctx.currentTime, nextStart);
-    });
-    client.on('event:audio-chunk', (ev) => {
-      if (!isCurrent(ev)) return;
-      const ctx = ensureAudio();
-      const pcm = ev.payload;
-      if (!pcm || !pcm.length) return;
-      const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2);
-      const buf = ctx.createBuffer(1, samples.length, 16000);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < samples.length; i++) data[i] = samples[i] / 32768;
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      const startAt = Math.max(ctx.currentTime, nextStart);
-      src.start(startAt);
-      nextStart = startAt + buf.duration;
-    });
-    client.on('event:audio-stop', (ev) => { if (!isCurrent(ev)) return; });
-
-    window.addEventListener('beforeunload', () => {
-      try { client.close(); } catch (_) {}
-    });
-
-    sendBtn.addEventListener('click', async () => {
-      const text = inputEl.value.trim();
-      if (!text) return;
-      inputEl.value = '';
-      addBubble('user', text);
-      try {
-        await client.submitText(text);
-      } catch (err) {
-        setStatus(`send failed: ${err?.message || err}`);
-      }
-    });
-    inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }
-    });
-    ttsBtn.addEventListener('click', async () => {
-      try { await client.cancelTts(); } catch (_) {}
-    });
-    smokeBtn.addEventListener('click', async () => {
-      try {
-        setStatus('running smoke diagnostics…');
-        const data = await runSmokeDiagnostics();
-        setStatus(data?.ok ? 'smoke diagnostics ok' : `smoke diagnostics failed: ${data?.error || 'unknown'}`);
-      } catch (err) {
-        setStatus(`smoke failed: ${err?.message || err}`);
-      }
-    });
-    captureBtn.addEventListener('click', async () => {
-      try {
-        setStatus('capturing live diagnostics…');
-        const data = await captureLiveAdminDiagnostics();
-        setStatus(data?.ok ? 'live capture ok' : 'live capture has blockers');
-      } catch (err) { setStatus(`capture failed: ${err?.message || err}`); }
-    });
-    validateBtn.addEventListener('click', async () => {
-      try {
-        const data = await validateRuntimeConfig();
-        setStatus(data?.ok ? 'config valid' : `config invalid: ${(data?.errors || [data?.error || 'unknown']).join('; ')}`);
-      } catch (err) { setStatus(`validate failed: ${err?.message || err}`); }
-    });
-    initConfigBtn.addEventListener('click', async () => {
-      try {
-        const data = await initRuntimeConfig();
-        setStatus(data?.ok ? 'config created' : `config init failed: ${data?.error || 'unknown'}`);
-      } catch (err) { setStatus(`config init failed: ${err?.message || err}`); }
-    });
-    startBtn.addEventListener('click', async () => {
-      try {
-        const data = await startRuntime();
-        setStatus(data?.started ? 'runtime started' : `runtime not started: ${data?.message || data?.validation?.errors?.join('; ') || 'unknown'}`);
-      } catch (err) { setStatus(`start failed: ${err?.message || err}`); }
-    });
-    async function handleChecklistClick() {
-      try {
-        const data = await runReadinessSnapshot({ tcpDescribe: false });
-        setStatus(data?.ready_for_browser ? 'ready for browser' : (data?.ok ? 'readiness ok; runtime may not be started' : 'readiness has blockers'));
-      } catch (err) { setStatus(`checklist failed: ${err?.message || err}`); }
-    }
-    checklistBtn.addEventListener('click', handleChecklistClick);
-    checklistMainBtn.addEventListener('click', handleChecklistClick);
-    micBtn.addEventListener('click', async () => {
-      micBtn.disabled = true;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1, noiseSuppression: true, echoCancellation: true } });
-        const ctx = ensureAudio();
-        const source = ctx.createMediaStreamSource(stream);
-        const processor = ctx.createScriptProcessor(4096, 1, 1);
-        const utt = await client.beginAudio({ rate: ctx.sampleRate, width: 2, channels: 1 });
-        processor.onaudioprocess = async (e) => {
-          const f32 = e.inputBuffer.getChannelData(0);
-          const i16 = new Int16Array(f32.length);
-          for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32767));
-          await client.sendAudioChunk(new Uint8Array(i16.buffer));
-        };
-        source.connect(processor);
-        processor.connect(ctx.destination);
-        await new Promise(r => setTimeout(r, 5000));
-        processor.disconnect();
-        source.disconnect();
-        stream.getTracks().forEach(t => t.stop());
-        await client.endAudio({ utteranceId: utt });
-      } catch (err) {
-        setStatus(`mic failed: ${err?.message || err}`);
-      } finally {
-        micBtn.disabled = false;
-      }
-    });
-
-    async function connectWithAutoSetup() {
-      try {
-        await client.connect();
-        return true;
-      } catch (err) {
-        setStatus('connect failed; configuring current chat…');
-        try {
-          const setup = await configureWebInterfaceFromCurrentContext({ start: true });
-          if (setup?.ok) {
-            client = createWyomingWsClient({ interfaceId: setupInterfaceEl.value.trim() || 'web', debug: true });
-            await client.connect();
-            setStatus('connected · web');
-            return true;
-          }
-        } catch (setupErr) {
-          setStatus(`auto setup failed: ${setupErr?.message || setupErr}`);
-        }
-        try { await validateRuntimeConfig(); } catch (_) { setupEl.hidden = false; }
-        return false;
-      }
-    }
-    await connectWithAutoSetup();
-  </script>
 </body>
 </html>

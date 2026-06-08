@@ -1,4 +1,5 @@
 import { callJsonApi } from '/js/api.js';
+import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w57-preserve-ui-wyoming-protocol-2026-06-08-1';
 import {
   bytesFromTtsPayload,
   concatAudioBytes,
@@ -35,12 +36,15 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'm8-tts-vu-asr-style-continuous';
+const PAGE_VERSION = 'w57-preserve-ui-wyoming-protocol';
 const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-asr-style-continuous-2026-06-04-82';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
 const POLL_ENDPOINT = 'poll';
 const VOQUALIZER_HANDLER = 'plugins/a0_voqualizer/ws_voqualizer';
+const WYOMING_STATUS_ENDPOINT = 'plugins/a0_voqualizer/wyoming_status';
+const WYOMING_PRIMARY_INTERFACE_ID = 'web';
+const WYOMING_TRANSPORT_PRIMARY = true;
 const SELECTED_CONTEXT_STORAGE_KEY = 'a0_voqualizer.standalone.selected_context_id';
 const TTS_ENABLED_STORAGE_KEY = 'a0_voqualizer.standalone.tts_enabled';
 const ASR_ENABLED_STORAGE_KEY = 'a0_voqualizer.standalone.asr_enabled';
@@ -155,6 +159,20 @@ const cx = {
   lastEventAt: 0,
   lastEvent: '',
   lastError: '',
+};
+
+const wyoming = {
+  client: null,
+  interfaceId: WYOMING_PRIMARY_INTERFACE_ID,
+  connectedContextId: '',
+  connecting: null,
+  responseStreamId: '',
+  responseMessageId: '',
+  responseBuffer: '',
+  audioUtteranceId: '',
+  lastError: '',
+  lastEvent: '',
+  lastEventAt: 0,
 };
 
 const wordPlan = {
@@ -1067,6 +1085,27 @@ function renderPreloadedResponseBubble(state, item) {
 function warmVoqSessionForContext(contextId, reason = 'preload') {
   const page = globalThis.__voqualizer_page;
   if (!contextId) return null;
+  if (WYOMING_TRANSPORT_PRIMARY) {
+    if (page) {
+      page.lastVoqWarmupAt = Date.now();
+      page.lastVoqWarmupContextId = contextId;
+      page.lastVoqWarmupReason = `wyoming:${reason}`;
+    }
+    return ensureWyomingSession(contextId, getPageStateRef()).then((client) => {
+      if (page) {
+        page.lastVoqWarmupReadyAt = Date.now();
+        page.lastVoqWarmupReady = true;
+        page.lastVoqWarmupSessionId = WYOMING_PRIMARY_INTERFACE_ID;
+      }
+      return client;
+    }).catch((err) => {
+      if (page) {
+        page.lastVoqWarmupError = err?.message || String(err);
+        page.lastVoqWarmupReady = false;
+      }
+      throw err;
+    });
+  }
   if (page) {
     page.lastVoqWarmupAt = Date.now();
     page.lastVoqWarmupContextId = contextId;
@@ -1222,6 +1261,185 @@ function updateTtsButton() {
   button.setAttribute('aria-pressed', tts.enabled ? 'true' : 'false');
   button.setAttribute('aria-label', tts.enabled ? 'Speak responses (on)' : 'Speak responses (off)');
   button.setAttribute('title', state === 'off' ? 'TTS off — click to speak assistant responses' : state === 'speaking' ? 'Speaking — click to stop and mute' : state === 'error' ? 'TTS error — click to retry/enable' : 'TTS on — click to mute assistant responses');  ensureTtsVuIdleVisual();
+}
+
+
+async function configureWyomingWebInterface(contextId) {
+  const clean = safeString(contextId).trim();
+  if (!clean) throw new Error('missing context for Wyoming web interface');
+  const configured = await callJsonApiWithDiagnostics(WYOMING_STATUS_ENDPOINT, {
+    action: 'web_configure',
+    ctxid: clean,
+    interface_id: WYOMING_PRIMARY_INTERFACE_ID,
+    overwrite: true,
+  }, 'wyoming_web_configure');
+  if (!configured || configured.ok === false) {
+    throw new Error(configured?.message || configured?.error || 'Wyoming web configuration failed');
+  }
+  const started = await callJsonApiWithDiagnostics(WYOMING_STATUS_ENDPOINT, { action: 'start' }, 'wyoming_start');
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.wyomingLastConfigureAt = Date.now();
+    globalThis.__voqualizer_page.wyomingLastConfigure = configured;
+    globalThis.__voqualizer_page.wyomingLastStart = started;
+  }
+  return { configured, started };
+}
+
+function wyomingCurrentGeneration(data = {}) {
+  return safeString(data.generation_id || data.generationId || data.message_id || data.messageId || '');
+}
+
+function isCurrentWyomingGeneration(data = {}) {
+  const generation = wyomingCurrentGeneration(data);
+  return !generation || !tts.activeGenerationId || generation === tts.activeGenerationId;
+}
+
+function installWyomingClientHandlers(client, state) {
+  if (!client || client.__voqualizerStandaloneHandlersInstalled) return;
+  client.__voqualizerStandaloneHandlersInstalled = true;
+  client.on('open', ({ info } = {}) => {
+    wyoming.lastEvent = 'open';
+    wyoming.lastEventAt = Date.now();
+    tts.ready = true;
+    cx.enabledByCapability = true;
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.wyomingConnected = true;
+      globalThis.__voqualizer_page.wyomingInfo = info || null;
+      globalThis.__voqualizer_page.promptSubmitTransport = 'wyoming';
+      globalThis.__voqualizer_page.protocolVersion = info?.data?.protocol_version || info?.data?.protocol || 'wyoming';
+      globalThis.__voqualizer_page.cxStreamCapability = true;
+    }
+    updateTtsButton();
+  });
+  client.on('close', () => {
+    wyoming.lastEvent = 'close';
+    wyoming.lastEventAt = Date.now();
+    tts.ready = false;
+    if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.wyomingConnected = false;
+    updateTtsButton();
+  });
+  client.on('error', (err) => {
+    wyoming.lastEvent = 'error';
+    wyoming.lastEventAt = Date.now();
+    wyoming.lastError = err?.error || err?.message || String(err || 'unknown');
+    if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.wyomingLastError = wyoming.lastError;
+  });
+  client.on('event:voqualizer-response-start', (ev) => {
+    const data = ev?.data || {};
+    if (!isCurrentWyomingGeneration(data)) return;
+    const streamId = safeString(data.stream_id || data.streamId || data.generation_id || data.message_id || `wy-${Date.now()}`);
+    const messageId = safeString(data.message_id || data.messageId || data.generation_id || tts.activeGenerationId || streamId);
+    wyoming.responseStreamId = streamId;
+    wyoming.responseMessageId = messageId;
+    wyoming.responseBuffer = '';
+    handleCxStreamStart({ data: { stream_id: streamId, message_id: messageId, context_id: wyoming.connectedContextId } });
+  });
+  client.on('event:voqualizer-response-chunk', (ev) => {
+    const data = ev?.data || {};
+    if (!isCurrentWyomingGeneration(data)) return;
+    const delta = safeString(data.delta || data.text || data.content || '');
+    if (!delta) return;
+    wyoming.responseBuffer += delta;
+    const streamId = wyoming.responseStreamId || safeString(data.stream_id || data.generation_id || tts.activeGenerationId || `wy-${Date.now()}`);
+    const messageId = wyoming.responseMessageId || safeString(data.message_id || data.generation_id || tts.activeGenerationId || streamId);
+    if (!wyoming.responseStreamId) handleCxStreamStart({ data: { stream_id: streamId, message_id: messageId, context_id: wyoming.connectedContextId } });
+    wyoming.responseStreamId = streamId;
+    wyoming.responseMessageId = messageId;
+    handleCxToken({ data: { stream_id: streamId, message_id: messageId, delta, text: wyoming.responseBuffer, seq: Date.now() } });
+  });
+  client.on('event:voqualizer-response-final', (ev) => {
+    const data = ev?.data || {};
+    if (!isCurrentWyomingGeneration(data)) return;
+    const finalText = safeString(data.text || data.content || wyoming.responseBuffer || '');
+    const streamId = wyoming.responseStreamId || safeString(data.stream_id || data.generation_id || tts.activeGenerationId || `wy-${Date.now()}`);
+    const messageId = wyoming.responseMessageId || safeString(data.message_id || data.generation_id || tts.activeGenerationId || streamId);
+    if (finalText && !wyoming.responseStreamId) handleCxStreamStart({ data: { stream_id: streamId, message_id: messageId, context_id: wyoming.connectedContextId } });
+    if (finalText) handleCxToken({ data: { stream_id: streamId, message_id: messageId, text: finalText, seq: Date.now() } });
+    handleCxStreamFinal({ data: { stream_id: streamId, message_id: messageId, text: finalText } });
+    state.isSubmitting = false;
+    state.activeSubmissionId = '';
+    if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.isSubmitting = false;
+    setSendIndicatorState('success');
+    updateSendButton(state);
+    setPageStatus('Response complete', 'ready');
+    stopProcessingHeartbeat('wyoming_response_final');
+    wyoming.responseBuffer = '';
+  });
+  client.on('event:audio-start', (ev) => {
+    const data = ev?.data || {};
+    if (!isCurrentWyomingGeneration(data)) return;
+    wyoming.audioUtteranceId = safeString(data.utterance_id || data.utteranceId || data.generation_id || tts.activeGenerationId || `wy-audio-${Date.now()}`);
+    tts.acceptedTtsUtteranceIds.add(wyoming.audioUtteranceId);
+    rememberPlaybackSource(wyoming.audioUtteranceId, 'wyoming_audio_stream');
+  });
+  client.on('event:audio-chunk', (ev) => {
+    const data = ev?.data || {};
+    if (!isCurrentWyomingGeneration(data)) return;
+    const bytes = ev?.payload || new Uint8Array();
+    if (!bytes || !bytes.length) return;
+    const utteranceId = safeString(data.utterance_id || data.utteranceId || wyoming.audioUtteranceId || tts.activeGenerationId || `wy-audio-${Date.now()}`);
+    tts.acceptedTtsUtteranceIds.add(utteranceId);
+    handleTtsChunk({ data: { utterance_id: utteranceId, codec: 'pcm16', sample_rate: Number(data.rate || data.sample_rate || 16000) }, payload: bytes });
+  });
+  client.on('event:audio-stop', (ev) => {
+    const data = ev?.data || {};
+    if (!isCurrentWyomingGeneration(data)) return;
+    const utteranceId = safeString(data.utterance_id || data.utteranceId || wyoming.audioUtteranceId || tts.activeGenerationId || 'default');
+    handleTtsDone({ data: { utterance_id: utteranceId } });
+  });
+  client.on('event:transcript', (ev) => {
+    const text = safeString(ev?.data?.text || '');
+    if (!text) return;
+    handleAsrFinal({ data: { text, source: 'wyoming_transcript' } });
+  });
+}
+
+async function ensureWyomingSession(contextId, state = getPageStateRef()) {
+  const clean = safeString(contextId).trim();
+  if (!clean) throw new Error('missing context for Wyoming session');
+  if (wyoming.client && wyoming.connectedContextId === clean && wyoming.client.isConnected?.()) return wyoming.client;
+  if (wyoming.connecting) return wyoming.connecting;
+  wyoming.connecting = (async () => {
+    await configureWyomingWebInterface(clean);
+    if (wyoming.client) {
+      try { wyoming.client.close(); } catch (_err) {}
+    }
+    const client = createWyomingWsClient({ interfaceId: WYOMING_PRIMARY_INTERFACE_ID, debug: true });
+    wyoming.client = client;
+    wyoming.connectedContextId = clean;
+    installWyomingClientHandlers(client, state || getPageStateRef());
+    await client.connect();
+    if (globalThis.__voqualizer_page) {
+      globalThis.__voqualizer_page.wyomingSessionReadyAt = Date.now();
+      globalThis.__voqualizer_page.wyomingInterfaceId = WYOMING_PRIMARY_INTERFACE_ID;
+      globalThis.__voqualizer_page.wyomingContextId = clean;
+      globalThis.__voqualizer_page.wyomingClientSnapshot = client.snapshot?.() || null;
+    }
+    return client;
+  })();
+  try {
+    return await wyoming.connecting;
+  } finally {
+    wyoming.connecting = null;
+  }
+}
+
+async function submitPromptOverWyomingSession(text, contextId, messageId, state) {
+  const page = globalThis.__voqualizer_page;
+  if (page) {
+    page.lastWyomingPromptAttemptAt = Date.now();
+    page.lastWyomingPromptMessageId = messageId;
+    page.lastWyomingPromptContextId = contextId;
+    page.lastWyomingPromptError = '';
+  }
+  const client = await ensureWyomingSession(contextId, state);
+  const ack = await client.submitText(text, { generationId: messageId, messageId });
+  if (page) {
+    page.lastWyomingPromptAckAt = Date.now();
+    page.lastWyomingPromptAck = ack || null;
+    page.promptSubmitTransport = 'wyoming';
+  }
+  return ack || { ok: true, transport: 'wyoming' };
 }
 
 async function pollOnce(contextId, logFrom) {
@@ -1388,20 +1606,25 @@ async function submitPrompt(state) {
   });
   try {
     let result;
-    try {
-      result = await submitPromptOverVoqSession(text, contextId, messageId);
-      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.promptSubmitTransport = 'websocket';
-    } catch (wsError) {
-      if (globalThis.__voqualizer_page) {
-        globalThis.__voqualizer_page.promptSubmitTransport = 'http_fallback';
-        globalThis.__voqualizer_page.lastWsPromptError = wsError?.message || String(wsError);
+    if (WYOMING_TRANSPORT_PRIMARY) {
+      result = await submitPromptOverWyomingSession(text, contextId, messageId, state);
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.promptSubmitTransport = 'wyoming';
+    } else {
+      try {
+        result = await submitPromptOverVoqSession(text, contextId, messageId);
+        if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.promptSubmitTransport = 'websocket';
+      } catch (wsError) {
+        if (globalThis.__voqualizer_page) {
+          globalThis.__voqualizer_page.promptSubmitTransport = 'http_fallback';
+          globalThis.__voqualizer_page.lastWsPromptError = wsError?.message || String(wsError);
+        }
+        result = await callJsonApiWithDiagnostics(MESSAGE_ENDPOINT, { text, context: contextId, message_id: messageId }, 'message_async');
       }
-      result = await callJsonApiWithDiagnostics(MESSAGE_ENDPOINT, { text, context: contextId, message_id: messageId }, 'message_async');
     }
     void voqInitPromise;
     if (!result) throw new Error('empty response from prompt submit');
-    setPageStatus('Awaiting response…', 'loading');
-    await runPollLoop(state, contextId, messageId);
+    setPageStatus('Awaiting Wyoming response…', 'loading');
+    if (!WYOMING_TRANSPORT_PRIMARY) await runPollLoop(state, contextId, messageId);
   } catch (error) {
     stopProcessingHeartbeat('send_failed');
     renderErrorRow(state, `Send failed: ${error?.message || error}`);
@@ -3012,6 +3235,11 @@ function initVoqualizerPage() {
     messageEndpoint: MESSAGE_ENDPOINT,
     pollEndpoint: POLL_ENDPOINT,
     voqualizerHandler: VOQUALIZER_HANDLER,
+    wyomingTransportPrimary: WYOMING_TRANSPORT_PRIMARY,
+    wyomingStatusEndpoint: WYOMING_STATUS_ENDPOINT,
+    wyomingInterfaceId: WYOMING_PRIMARY_INTERFACE_ID,
+    wyomingConnected: false,
+    wyomingLastError: '',
     lastApiStage: '',
     lastApiEndpoint: '',
     lastApiPayload: null,
@@ -3182,6 +3410,12 @@ export {
   SELECTED_CONTEXT_STORAGE_KEY,
   TTS_ENABLED_STORAGE_KEY,
   VOQUALIZER_HANDLER,
+  WYOMING_STATUS_ENDPOINT,
+  WYOMING_PRIMARY_INTERFACE_ID,
+  WYOMING_TRANSPORT_PRIMARY,
+  configureWyomingWebInterface,
+  ensureWyomingSession,
+  submitPromptOverWyomingSession,
   cancelInflightTts,
   connectVoq,
   disconnectVoq,

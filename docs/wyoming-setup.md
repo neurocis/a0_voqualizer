@@ -391,3 +391,17 @@ links. The previous custom-protocol standalone page was moved to
 Normal browser usage should target `voqualizer.html`; it auto-configures the
 current chat through `action=web_configure`, starts the Wyoming runtime, and then
 connects through the Wyoming-over-WebSocket bridge.
+
+
+## W57 preserved UI with Wyoming transport
+
+The canonical page remains:
+
+```text
+/plugins/a0_voqualizer/webui/voqualizer.html
+```
+
+It preserves the prior standalone Voqualizer layout and controls. The Wyoming
+migration happens inside `webui/voqualizer.js`: prompt submit, response chunks,
+and TTS audio events use the Wyoming web interface while the visual/functional
+UI shell remains intact.

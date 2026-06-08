@@ -1,43 +1,26 @@
-"""W56: the canonical standalone Voqualizer page is the Wyoming UI."""
+"""Canonical standalone Voqualizer page preserves UI and loads Wyoming-backed JS."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL = ROOT / 'webui' / 'voqualizer.html'
-WYOMING_ALIAS = ROOT / 'webui' / 'voqualizer-wyoming.html'
+JS = ROOT / 'webui' / 'voqualizer.js'
 LEGACY_REF = ROOT / 'webui' / 'voqualizer-legacy-reference.html'
 
 
-def test_canonical_voqualizer_page_is_wyoming_interface():
+def test_canonical_voqualizer_page_preserves_polished_layout():
     src = CANONICAL.read_text()
-    for marker in (
-        '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js',
-        'createWyomingWsClient',
-        "action: 'web_configure'",
-        'configureWebInterfaceFromCurrentContext',
-        'connectWithAutoSetup',
-        'window.voqualizerWyomingConfigureWeb',
-        'w56-canonical-wyoming-2026-06-08-1',
-    ):
+    for marker in ('voq-topbar', 'voq-brand-row', 'voq-chat', 'voq-composer', 'voq-send-button', 'voq-mic-button', 'voq-speaker-button'):
         assert marker in src, marker
+    assert 'id="voq-wyoming-app"' not in src
 
 
-def test_canonical_page_avoids_retired_custom_protocol():
+def test_canonical_page_loads_wyoming_backed_js_cache_marker():
     src = CANONICAL.read_text()
-    for token in (
-        'voqualizer_init',
-        'voqualizer_user_text',
-        'voqualizer_audio_chunk',
-        'voqualizer_tts_chunk',
-        'ack_fallback',
-        'conversation-mode.js',
-        '/message_async',
-        '/poll',
-    ):
-        assert token not in src, token
+    assert '/plugins/a0_voqualizer/webui/voqualizer.js?v=w57-preserve-ui-wyoming-protocol-2026-06-08-1' in src
+    js = JS.read_text()
+    for marker in ('createWyomingWsClient', 'submitPromptOverWyomingSession', 'WYOMING_TRANSPORT_PRIMARY = true'):
+        assert marker in js, marker
 
 
 def test_legacy_standalone_preserved_only_as_reference():
     assert LEGACY_REF.exists()
-    legacy = LEGACY_REF.read_text()
-    assert '/message_async' in legacy or '/poll' in legacy or 'conversation-mode' in legacy or 'voqualizer.js' in legacy
-    assert WYOMING_ALIAS.exists()
