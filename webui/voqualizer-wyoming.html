@@ -33,6 +33,7 @@
       <select id="voq-wyoming-interface" aria-label="Wyoming interface" title="Wyoming interface"></select>
       <button id="voq-wyoming-smoke" type="button" aria-label="Run Wyoming smoke diagnostics" title="Run Wyoming smoke diagnostics">smoke</button>
       <button id="voq-wyoming-checklist-main" type="button" aria-label="Run Wyoming live checklist" title="Run Wyoming live checklist">checklist</button>
+      <button id="voq-wyoming-capture" type="button" aria-label="Capture Wyoming diagnostics" title="Capture Wyoming diagnostics">capture</button>
       <span id="voq-wyoming-status">disconnected</span>
     </header>
     <section id="voq-wyoming-setup" aria-label="Wyoming setup" hidden>
@@ -53,7 +54,7 @@
     </footer>
   </div>
   <script type="module">
-    import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w41-setup-2026-06-06-1';
+    import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w53-capture-2026-06-07-1';
 
     const params = new URLSearchParams(location.search);
     const interfaceSelect = document.getElementById('voq-wyoming-interface');
@@ -65,6 +66,7 @@
     const ttsBtn = document.getElementById('voq-wyoming-tts');
     const smokeBtn = document.getElementById('voq-wyoming-smoke');
     const checklistMainBtn = document.getElementById('voq-wyoming-checklist-main');
+    const captureBtn = document.getElementById('voq-wyoming-capture');
     const diagnosticsEl = document.getElementById('voq-wyoming-diagnostics');
     const setupEl = document.getElementById('voq-wyoming-setup');
     const ctxidEl = document.getElementById('voq-wyoming-ctxid');
@@ -91,6 +93,15 @@
       const payload = { action: 'smoke', interface_id: interfaceSelect.value || interfaceId, tcp_describe: false };
       const data = await wyomingStatusAction(payload);
       showDiagnostics({ client: client.snapshot(), smoke: data });
+      return data;
+    }
+    async function captureLiveAdminDiagnostics() {
+      const data = await wyomingStatusAction({
+        action: 'live_admin_capture',
+        interface_id: interfaceSelect.value || interfaceId,
+        tcp_describe: false,
+      });
+      showDiagnostics({ client: client.snapshot(), live_admin_capture: data });
       return data;
     }
     async function validateRuntimeConfig() {
@@ -179,6 +190,7 @@
     let client = createWyomingWsClient({ interfaceId, debug: true });
     window.voqualizerWyomingDebug = () => ({ client: client.snapshot(), diagnostics: diagnosticsEl?.textContent || '' });
     window.voqualizerWyomingSmoke = runSmokeDiagnostics;
+    window.voqualizerWyomingCapture = captureLiveAdminDiagnostics;
     window.voqualizerWyomingValidate = validateRuntimeConfig;
     window.voqualizerWyomingInitConfig = initRuntimeConfig;
     window.voqualizerWyomingStart = startRuntime;
@@ -279,6 +291,13 @@
       } catch (err) {
         setStatus(`smoke failed: ${err?.message || err}`);
       }
+    });
+    captureBtn.addEventListener('click', async () => {
+      try {
+        setStatus('capturing live diagnostics…');
+        const data = await captureLiveAdminDiagnostics();
+        setStatus(data?.ok ? 'live capture ok' : 'live capture has blockers');
+      } catch (err) { setStatus(`capture failed: ${err?.message || err}`); }
     });
     validateBtn.addEventListener('click', async () => {
       try {

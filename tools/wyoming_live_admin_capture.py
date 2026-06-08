@@ -187,6 +187,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--interface-id", default="")
     p.add_argument("--tcp-describe", action="store_true")
     p.add_argument("--timeout", type=float, default=5.0)
+    p.add_argument("--save", default="", help="Optional path to write the JSON bundle")
     return p
 
 
@@ -202,6 +203,9 @@ def main(argv: list[str] | None = None) -> int:
         tcp_describe=args.tcp_describe,
         timeout=args.timeout,
     )
+    if args.save:
+        from pathlib import Path
+        Path(args.save).write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n")
     json.dump(bundle, sys.stdout, indent=2, sort_keys=True)
     sys.stdout.write("\n")
     return 0 if bundle.get("ok") else 1

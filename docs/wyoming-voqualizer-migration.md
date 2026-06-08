@@ -891,3 +891,14 @@ Implemented:
 - emits structured `blockers` and `next_actions` for triage;
 - `tests/test_wyoming_live_admin_capture_tool.py` covers connection failure, auth redirect, full-success bundling, and CLI exit codes;
 - docs updated in `docs/wyoming-setup.md`.
+
+
+### W53 in-framework live admin capture
+
+Implemented:
+
+- `helpers/wyoming_live_admin_capture.py` builds a live admin capture bundle from inside the framework;
+- `wyoming_status` supports `action=live_admin_capture`;
+- standalone Wyoming page adds a **capture** button and `window.voqualizerWyomingCapture()`;
+- W52 HTTP CLI gains `--save PATH`;
+- tests cover helper bundling, endpoint/page markers, and CLI save support.

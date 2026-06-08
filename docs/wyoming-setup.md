@@ -257,3 +257,19 @@ python3 tools/wyoming_live_admin_capture.py \
 
 The output includes a `blockers` list and `next_actions` to guide remediation
 (framework unreachable, auth required, 500s, etc.).
+
+
+## W53 in-browser/in-framework capture
+
+The authenticated admin endpoint now supports:
+
+```json
+{"action":"live_admin_capture","interface_id":"hero","tcp_describe":false}
+```
+
+This returns the same support-style bundle as the W52 HTTP CLI without needing
+manual cookie/CSRF extraction, because the request is already authenticated by
+the browser session. The standalone Wyoming page exposes a **capture** button and
+`window.voqualizerWyomingCapture()` for quick copy/paste diagnostics.
+
+The W52 CLI also supports `--save PATH` to write the JSON bundle to disk.

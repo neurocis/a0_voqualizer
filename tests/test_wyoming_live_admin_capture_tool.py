@@ -88,3 +88,12 @@ def test_main_returns_nonzero_on_connection_failure(capsys):
     assert rc == 1
     assert payload['ok'] is False
     assert 'wyoming_live_admin_capture' == payload['tool']
+
+
+def test_save_flag_writes_bundle(tmp_path):
+    mod = _load_tool()
+    out = tmp_path / 'capture.json'
+    with patch.object(mod, 'capture', return_value={'ok': True, 'tool': 'wyoming_live_admin_capture'}):
+        rc = mod.main(['--save', str(out)])
+    assert rc == 0
+    assert json.loads(out.read_text())['tool'] == 'wyoming_live_admin_capture'
