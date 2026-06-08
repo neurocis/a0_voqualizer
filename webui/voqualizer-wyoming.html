@@ -54,7 +54,7 @@
     </footer>
   </div>
   <script type="module">
-    import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w53-capture-2026-06-07-1';
+    import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w55-functional-web-2026-06-08-1';
 
     const params = new URLSearchParams(location.search);
     const interfaceSelect = document.getElementById('voq-wyoming-interface');
@@ -144,6 +144,36 @@
       showDiagnostics({ client: client.snapshot(), readiness: data });
       return data;
     }
+    function getCurrentA0ContextId() {
+      try { if (typeof globalThis.getContext === 'function') return String(globalThis.getContext() || '').trim(); } catch (_) {}
+      try {
+        const selected = globalThis.Alpine?.store?.('chats')?.selectedContext;
+        if (selected?.id) return String(selected.id).trim();
+      } catch (_) {}
+      try {
+        const qs = new URLSearchParams(location.search);
+        return String(qs.get('ctxid') || qs.get('context') || '').trim();
+      } catch (_) {}
+      return '';
+    }
+    async function configureWebInterfaceFromCurrentContext({ start = true } = {}) {
+      const ctxid = getCurrentA0ContextId();
+      ctxidEl.value = ctxid || ctxidEl.value || '';
+      setupInterfaceEl.value = setupInterfaceEl.value || 'web';
+      if (!ctxid) {
+        setupEl.hidden = false;
+        const data = { ok: false, error: 'current_context_unavailable', message: 'Open Voqualizer from an active Agent Zero chat or pass ?ctxid=...' };
+        showDiagnostics({ client: client?.snapshot?.() || null, web_configure: data });
+        return data;
+      }
+      const configured = await wyomingStatusAction({ action: 'web_configure', ctxid, interface_id: setupInterfaceEl.value.trim() || 'web', overwrite: true });
+      let started = null;
+      if (configured?.ok && start) started = await startRuntime();
+      showDiagnostics({ client: client?.snapshot?.() || null, web_configure: configured, start: started });
+      if (configured?.ok) setupEl.hidden = true;
+      return { ok: !!configured?.ok, configured, started };
+    }
+
     function addBubble(role, text) {
       const div = document.createElement('div');
       div.className = `voq-bubble ${role}`;
@@ -194,6 +224,7 @@
     window.voqualizerWyomingValidate = validateRuntimeConfig;
     window.voqualizerWyomingInitConfig = initRuntimeConfig;
     window.voqualizerWyomingStart = startRuntime;
+    window.voqualizerWyomingConfigureWeb = configureWebInterfaceFromCurrentContext;
     window.voqualizerWyomingChecklist = runLiveChecklist;
     window.voqualizerWyomingReadiness = runReadinessSnapshot;
     interfaceSelect.addEventListener('change', () => {
@@ -353,12 +384,28 @@
       }
     });
 
-    try {
-      await client.connect();
-    } catch (err) {
-      setStatus(`connect failed: ${err?.message || err}`);
-      try { await validateRuntimeConfig(); } catch (_) { setupEl.hidden = false; }
+    async function connectWithAutoSetup() {
+      try {
+        await client.connect();
+        return true;
+      } catch (err) {
+        setStatus('connect failed; configuring current chat…');
+        try {
+          const setup = await configureWebInterfaceFromCurrentContext({ start: true });
+          if (setup?.ok) {
+            client = createWyomingWsClient({ interfaceId: setupInterfaceEl.value.trim() || 'web', debug: true });
+            await client.connect();
+            setStatus('connected · web');
+            return true;
+          }
+        } catch (setupErr) {
+          setStatus(`auto setup failed: ${setupErr?.message || setupErr}`);
+        }
+        try { await validateRuntimeConfig(); } catch (_) { setupEl.hidden = false; }
+        return false;
+      }
     }
+    await connectWithAutoSetup();
   </script>
 </body>
 </html>

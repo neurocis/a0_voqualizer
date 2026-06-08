@@ -358,3 +358,19 @@ python3 tools/wyoming_live_admin_capture.py \
 - with `tcp_describe:true`, TCP `describe/info` succeeds for the selected interface;
 - no placeholder ctxID blockers;
 - browser capture button shows JSON rather than an endpoint/import error.
+
+
+### W55 functional web interface auto-setup
+
+The objective is a functional browser interface using Wyoming, not a manual CLI
+exercise. The standalone Wyoming page now derives the current Agent Zero ctxID
+from `window.getContext()`, the Alpine chat store, or `?ctxid=...`; calls
+`wyoming_status` with `action=web_configure`; creates/updates one `web`
+interface bound 1:1 to that ctxID; starts the Wyoming runtime; and reconnects
+the browser Wyoming WS client. Manual tools remain diagnostics/fallbacks only.
+
+Browser debug helper:
+
+```js
+await window.voqualizerWyomingConfigureWeb()
+```

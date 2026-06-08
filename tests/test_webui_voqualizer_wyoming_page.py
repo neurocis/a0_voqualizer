@@ -72,7 +72,7 @@ def test_new_page_has_interface_selector_and_discovery():
 
 def test_new_page_uses_w35_csrf_cache_bust():
     src = NEW.read_text()
-    assert 'w35-csrf-2026-06-05-1' in src
+    assert 'w55-functional-web-2026-06-08-1' in src
 
 
 def test_new_page_exposes_smoke_diagnostics():
@@ -83,7 +83,7 @@ def test_new_page_exposes_smoke_diagnostics():
     assert "action: 'smoke'" in src
     assert '/api/plugins/a0_voqualizer/wyoming_status' in src
     assert 'client.snapshot()' in src
-    assert 'w36-smoke-2026-06-06-1' in src
+    assert 'w55-functional-web-2026-06-08-1' in src
 
 
 def test_new_page_exposes_setup_init_validate_start_controls():
@@ -100,7 +100,7 @@ def test_new_page_exposes_setup_init_validate_start_controls():
         'window.voqualizerWyomingInitConfig',
         'window.voqualizerWyomingValidate',
         'window.voqualizerWyomingStart',
-        'w41-setup-2026-06-06-1',
+        'w55-functional-web-2026-06-08-1',
     ):
         assert marker in src, marker
 
@@ -112,7 +112,7 @@ def test_new_page_exposes_live_checklist_controls():
         "action: 'checklist'",
         'window.voqualizerWyomingChecklist',
         'runLiveChecklist',
-        'w49-readiness-2026-06-06-1',
+        'w55-functional-web-2026-06-08-1',
     ):
         assert marker in src, marker
 
@@ -122,7 +122,7 @@ def test_new_page_has_always_visible_checklist_button():
     assert 'id="voq-wyoming-checklist-main"' in src
     assert 'handleChecklistClick' in src
     assert 'checklistMainBtn.addEventListener' in src
-    assert 'w49-readiness-2026-06-06-1' in src
+    assert 'w55-functional-web-2026-06-08-1' in src
 
 
 def test_new_page_exposes_readiness_snapshot_helper():
@@ -132,6 +132,19 @@ def test_new_page_exposes_readiness_snapshot_helper():
         'runReadinessSnapshot',
         'window.voqualizerWyomingReadiness',
         'ready_for_browser',
-        'w49-readiness-2026-06-06-1',
+        'w55-functional-web-2026-06-08-1',
+    ):
+        assert marker in src, marker
+
+
+def test_new_page_auto_configures_current_chat_for_functional_web_ui():
+    src = NEW.read_text()
+    for marker in (
+        'getCurrentA0ContextId',
+        "action: 'web_configure'",
+        'configureWebInterfaceFromCurrentContext',
+        'connectWithAutoSetup',
+        'window.voqualizerWyomingConfigureWeb',
+        'w55-functional-web-2026-06-08-1',
     ):
         assert marker in src, marker

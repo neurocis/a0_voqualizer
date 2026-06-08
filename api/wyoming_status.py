@@ -9,6 +9,7 @@ from usr.plugins.a0_voqualizer.helpers.wyoming_config_init import init_wyoming_c
 from usr.plugins.a0_voqualizer.helpers.wyoming_live_checklist import run_live_checklist  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_readiness import readiness_snapshot  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_live_admin_capture import live_admin_capture  # noqa: E402
+from usr.plugins.a0_voqualizer.helpers.wyoming_web_context import bind_current_context_interface  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_dom_settings import (  # noqa: E402
     dom_integration_status,
     set_dom_integration_enabled,
@@ -106,8 +107,18 @@ class WyomingStatus(ApiHandler):
                 live_provider_status=live_provider_status,
                 dom_integration_status_provider=dom_integration_status,
             )
+        if action == "web_configure":
+            return bind_current_context_interface(
+                ctxid=str((input or {}).get("ctxid") or (input or {}).get("ctxID") or ""),
+                interface_id=str((input or {}).get("interface_id") or "web"),
+                name=str((input or {}).get("name") or "Voqualizer Web"),
+                config_path=(input or {}).get("config_path") or hooks.wyoming_config_path(),
+                bind_host=str((input or {}).get("bind_host") or "127.0.0.1"),
+                bind_port=int((input or {}).get("bind_port") or 10701),
+                overwrite=bool((input or {}).get("overwrite", True)),
+            )
         return {
             "error": "unsupported_action",
             "message": f"Unsupported Wyoming status action: {action}",
-            "supported_actions": ["status", "bootstrap", "validate", "init_config", "start", "stop", "smoke", "checklist", "readiness", "dom_integration", "live_admin_capture"],
+            "supported_actions": ["status", "bootstrap", "validate", "init_config", "start", "stop", "smoke", "checklist", "readiness", "dom_integration", "live_admin_capture", "web_configure"],
         }

@@ -911,3 +911,19 @@ paths. The W54 plan focuses on running the standalone page capture button and
 `window.voqualizerWyomingCapture()` against a real ctxID, then optionally
 repeating with `tcp_describe:true` after runtime start. Pass criteria are
 recorded in `docs/wyoming-setup.md`.
+
+
+### W55 functional web interface auto-setup
+
+The objective is a functional browser interface using Wyoming, not a manual CLI
+exercise. The standalone Wyoming page now derives the current Agent Zero ctxID
+from `window.getContext()`, the Alpine chat store, or `?ctxid=...`; calls
+`wyoming_status` with `action=web_configure`; creates/updates one `web`
+interface bound 1:1 to that ctxID; starts the Wyoming runtime; and reconnects
+the browser Wyoming WS client. Manual tools remain diagnostics/fallbacks only.
+
+Browser debug helper:
+
+```js
+await window.voqualizerWyomingConfigureWeb()
+```
