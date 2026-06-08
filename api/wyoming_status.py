@@ -1,7 +1,7 @@
 """Admin/status endpoint for the Voqualizer Wyoming runtime scaffold."""
 from __future__ import annotations
 
-from python.helpers.api import ApiHandler, Request, Response
+from helpers.api import ApiHandler, Request, Response
 
 from usr.plugins.a0_voqualizer.helpers.wyoming_live_providers import live_provider_status  # noqa: E402
 from usr.plugins.a0_voqualizer.helpers.wyoming_smoke_diagnostics import smoke_report  # noqa: E402
