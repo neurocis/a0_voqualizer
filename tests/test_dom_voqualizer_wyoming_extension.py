@@ -140,4 +140,11 @@ def test_dom_extension_does_not_remove_core_x_component_ancestor():
     src = NEW.read_text()
     assert "closest?.('x-component')" not in src
     assert 'this.$root?.remove?.()' not in src
-    assert 'this.$root.hidden = true' in src
+    assert 'if (this.$root) this.$root.hidden = true' in src
+
+
+def test_dom_extension_has_no_invalid_optional_assignment():
+    src = NEW.read_text()
+    assert '?.hidden =' not in src
+    assert '?.style.display =' not in src
+    assert 'if (this.$root) this.$root.hidden = true' in src

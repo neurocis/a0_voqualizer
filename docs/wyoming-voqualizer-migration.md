@@ -846,3 +846,19 @@ Repair:
   `display:none`, and `data-wyoming-dom-disabled=true`;
 - defensive CSS now collapses only Voqualizer-disabled roots, not parent
   framework wrappers.
+
+
+### Side quest follow-up 5: fix Wyoming inline module syntax artifact
+
+Browser console showed `Failed to fetch dynamically imported module: blob:...`
+for `voqualizer-wyoming-buttons.html`. The disabled-path patch had introduced an
+invalid JavaScript assignment through optional chaining (`this.$root?.hidden =
+true` / equivalent), causing the generated inline module blob to fail at parse
+time. The failed component stayed as a framework `div.loading` artifact in
+`chat-input-box-end`.
+
+Repair:
+
+- replaced invalid optional-chain assignments with guarded normal assignments;
+- added a regression test that extracts `<script type="module">` blocks from the
+  DOM extension HTML and runs `node --check` against them.
