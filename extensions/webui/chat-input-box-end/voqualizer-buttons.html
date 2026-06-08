@@ -20,9 +20,28 @@
 -->
 <div
   x-data="a0VoqualizerButtons()"
-  x-init="init()"
+  x-init="(async () => {
+    // Side quest: respect Voqualizer DOM-only ASR/TTS integration toggle.
+    // When disabled, hide the legacy DOM buttons too. Legacy file is kept
+    // in-tree as reference per the breaking-rewrite plan.
+    try {
+      const res = await fetch('/api/plugins/a0_voqualizer/wyoming_status', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dom_integration' })
+      });
+      const data = await res.json();
+      window.voqualizerLegacyDomIntegrationStatus = data;
+      if (data && data.enabled === false) {
+        $el.setAttribute('data-wyoming-dom-disabled', 'true');
+        $el.style.display = 'none';
+        return; // do not initialize legacy buttons
+      }
+    } catch (e) { /* fall through and init normally */ }
+    init();
+  })()"
   x-move-after="#send-button"
   data-a0-voqualizer-buttons="1"
+  data-voqualizer-dom-toggle-guard="side-dom-toggle-2026-06-07-1"
   class="voqualizer-buttons-row"
 >
   <button

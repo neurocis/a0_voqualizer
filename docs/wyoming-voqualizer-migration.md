@@ -777,3 +777,21 @@ Validation: a live A0 framework probe confirmed the modal-equivalent flow:
 load config → set `wyoming.dom_integration.enabled=false` → save config → reload
 config → helper status sees `enabled=false`. The local config was restored to
 `enabled=true` after the probe.
+
+
+### Side quest follow-up: hide legacy DOM buttons too
+
+Follow-up after the DOM-only toggle landed:
+
+- Agent Zero auto-loads every file under
+  `extensions/webui/chat-input-box-end/`, so both `voqualizer-buttons.html`
+  (legacy custom protocol, kept for reference) AND
+  `voqualizer-wyoming-buttons.html` (new Wyoming) render side by side.
+- The initial side-quest toggle hid only the new Wyoming buttons, so the legacy
+  buttons remained visible after the user disabled DOM ASR/TTS.
+- Repair: legacy `voqualizer-buttons.html` now also queries the
+  `wyoming_status` `dom_integration` admin action, hides itself, and skips its
+  Alpine `init()` when `enabled` is `false`.
+- Scope unchanged: standalone Voqualizer page, Wyoming TCP runtime, providers,
+  and retained legacy reference files remain available; only the DOM main UI
+  ASR/TTS surface is disabled when the toggle is off.
