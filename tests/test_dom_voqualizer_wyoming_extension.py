@@ -134,3 +134,10 @@ def test_dom_extension_exposes_readiness_snapshot_helper():
         'w49-readiness-2026-06-06-1',
     ):
         assert marker in src, marker
+
+
+def test_dom_extension_does_not_remove_core_x_component_ancestor():
+    src = NEW.read_text()
+    assert "closest?.('x-component')" not in src
+    assert 'this.$root?.remove?.()' not in src
+    assert 'this.$root.hidden = true' in src

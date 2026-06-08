@@ -35,7 +35,12 @@
         // Toggle OFF: do NOT activate the CSS that hides A0 native mic/speaker buttons,
         // and remove the legacy host element entirely so no empty placeholder remains
         // below the chat input row.
-        try { ($el.closest('x-component') || $el).remove(); } catch (_) { $el.style.display = 'none'; }
+        // Do not remove closest x-component: after x-move-after, that can be a
+        // core chat input wrapper and can remove the entire prompt input. Hide
+        // only this Voqualizer root node.
+        $el.setAttribute('data-wyoming-dom-disabled', 'true');
+        $el.hidden = true;
+        $el.style.display = 'none';
         return; // do not initialize legacy buttons
       }
       // Toggle ON: activate the gated CSS that hides A0 native mic/speaker buttons.
@@ -113,10 +118,11 @@
 
 
 
-  /* Safety net: if a framework/cache race leaves a disabled component wrapper
-     in place, collapse it completely so it cannot create a row below the chat bar. */
-  x-extension[id="chat-input-box-end"] > x-component:has([data-wyoming-dom-disabled="true"]),
-  x-extension[id="chat-input-box-end"] [data-wyoming-dom-disabled="true"] {
+  /* Safety net: collapse only Voqualizer-disabled roots. Do not hide/remove
+     the parent x-component because moved nodes may resolve ancestors in the
+     core chat input tree. */
+  [data-a0-voqualizer-buttons][data-wyoming-dom-disabled="true"],
+  .voqualizer-wyoming-buttons[data-wyoming-dom-disabled="true"] {
     display: none !important;
     height: 0 !important;
     min-height: 0 !important;

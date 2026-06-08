@@ -830,3 +830,19 @@ Repair:
   wrapper, falling back to the root element if needed;
 - added defensive CSS to collapse any disabled wrapper that survives a cache or
   framework timing race.
+
+
+### Side quest follow-up 4: restore prompt input after ancestor-removal regression
+
+The wrapper-artifact fix was too aggressive: disabled DOM paths removed the
+closest `x-component`. After `x-move-after` / `x-move-to` relocation, that
+ancestor can belong to the core chat input component, so removing it can remove
+the entire prompt input.
+
+Repair:
+
+- disable paths no longer remove ancestor `x-component` wrappers;
+- they hide only the Voqualizer root element with `hidden=true`,
+  `display:none`, and `data-wyoming-dom-disabled=true`;
+- defensive CSS now collapses only Voqualizer-disabled roots, not parent
+  framework wrappers.
