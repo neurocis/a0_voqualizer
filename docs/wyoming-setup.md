@@ -374,3 +374,20 @@ Browser debug helper:
 ```js
 await window.voqualizerWyomingConfigureWeb()
 ```
+
+
+## W56 canonical web interface migration
+
+The canonical standalone Voqualizer URL is now the Wyoming web interface:
+
+```text
+/plugins/a0_voqualizer/webui/voqualizer.html
+```
+
+`voqualizer-wyoming.html` remains only as an alias/compatibility page for older
+links. The previous custom-protocol standalone page was moved to
+`webui/voqualizer-legacy-reference.html` for source reference only.
+
+Normal browser usage should target `voqualizer.html`; it auto-configures the
+current chat through `action=web_configure`, starts the Wyoming runtime, and then
+connects through the Wyoming-over-WebSocket bridge.

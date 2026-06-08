@@ -927,3 +927,11 @@ Browser debug helper:
 ```js
 await window.voqualizerWyomingConfigureWeb()
 ```
+
+
+### W56 canonical standalone page migration
+
+Corrected the migration target: `webui/voqualizer.html` is now the Wyoming web
+interface. The older custom-protocol page is retained only as
+`webui/voqualizer-legacy-reference.html`, and `voqualizer-wyoming.html` remains
+as a compatibility alias for earlier links.

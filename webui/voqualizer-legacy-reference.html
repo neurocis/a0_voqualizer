@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>Voqualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+  <link rel="stylesheet" href="/plugins/a0_voqualizer/webui/voqualizer.css?v=m8-tts-vu-asr-style-continuous-2026-06-04-82" />
+  <script type="module" src="/plugins/a0_voqualizer/webui/voqualizer.js?v=m8-tts-vu-asr-style-continuous-2026-06-04-82"></script>
+</head>
+<body>
+  <div class="voq-app" data-voqualizer-page="standalone">
+    <header class="voq-topbar" aria-label="Voqualizer top bar">
+      <select id="voq-context-select" class="voq-context-select" aria-label="Select Voqualizer context" hidden aria-hidden="true">
+        <option value="" selected>Context / Agent Name</option>
+      </select>
+      <div class="voq-brand-row" aria-hidden="true">
+        <img class="voq-brand-logo" src="/public/splash.jpg" alt="Agent Zero" />
+        <span id="voq-header-context-name" class="voq-brand-text" title="Voqualizer">Voqualizer</span>
+      </div>
+      <nav class="voq-topbar-actions" aria-label="Voqualizer page actions">
+        <button
+          type="button"
+          id="voq-fullscreen-button"
+          class="voq-icon-button voq-fullscreen-button"
+          aria-label="Toggle fullscreen"
+          title="Toggle fullscreen"
+          aria-pressed="false"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">fullscreen</span>
+          <span class="voq-text-fallback">fullscreen</span>
+        </button>
+        <div class="voq-context-menu-wrap">
+          <button
+            type="button"
+            id="voq-context-menu-button"
+            class="voq-icon-button voq-context-menu-button"
+            aria-label="Select Voqualizer context"
+            title="Select Voqualizer context"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-controls="voq-context-menu"
+          >
+            <span class="material-symbols-outlined voq-material" aria-hidden="true">menu</span>
+            <span class="voq-text-fallback">contexts</span>
+          </button>
+          <ul id="voq-context-menu" class="voq-context-menu" role="listbox" aria-label="Voqualizer contexts" hidden></ul>
+        </div>
+        <button
+          type="button"
+          id="voq-asr-debug-button"
+          class="voq-icon-button voq-asr-debug-button"
+          aria-label="Copy ASR debug state"
+          title="Copy ASR debug state"
+          hidden
+          aria-hidden="true"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">bug_report</span>
+          <span class="voq-text-fallback">copy asr debug</span>
+        </button>
+        <button
+          type="button"
+          id="voq-tts-debug-button"
+          class="voq-icon-button voq-tts-debug-button"
+          aria-label="Copy TTS debug state"
+          title="Copy TTS debug state"
+          hidden
+          aria-hidden="true"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">volume_up</span>
+          <span class="voq-text-fallback">copy tts debug</span>
+        </button>
+        <a
+          id="voq-logout-button"
+          class="voq-icon-button voq-logout-button"
+          href="/logout"
+          aria-label="Log out of Agent Zero"
+          title="Log out"
+        >
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">logout</span>
+          <span class="voq-text-fallback">logout</span>
+        </a>
+      </nav>
+    </header>
+
+    <div id="voq-status" class="voq-status" role="status" aria-live="polite" aria-atomic="true">Ready</div>
+
+    <div class="voq-chat-wrap">
+      <main
+        id="voq-chat"
+        class="voq-chat"
+        role="log"
+        aria-label="Voqualizer chat transcript"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-atomic="false"
+        tabindex="0"
+      >
+        <section class="voq-empty-state" aria-label="Empty chat state">
+          <div class="voq-orb" aria-hidden="true">◌</div>
+          <h1>Voqualizer</h1>
+          <p>Speak or type to an A0 context. Minimal, dark, and focused.</p>
+        </section>
+      </main>
+      <button id="voq-jump-latest" class="voq-jump-latest" type="button" hidden>Jump to latest</button>
+    </div>
+
+    <footer class="voq-composer" aria-label="Voqualizer prompt composer">
+      <div class="voq-prompt-shell">
+        <textarea
+          id="voq-prompt-input"
+          class="voq-prompt-input"
+          rows="1"
+          placeholder="Type or speak…"
+          aria-label="Prompt input / text window"
+          aria-describedby="voq-status voq-input-help"
+          autocomplete="off"
+          spellcheck="true"
+        ></textarea>
+        <button
+          id="voq-prompt-clear"
+          class="voq-prompt-clear"
+          type="button"
+          aria-label="Clear prompt text"
+          title="Clear prompt"
+          hidden
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <p id="voq-input-help" class="voq-sr-only">Press Enter to send. Press Shift Enter for a new line.</p>
+      <div class="voq-actions" aria-label="Prompt actions">
+        <div class="voqualizer-buttons-row" data-voqualizer-standalone-buttons="1">
+          <button
+            type="button"
+            id="voqualizer-speaker-button"
+            class="voq-action-button voqualizer-button voqualizer-speaker"
+            aria-label="Voqualizer TTS is on. Click to mute TTS for this chat."
+            title="Voqualizer TTS is on. Click to mute TTS for this chat."
+            aria-pressed="true"
+          >
+            <span class="voqualizer-tts-vu" aria-hidden="true">
+              <span class="voqualizer-tts-vu-bar voqualizer-tts-vu-bar-1"></span>
+              <span class="voqualizer-tts-vu-bar voqualizer-tts-vu-bar-2"></span>
+              <span class="voqualizer-tts-vu-bar voqualizer-tts-vu-bar-3"></span>
+            </span>
+            <span class="material-symbols-outlined voq-material" aria-hidden="true">graphic_eq</span>
+            <span class="voq-text-fallback">tts</span>
+          </button>
+          <button
+            type="button"
+            id="voqualizer-mic-button"
+            class="voq-action-button voqualizer-button voqualizer-mic voqualizer-idle"
+            aria-label="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
+            title="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
+            aria-pressed="false"
+          >
+            <span class="voqualizer-mic-vu" aria-hidden="true"></span>
+            <span class="material-symbols-outlined voq-material" aria-hidden="true">mic</span>
+            <span class="voqualizer-button-ring" aria-hidden="true"></span>
+            <span class="voq-text-fallback">asr</span>
+          </button>
+        </div>
+        <button id="voq-send-button" class="voq-action-button" type="button" aria-label="Send prompt" title="Send">
+          <span class="material-symbols-outlined voq-material" aria-hidden="true">send</span>
+          <span class="voq-text-fallback">send</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
