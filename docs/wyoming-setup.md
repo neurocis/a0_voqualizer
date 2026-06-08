@@ -273,3 +273,88 @@ the browser session. The standalone Wyoming page exposes a **capture** button an
 `window.voqualizerWyomingCapture()` for quick copy/paste diagnostics.
 
 The W52 CLI also supports `--save PATH` to write the JSON bundle to disk.
+
+
+## W54 live runtime/browser validation
+
+Use this checklist after W51-W53 are installed and pushed. It validates the live
+framework runtime, the authenticated admin capture path, and the standalone
+browser capture path using a **real ctxID**.
+
+### 1. Confirm or create a real interface config
+
+Create `config/wyoming_interfaces.json` with a real Agent Zero context ID. Do not
+leave `REPLACE_WITH_REAL_CTXID` or other placeholders in place.
+
+```bash
+python3 tools/wyoming_init_config.py \
+  --ctxid REAL_CTXID \
+  --interface-id hero \
+  --bind-host 127.0.0.1 \
+  --bind-port 10701
+```
+
+Validate the on-disk setup before starting runtime:
+
+```bash
+python3 tools/wyoming_live_smoke_capture.py \
+  --config config/wyoming_interfaces.json \
+  --interface hero
+```
+
+### 2. Start runtime from the authenticated browser/admin path
+
+From the standalone Wyoming page, press **validate**, then **start runtime**. Or
+POST to the admin endpoint from an authenticated browser session:
+
+```json
+{"action":"start"}
+```
+
+Hard refresh the standalone page after changing config or after plugin updates.
+
+### 3. Capture live admin diagnostics from the browser
+
+Use the standalone page **capture** button, or run in the browser console:
+
+```js
+await window.voqualizerWyomingCapture()
+```
+
+Equivalent admin JSON action:
+
+```json
+{"action":"live_admin_capture","interface_id":"hero","tcp_describe":false}
+```
+
+For TCP validation after runtime start, use:
+
+```json
+{"action":"live_admin_capture","interface_id":"hero","tcp_describe":true}
+```
+
+The returned JSON should include actions for `status`, `dom_integration`,
+`validate`, `readiness`, `smoke`, and `checklist`. Paste the full JSON if any
+`blockers` remain.
+
+### 4. Optional CLI live admin capture
+
+If you have a browser session cookie and CSRF token, the W52 CLI can capture the
+same live admin state from outside the browser:
+
+```bash
+python3 tools/wyoming_live_admin_capture.py \
+  --host 127.0.0.1 --port 80 \
+  --cookie 'session=...' --csrf-token '...' \
+  --interface-id hero --tcp-describe \
+  --save /tmp/wyoming-live-admin-capture.json
+```
+
+### 5. Expected pass criteria
+
+- `validate.ok === true`;
+- runtime `status.started` or `status.running` is true after start;
+- `readiness.ready_for_browser === true` when TCP probe is skipped;
+- with `tcp_describe:true`, TCP `describe/info` succeeds for the selected interface;
+- no placeholder ctxID blockers;
+- browser capture button shows JSON rather than an endpoint/import error.

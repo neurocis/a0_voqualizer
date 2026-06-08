@@ -902,3 +902,12 @@ Implemented:
 - standalone Wyoming page adds a **capture** button and `window.voqualizerWyomingCapture()`;
 - W52 HTTP CLI gains `--save PATH`;
 - tests cover helper bundling, endpoint/page markers, and CLI save support.
+
+
+### W54 live runtime/browser validation plan
+
+Added explicit validation instructions for the newly available W51-W53 capture
+paths. The W54 plan focuses on running the standalone page capture button and
+`window.voqualizerWyomingCapture()` against a real ctxID, then optionally
+repeating with `tcp_describe:true` after runtime start. Pass criteria are
+recorded in `docs/wyoming-setup.md`.
