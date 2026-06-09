@@ -1,5 +1,5 @@
 import { callJsonApi } from '/js/api.js';
-import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w57-preserve-ui-wyoming-protocol-2026-06-08-1';
+import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w58-preserve-ui-wyoming-runtime-2026-06-08-1';
 import {
   bytesFromTtsPayload,
   concatAudioBytes,
@@ -36,7 +36,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'w57-preserve-ui-wyoming-protocol';
+const PAGE_VERSION = 'w58-preserve-ui-wyoming-runtime';
 const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-asr-style-continuous-2026-06-04-82';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
@@ -1294,6 +1294,10 @@ function isCurrentWyomingGeneration(data = {}) {
   return !generation || !tts.activeGenerationId || generation === tts.activeGenerationId;
 }
 
+function isWyomingClientConnected(client) {
+  try { return !!client?.snapshot?.().connected; } catch (_err) { return false; }
+}
+
 function installWyomingClientHandlers(client, state) {
   if (!client || client.__voqualizerStandaloneHandlersInstalled) return;
   client.__voqualizerStandaloneHandlersInstalled = true;
@@ -1397,7 +1401,7 @@ function installWyomingClientHandlers(client, state) {
 async function ensureWyomingSession(contextId, state = getPageStateRef()) {
   const clean = safeString(contextId).trim();
   if (!clean) throw new Error('missing context for Wyoming session');
-  if (wyoming.client && wyoming.connectedContextId === clean && wyoming.client.isConnected?.()) return wyoming.client;
+  if (wyoming.client && wyoming.connectedContextId === clean && isWyomingClientConnected(wyoming.client)) return wyoming.client;
   if (wyoming.connecting) return wyoming.connecting;
   wyoming.connecting = (async () => {
     await configureWyomingWebInterface(clean);
@@ -1421,6 +1425,21 @@ async function ensureWyomingSession(contextId, state = getPageStateRef()) {
     return await wyoming.connecting;
   } finally {
     wyoming.connecting = null;
+  }
+}
+
+async function disconnectWyomingSession(reason = 'disconnect') {
+  const client = wyoming.client;
+  wyoming.client = null;
+  wyoming.connectedContextId = '';
+  wyoming.connecting = null;
+  if (client) {
+    try { client.close?.(); } catch (_err) {}
+  }
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.wyomingConnected = false;
+    globalThis.__voqualizer_page.wyomingDisconnectReason = reason;
+    globalThis.__voqualizer_page.wyomingDisconnectedAt = Date.now();
   }
 }
 
@@ -2922,6 +2941,10 @@ function setPageStateRef(state) {
   pageState = state;
 }
 
+function getPageStateRef() {
+  return pageState;
+}
+
 // M8: route ASR finals into the standalone submitPrompt(pageState) path so
 // the M3/M4/M5/M7 typed-prompt + /poll + cx-stream + word-highlight pipeline
 // stays the single source of truth for assistant responses on this page.
@@ -3391,6 +3414,7 @@ function initVoqualizerPage() {
   globalThis.addEventListener('beforeunload', () => {
     try { void voqStore?.stop('beforeunload'); } catch (_err) {}
     disconnectVoq();
+    void disconnectWyomingSession('beforeunload');
   });
 }
 
@@ -3415,6 +3439,8 @@ export {
   WYOMING_TRANSPORT_PRIMARY,
   configureWyomingWebInterface,
   ensureWyomingSession,
+  disconnectWyomingSession,
+  isWyomingClientConnected,
   submitPromptOverWyomingSession,
   cancelInflightTts,
   connectVoq,

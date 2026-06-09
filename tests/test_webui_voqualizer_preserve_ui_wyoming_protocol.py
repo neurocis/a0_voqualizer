@@ -22,7 +22,7 @@ def test_canonical_html_preserves_existing_visual_layout():
         'Material Symbols',
         '/plugins/a0_voqualizer/webui/voqualizer.css',
         '/plugins/a0_voqualizer/webui/voqualizer.js',
-        'w57-preserve-ui-wyoming-protocol-2026-06-08-1',
+        'w58-preserve-ui-wyoming-runtime-2026-06-08-1',
     ):
         assert marker in src, marker
 
@@ -44,7 +44,7 @@ def test_voqualizer_js_imports_wyoming_client_and_primary_transport():
         'submitPromptOverWyomingSession',
         "action: 'web_configure'",
         "promptSubmitTransport = 'wyoming'",
-        'w57-preserve-ui-wyoming-protocol-2026-06-08-1',
+        'w58-preserve-ui-wyoming-runtime-2026-06-08-1',
     ):
         assert marker in src, marker
 
@@ -72,3 +72,12 @@ def test_canonical_html_is_not_minimal_wyoming_scaffold():
     assert 'id="voq-wyoming-app"' not in src
     assert 'id="voq-wyoming-transcript"' not in src
     assert 'class="voqualizer-app"' not in src
+
+
+def test_wyoming_runtime_helpers_match_shared_client_api():
+    src = JS.read_text()
+    assert 'function getPageStateRef()' in src
+    assert 'function isWyomingClientConnected' in src
+    assert '.isConnected?.()' not in src
+    assert 'disconnectWyomingSession' in src
+    assert 'client.snapshot?.().connected' in src
