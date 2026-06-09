@@ -71,7 +71,7 @@ def test_dom_extension_checks_toggle_before_connecting():
         'DOM ASR/TTS disabled',
         'data-wyoming-dom-disabled',
         'voqualizerWyomingDomIntegrationStatus',
-        'side-dom-toggle-2026-06-07-1',
+        'side-dom-toggle-2026-06-08-4',
     ):
         assert marker in src, marker
 

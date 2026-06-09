@@ -22,8 +22,7 @@
   x-data="a0VoqualizerButtons()"
   x-init="(async () => {
     // Side quest: respect Voqualizer DOM-only ASR/TTS integration toggle.
-    // When disabled, hide the legacy DOM buttons too. Legacy file is kept
-    // in-tree as reference per the breaking-rewrite plan.
+    // Disabled means no live Voqualizer button elements in the main DOM.
     try {
       const res = await fetch('/api/plugins/a0_voqualizer/wyoming_status', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -32,57 +31,60 @@
       const data = await res.json();
       window.voqualizerLegacyDomIntegrationStatus = data;
       if (data && data.enabled === false) {
-        // Toggle OFF: do NOT activate the CSS that hides A0 native mic/speaker buttons,
-        // and remove the legacy host element entirely so no empty placeholder remains
-        // below the chat input row.
-        // Do not remove closest x-component: after x-move-after, that can be a
-        // core chat input wrapper and can remove the entire prompt input. Hide
-        // only this Voqualizer root node.
         $el.setAttribute('data-wyoming-dom-disabled', 'true');
         $el.hidden = true;
         $el.style.display = 'none';
-        return; // do not initialize legacy buttons
+        return; // do not initialize or render legacy buttons
       }
-      // Toggle ON: activate the gated CSS that hides A0 native mic/speaker buttons.
       try { document.body.classList.add('voqualizer-dom-active'); } catch (_) {}
-    } catch (e) { /* fall through and init normally */ }
+      domIntegrationEnabled = true;
+      await $nextTick();
+    } catch (e) {
+      // Defensive fallback: keep previous behavior if the status endpoint is unavailable.
+      domIntegrationEnabled = true;
+      await $nextTick();
+    }
     init();
   })()"
   x-move-after="#send-button"
   data-a0-voqualizer-buttons="1"
-  data-voqualizer-dom-toggle-guard="side-dom-toggle-2026-06-07-3"
+  data-voqualizer-dom-toggle-guard="side-dom-toggle-2026-06-08-4"
   class="voqualizer-buttons-row"
 >
-  <button
-    type="button"
-    id="voqualizer-speaker-button"
-    class="chat-button voqualizer-button voqualizer-speaker"
-    aria-label="Voqualizer TTS is on. Click to mute TTS for this chat."
-    title="Voqualizer TTS is on. Click to mute TTS for this chat."
-    aria-pressed="true"
-    @click="onSpeakerClick($event)"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">graphic_eq</span>
-    <span class="voqualizer-button-badge" aria-hidden="true">V</span>
-  </button>
-  <button
-    type="button"
-    id="voqualizer-mic-button"
-    class="chat-button voqualizer-button voqualizer-mic voqualizer-idle"
-    aria-label="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
-    title="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
-    aria-pressed="false"
-    @pointerdown="onPointerDown($event)"
-    @pointerup="onPointerUp($event)"
-    @pointercancel="onPointerCancel($event)"
-    @pointerleave="onPointerCancel($event)"
-    @keydown="onKey($event)"
-    @keyup="onKey($event)"
-  >
-    <span class="voqualizer-mic-vu" aria-hidden="true"></span>
-    <span class="material-symbols-outlined" aria-hidden="true">mic</span>
-    <span class="voqualizer-button-ring" aria-hidden="true"></span>
-  </button>
+  <template x-if="domIntegrationEnabled">
+    <div class="voqualizer-buttons-row" data-a0-voqualizer-buttons-live="1">
+      <button
+        type="button"
+        id="voqualizer-speaker-button"
+        class="chat-button voqualizer-button voqualizer-speaker"
+        aria-label="Voqualizer TTS is on. Click to mute TTS for this chat."
+        title="Voqualizer TTS is on. Click to mute TTS for this chat."
+        aria-pressed="true"
+        @click="onSpeakerClick($event)"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">graphic_eq</span>
+        <span class="voqualizer-button-badge" aria-hidden="true">V</span>
+      </button>
+      <button
+        type="button"
+        id="voqualizer-mic-button"
+        class="chat-button voqualizer-button voqualizer-mic voqualizer-idle"
+        aria-label="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
+        title="Voqualizer mic off. Tap for conversation. Hold for push-to-talk."
+        aria-pressed="false"
+        @pointerdown="onPointerDown($event)"
+        @pointerup="onPointerUp($event)"
+        @pointercancel="onPointerCancel($event)"
+        @pointerleave="onPointerCancel($event)"
+        @keydown="onKey($event)"
+        @keyup="onKey($event)"
+      >
+        <span class="voqualizer-mic-vu" aria-hidden="true"></span>
+        <span class="material-symbols-outlined" aria-hidden="true">mic</span>
+        <span class="voqualizer-button-ring" aria-hidden="true"></span>
+      </button>
+    </div>
+  </template>
 </div>
 
 <style>
@@ -306,6 +308,7 @@
 
   window.a0VoqualizerButtons = function () {
     return {
+      domIntegrationEnabled: false,
       _holdTimer: 0,
       _holdActive: false,
       _pointerDownTs: 0,

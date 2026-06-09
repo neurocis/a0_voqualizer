@@ -954,3 +954,13 @@ fail before `voqualizer.js` bound the existing buttons and prompt controls. The
 canonical page now loads the Wyoming client lazily only when the Wyoming
 transport is needed, uses the framework's existing Socket.IO vendor module path,
 and restores the prompt clear button markup in the preserved standalone layout.
+
+
+### DOM toggle no-live-elements follow-up
+
+Adjusted the main A0 DOM chat-input extensions so `wyoming.dom_integration.enabled=false`
+means no live Voqualizer button elements are rendered in the main chat DOM. The
+legacy and Wyoming chat-input extensions now start with `domIntegrationEnabled=false`
+and gate their button markup behind Alpine templates, enabling/rendering only
+after the admin toggle reports true. Standalone pages are unaffected and keep
+their own controls.

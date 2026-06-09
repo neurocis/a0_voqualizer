@@ -19,44 +19,55 @@
   x-move-to="chat-input-box-end"
   data-wyoming-interface=""
   class="voqualizer-wyoming-buttons"
-  data-voqualizer-dom-toggle-guard="side-dom-toggle-2026-06-07-3"
+  data-voqualizer-dom-toggle-guard="side-dom-toggle-2026-06-08-4"
   style="display:inline-flex;gap:6px;align-items:center;margin-left:8px;"
 >
-  <button
-    id="voqualizer-wyoming-speaker-button"
-    type="button"
-    aria-label="Wyoming TTS toggle"
-    :aria-pressed="ttsEnabled"
-    @click="toggleTts()"
-    class="voqualizer-wyoming-btn"
-    style="min-width:36px;min-height:36px;border-radius:50%;"
-  >🔊</button>
-  <button
-    id="voqualizer-wyoming-mic-button"
-    type="button"
-    aria-label="Wyoming mic toggle"
-    :aria-pressed="micActive"
-    @click="toggleMic()"
-    class="voqualizer-wyoming-btn"
-    style="min-width:36px;min-height:36px;border-radius:50%;"
-  >🎤</button>
-  <button
-    id="voqualizer-wyoming-checklist-button"
-    type="button"
-    aria-label="Wyoming live checklist"
-    @click="runChecklist()"
-    class="voqualizer-wyoming-btn"
-    style="min-width:36px;min-height:36px;border-radius:50%;"
-  >✓</button>
-  <span
-    class="voqualizer-wyoming-status"
-    x-text="statusText"
-    style="font-size:0.75rem;opacity:0.7;"
-  ></span>
+  <template x-if="domIntegrationEnabled">
+    <div class="voqualizer-wyoming-buttons-live" style="display:inline-flex;gap:6px;align-items:center;margin-left:8px;">
+      <button
+        id="voqualizer-wyoming-speaker-button"
+        type="button"
+        aria-label="Wyoming TTS toggle"
+        :aria-pressed="ttsEnabled"
+        @click="toggleTts()"
+        class="voqualizer-wyoming-btn"
+        style="min-width:36px;min-height:36px;border-radius:50%;"
+      >🔊</button>
+      <button
+        id="voqualizer-wyoming-mic-button"
+        type="button"
+        aria-label="Wyoming mic toggle"
+        :aria-pressed="micActive"
+        @click="toggleMic()"
+        class="voqualizer-wyoming-btn"
+        style="min-width:36px;min-height:36px;border-radius:50%;"
+      >🎤</button>
+      <button
+        id="voqualizer-wyoming-checklist-button"
+        type="button"
+        aria-label="Wyoming live checklist"
+        @click="runChecklist()"
+        class="voqualizer-wyoming-btn"
+        style="min-width:36px;min-height:36px;border-radius:50%;"
+      >✓</button>
+      <span
+        class="voqualizer-wyoming-status"
+        x-text="statusText"
+        style="font-size:0.75rem;opacity:0.7;"
+      ></span>
+    </div>
+  </template>
 </div>
 
 <script type="module">
-  import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=side-dom-toggle-2026-06-07-3';
+  async function _loadWyomingDomClientFactory() {
+    if (window.__voqualizerWyomingDomClientFactory) return window.__voqualizerWyomingDomClientFactory;
+    const mod = await import('/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=side-dom-toggle-2026-06-08-4');
+    const factory = mod.createWyomingWsClient || mod.default;
+    if (typeof factory !== 'function') throw new Error('Wyoming DOM client factory unavailable');
+    window.__voqualizerWyomingDomClientFactory = factory;
+    return factory;
+  }
 
   function _resolveInterfaceId(rootEl) {
     const attr = rootEl?.getAttribute?.('data-wyoming-interface');
@@ -67,6 +78,7 @@
 
   document.addEventListener('alpine:init', () => {
     Alpine.data('voqualizerWyomingButtons', () => ({
+      domIntegrationEnabled: false,
       client: null,
       ttsEnabled: false,
       micActive: false,
@@ -102,7 +114,10 @@
           }
         } catch (_) { /* fall through and try to connect anyway */ }
         try {
+          this.domIntegrationEnabled = true;
+          await this.$nextTick?.();
           this.interfaceId = interfaceId;
+          const createWyomingWsClient = await _loadWyomingDomClientFactory();
           this.client = createWyomingWsClient({ interfaceId, debug: false });
           window.voqualizerWyomingDomDebug = () => this.client ? this.client.snapshot() : { connected: false, reason: 'no_client', lastSmokeDiagnostics: this.lastSmokeDiagnostics || null, lastValidation: this.lastValidation || null };
           window.voqualizerWyomingDomSmoke = () => this._smokeDiagnostics();
