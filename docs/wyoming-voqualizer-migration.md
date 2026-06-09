@@ -964,3 +964,12 @@ legacy and Wyoming chat-input extensions now start with `domIntegrationEnabled=f
 and gate their button markup behind Alpine templates, enabling/rendering only
 after the admin toggle reports true. Standalone pages are unaffected and keep
 their own controls.
+
+
+### W60 Voqualizer logout next redirect
+
+Updated the standalone Voqualizer web chat logout action to preserve a return
+path. The logout anchor now includes `next=/plugins/a0_voqualizer/webui/voqualizer.html`,
+and the page script dynamically refreshes that next target with the current
+query string so login returns to Voqualizer rather than the standard login flow
+with no next destination.

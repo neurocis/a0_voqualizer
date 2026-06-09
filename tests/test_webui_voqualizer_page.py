@@ -338,7 +338,7 @@ def test_voqualizer_logout_link_and_debug():
     html = read(HTML)
     js = read(JS)
     assert 'id="voq-logout-button"' in html
-    assert 'href="/logout"' in html
+    assert 'href="/logout?next=%2Fplugins%2Fa0_voqualizer%2Fwebui%2Fvoqualizer.html"' in html
     assert 'aria-label="Log out of Agent Zero"' in html
     assert '>logout<' in html
     assert "lastLogoutClickAt" in js

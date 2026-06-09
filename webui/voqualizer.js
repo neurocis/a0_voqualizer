@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'w59-ui-bindings-safe-wyoming';
+const PAGE_VERSION = 'w60-logout-next';
 const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-asr-style-continuous-2026-06-04-82';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
@@ -3235,6 +3235,33 @@ async function ensureWorklet(ctx) {
   try { await ctx.audioWorklet.addModule(WORKLET_URL); ctx[' __voq_worklet_loaded__'] = true; } catch (_err) {}
 }
 
+function voqualizerCanonicalPathWithSearch() {
+  const path = '/plugins/a0_voqualizer/webui/voqualizer.html';
+  const search = globalThis.location?.search || '';
+  return `${path}${search || ''}`;
+}
+
+function voqualizerLoginNextUrl() {
+  return `/login?next=${encodeURIComponent(voqualizerCanonicalPathWithSearch())}`;
+}
+
+function voqualizerLogoutUrl() {
+  return `/logout?next=${encodeURIComponent(voqualizerCanonicalPathWithSearch())}`;
+}
+
+function bindLogoutNextRedirect(logout) {
+  if (!logout) return;
+  const logoutUrl = voqualizerLogoutUrl();
+  logout.setAttribute('href', logoutUrl);
+  logout.dataset.loginNext = voqualizerLoginNextUrl();
+  logout.addEventListener('click', () => {
+    globalThis.__voqualizer_page.lastLogoutClickAt = Date.now();
+    globalThis.__voqualizer_page.lastLogoutHref = logoutUrl;
+    globalThis.__voqualizer_page.lastLoginNextHref = voqualizerLoginNextUrl();
+    setPageStatus('Logging out…', 'info');
+  });
+}
+
 function initVoqualizerPage() {
   const root = document.querySelector('[data-voqualizer-page="standalone"]');
   const settings = document.getElementById('voq-settings-button');
@@ -3384,12 +3411,7 @@ function initVoqualizerPage() {
     });
   }
 
-  if (logout) {
-    logout.addEventListener('click', () => {
-      globalThis.__voqualizer_page.lastLogoutClickAt = Date.now();
-      setPageStatus('Logging out…', 'info');
-    });
-  }
+  bindLogoutNextRedirect(logout);
 
   setPageStateRef(state);
   bindPromptInput(state);
@@ -3447,6 +3469,10 @@ export {
   WYOMING_STATUS_ENDPOINT,
   WYOMING_PRIMARY_INTERFACE_ID,
   WYOMING_TRANSPORT_PRIMARY,
+  voqualizerCanonicalPathWithSearch,
+  voqualizerLoginNextUrl,
+  voqualizerLogoutUrl,
+  bindLogoutNextRedirect,
   loadWyomingWsClientFactory,
   configureWyomingWebInterface,
   ensureWyomingSession,
