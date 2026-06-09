@@ -16,9 +16,9 @@ def test_canonical_voqualizer_page_preserves_polished_layout():
 
 def test_canonical_page_loads_wyoming_backed_js_cache_marker():
     src = CANONICAL.read_text()
-    assert '/plugins/a0_voqualizer/webui/voqualizer.js?v=w58-preserve-ui-wyoming-runtime-2026-06-08-1' in src
+    assert '/plugins/a0_voqualizer/webui/voqualizer.js?v=w59-ui-bindings-safe-wyoming-2026-06-08-1' in src
     js = JS.read_text()
-    for marker in ('createWyomingWsClient', 'submitPromptOverWyomingSession', 'WYOMING_TRANSPORT_PRIMARY = true'):
+    for marker in ('loadWyomingWsClientFactory', 'submitPromptOverWyomingSession', 'WYOMING_TRANSPORT_PRIMARY = true'):
         assert marker in js, marker
 
 

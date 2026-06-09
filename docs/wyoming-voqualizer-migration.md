@@ -945,3 +945,12 @@ from the legacy reference and moved the Wyoming migration into `voqualizer.js` a
 the primary transport. Existing send, context picker, mic/speaker controls,
 stream bubbles, word/TTS handling, and diagnostics remain in place while prompt
 submit/response/audio events route through the Wyoming web interface.
+
+
+### W59 preserved UI binding safety repair
+
+Fixed a preserved-UI regression where a top-level Wyoming client import could
+fail before `voqualizer.js` bound the existing buttons and prompt controls. The
+canonical page now loads the Wyoming client lazily only when the Wyoming
+transport is needed, uses the framework's existing Socket.IO vendor module path,
+and restores the prompt clear button markup in the preserved standalone layout.

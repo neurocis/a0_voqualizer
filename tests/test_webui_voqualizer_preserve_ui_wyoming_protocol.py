@@ -22,7 +22,7 @@ def test_canonical_html_preserves_existing_visual_layout():
         'Material Symbols',
         '/plugins/a0_voqualizer/webui/voqualizer.css',
         '/plugins/a0_voqualizer/webui/voqualizer.js',
-        'w58-preserve-ui-wyoming-runtime-2026-06-08-1',
+        'w59-ui-bindings-safe-wyoming-2026-06-08-1',
     ):
         assert marker in src, marker
 
@@ -36,7 +36,7 @@ def test_legacy_reference_kept_for_diff_not_served_as_canonical():
 def test_voqualizer_js_imports_wyoming_client_and_primary_transport():
     src = JS.read_text()
     for marker in (
-        'createWyomingWsClient',
+        'loadWyomingWsClientFactory',
         'WYOMING_STATUS_ENDPOINT',
         'WYOMING_TRANSPORT_PRIMARY = true',
         'configureWyomingWebInterface',
@@ -44,7 +44,7 @@ def test_voqualizer_js_imports_wyoming_client_and_primary_transport():
         'submitPromptOverWyomingSession',
         "action: 'web_configure'",
         "promptSubmitTransport = 'wyoming'",
-        'w58-preserve-ui-wyoming-runtime-2026-06-08-1',
+        'w59-ui-bindings-safe-wyoming-2026-06-08-1',
     ):
         assert marker in src, marker
 

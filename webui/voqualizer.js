@@ -1,5 +1,4 @@
 import { callJsonApi } from '/js/api.js';
-import { createWyomingWsClient } from '/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w58-preserve-ui-wyoming-runtime-2026-06-08-1';
 import {
   bytesFromTtsPayload,
   concatAudioBytes,
@@ -36,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'w58-preserve-ui-wyoming-runtime';
+const PAGE_VERSION = 'w59-ui-bindings-safe-wyoming';
 const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-asr-style-continuous-2026-06-04-82';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
@@ -1103,7 +1102,8 @@ function warmVoqSessionForContext(contextId, reason = 'preload') {
         page.lastVoqWarmupError = err?.message || String(err);
         page.lastVoqWarmupReady = false;
       }
-      throw err;
+      if (reason === 'submit') throw err;
+      return null;
     });
   }
   if (page) {
@@ -1264,6 +1264,15 @@ function updateTtsButton() {
 }
 
 
+async function loadWyomingWsClientFactory() {
+  if (globalThis.__voqualizerWyomingClientFactory) return globalThis.__voqualizerWyomingClientFactory;
+  const mod = await import('/plugins/a0_voqualizer/webui/wyoming/wyoming-ws-client.js?v=w59-ui-bindings-safe-wyoming-2026-06-08-1');
+  const factory = mod.createWyomingWsClient || mod.default;
+  if (typeof factory !== 'function') throw new Error('Wyoming client factory unavailable');
+  globalThis.__voqualizerWyomingClientFactory = factory;
+  return factory;
+}
+
 async function configureWyomingWebInterface(contextId) {
   const clean = safeString(contextId).trim();
   if (!clean) throw new Error('missing context for Wyoming web interface');
@@ -1408,6 +1417,7 @@ async function ensureWyomingSession(contextId, state = getPageStateRef()) {
     if (wyoming.client) {
       try { wyoming.client.close(); } catch (_err) {}
     }
+    const createWyomingWsClient = await loadWyomingWsClientFactory();
     const client = createWyomingWsClient({ interfaceId: WYOMING_PRIMARY_INTERFACE_ID, debug: true });
     wyoming.client = client;
     wyoming.connectedContextId = clean;
@@ -3437,6 +3447,7 @@ export {
   WYOMING_STATUS_ENDPOINT,
   WYOMING_PRIMARY_INTERFACE_ID,
   WYOMING_TRANSPORT_PRIMARY,
+  loadWyomingWsClientFactory,
   configureWyomingWebInterface,
   ensureWyomingSession,
   disconnectWyomingSession,

@@ -15,7 +15,7 @@
  * webui/conversation-mode.js and webui/voqualizer.js remain in-tree for
  * reference only.
  */
-import { io } from '/socket.io/socket.io.esm.min.js';
+import { io } from '/vendor/socket.io.esm.min.js';
 
 const HANDLER_ID = 'plugins/a0_voqualizer/ws_wyoming';
 
@@ -31,7 +31,7 @@ function _b64ToBytes(b64) {
 
 async function _fetchCsrfTokenSafe() {
   try {
-    const mod = await import('/webui/js/api.js');
+    const mod = await import('/js/api.js');
     if (mod && typeof mod.getCsrfToken === 'function') {
       return await mod.getCsrfToken();
     }
