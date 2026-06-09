@@ -22,7 +22,7 @@ def test_canonical_html_preserves_existing_visual_layout():
         'Material Symbols',
         '/plugins/a0_voqualizer/webui/voqualizer.css',
         '/plugins/a0_voqualizer/webui/voqualizer.js',
-        'w60-logout-next-2026-06-08-1',
+        'w60-logout-next-2026-06-09-1',
     ):
         assert marker in src, marker
 
@@ -44,7 +44,7 @@ def test_voqualizer_js_imports_wyoming_client_and_primary_transport():
         'submitPromptOverWyomingSession',
         "action: 'web_configure'",
         "promptSubmitTransport = 'wyoming'",
-        'w60-logout-next-2026-06-08-1',
+        'w60-logout-next-2026-06-09-1',
     ):
         assert marker in src, marker
 
