@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'w60-logout-next-2026-06-09-2';
+const PAGE_VERSION = 'w61-wyoming-init-gate-2026-06-09-1';
 const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-asr-style-continuous-2026-06-04-82';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';

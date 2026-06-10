@@ -94,9 +94,17 @@ export class WyomingWsClient {
     this._activeGenerationId = null;
     this._closed = false;
     this._initPromise = null;
+    // Per-session init ack gate. Recreated on every (re)connect so any
+    // sendEvent() awaiting send is suspended until the server-side handler
+    // for the current sid has bound a Wyoming bridge via wyoming_init.
+    this._initReady = null;
+    this._initReadyResolve = null;
+    this._initReadyReject = null;
+    this._sessionEpoch = 0;
     this._stats = {
       connect_attempts: 0,
       init_acks: 0,
+      reinit_acks: 0,
       events_in: 0,
       events_out: 0,
       payload_bytes_in: 0,
@@ -107,7 +115,18 @@ export class WyomingWsClient {
       last_error: '',
       last_generation_id: '',
       stale_generation_drops: 0,
+      last_disconnect_reason: '',
+      reconnects: 0,
     };
+  }
+
+  _resetInitReady() {
+    this._initReady = new Promise((resolve, reject) => {
+      this._initReadyResolve = resolve;
+      this._initReadyReject = reject;
+    });
+    // Swallow unhandled rejections; sendEvent surfaces them explicitly.
+    this._initReady.catch(() => {});
   }
 
   on(eventType, handler) {
@@ -128,6 +147,8 @@ export class WyomingWsClient {
       closed: this._closed,
       active_generation_id: this._activeGenerationId,
       init_info: this._initInfo,
+      session_epoch: this._sessionEpoch,
+      init_ready: !!this._initReady,
       stats: { ...this._stats },
     };
   }
@@ -149,6 +170,9 @@ export class WyomingWsClient {
   async connect() {
     if (this._initPromise) return this._initPromise;
     this._stats.connect_attempts += 1;
+    // Open the per-session init gate before the socket is even created so any
+    // sendEvent() called immediately after connect() will wait.
+    this._resetInitReady();
     this._initPromise = new Promise((resolve, reject) => {
       const socket = io(this.url, {
         path: '/socket.io',
@@ -163,32 +187,51 @@ export class WyomingWsClient {
         },
       });
       this._socket = socket;
+      let firstInitResolved = false;
 
       socket.on('connect', async () => {
-        this._connected = true;
+        // A new sid is a fresh server-side handler with no bridge yet. Re-arm
+        // the init gate and (re)send wyoming_init before any wyoming_event.
+        this._sessionEpoch += 1;
+        this._resetInitReady();
+        const epoch = this._sessionEpoch;
         try {
           const ack = await socket.emitWithAck('wyoming_init', { interface_id: this.interfaceId });
           const ackData = _extractAckData(ack);
           const info = (ackData && ackData.info) || null;
+          // Guard against late acks from a stale session.
+          if (epoch !== this._sessionEpoch) return;
           this._initInfo = info;
-          this._stats.init_acks += 1;
+          this._connected = true;
+          if (firstInitResolved) {
+            this._stats.reinit_acks += 1;
+          } else {
+            this._stats.init_acks += 1;
+          }
+          if (this._initReadyResolve) this._initReadyResolve(info);
           this._emitLocal('open', { info });
-          resolve(info);
+          if (!firstInitResolved) { firstInitResolved = true; resolve(info); }
         } catch (err) {
           this._recordError('init', err);
-          reject(err);
+          if (this._initReadyReject) this._initReadyReject(err);
+          if (!firstInitResolved) { firstInitResolved = true; reject(err); }
         }
       });
 
       socket.on('disconnect', (reason) => {
         this._connected = false;
+        this._stats.last_disconnect_reason = String(reason || '');
+        this._stats.reconnects += 1;
+        // Re-close the init gate so any subsequent sendEvent waits for the next
+        // wyoming_init ack on the next sid.
+        this._resetInitReady();
         this._emitLocal('close', { reason });
       });
 
       socket.on('connect_error', (err) => {
         this._recordError('connect', err);
         this._emitLocal('error', { kind: 'connect', error: err && (err.message || String(err)) });
-        if (this._initPromise && !this._initInfo) reject(err);
+        if (!firstInitResolved) { firstInitResolved = true; reject(err); }
       });
 
       socket.on('wyoming_event', (envelope) => {
@@ -211,7 +254,13 @@ export class WyomingWsClient {
   }
 
   async sendEvent(type, data = {}, payload = null) {
-    if (!this._connected || !this._socket) await this.connect();
+    if (!this._socket) await this.connect();
+    // Always wait for the current session's wyoming_init ack before emitting
+    // a wyoming_event. Server-side bridge state is tied to the current sid;
+    // skipping this gate causes "send wyoming_init before wyoming_event".
+    if (this._initReady) {
+      await this._initReady;
+    }
     const envelope = {
       type: String(type),
       data: data || {},

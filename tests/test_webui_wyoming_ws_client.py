@@ -87,3 +87,19 @@ def test_wyoming_ws_client_fetches_csrf_for_socket_auth():
     assert "/api/csrf_token" in src
     assert 'auth: async (cb)' in src
     assert 'csrf_token: csrf || undefined' in src
+
+
+def test_wyoming_ws_client_gates_send_on_per_session_init_ack():
+    from pathlib import Path
+    src = Path('webui/wyoming/wyoming-ws-client.js').read_text()
+    for marker in (
+        '_resetInitReady',
+        '_initReady',
+        '_sessionEpoch',
+        'await this._initReady',
+        'reinit_acks',
+        "this._sessionEpoch += 1",
+        'reconnects',
+        'last_disconnect_reason',
+    ):
+        assert marker in src, marker
