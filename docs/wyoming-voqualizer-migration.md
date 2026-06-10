@@ -983,3 +983,12 @@ opening the Wyoming WS bridge. The client validates the returned runtime status
 and retries once if `wyoming_init` reports that the runtime is not started,
 preventing typed sends from failing with `Wyoming runtime is not started;
 configure interfaces first`.
+
+
+### W63 backend runtime validation Path import
+
+Typed prompt send reached the Wyoming runtime startup path, but backend
+validation failed with `name 'Path' is not defined`, causing `action=start` to
+return a non-running status and the browser to report `Wyoming runtime is not
+started`. Added the missing `pathlib.Path` import in `hooks.py` and regression
+coverage for the startup validation path.
