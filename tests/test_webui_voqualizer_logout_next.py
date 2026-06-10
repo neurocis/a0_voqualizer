@@ -10,12 +10,16 @@ def test_logout_anchor_has_voqualizer_next_fallback():
     src = HTML.read_text()
     assert 'id="voq-logout-button"' in src
     assert 'href="/logout?next=%2Fplugins%2Fa0_voqualizer%2Fwebui%2Fvoqualizer.html"' in src
-    assert 'w60-logout-next-2026-06-09-1' in src
+    assert 'w60-logout-next-2026-06-09-2' in src
 
 
 def test_logout_js_sets_dynamic_next_back_to_current_voq_page():
     src = JS.read_text()
     for marker in (
+        "ev.preventDefault()",
+        "fetch('/logout'",
+        "redirect: 'manual'",
+        "globalThis.location.replace(loginNextUrl)",
         "function voqualizerCanonicalPathWithSearch()",
         "function voqualizerLoginNextUrl()",
         "function voqualizerLogoutUrl()",
@@ -24,7 +28,7 @@ def test_logout_js_sets_dynamic_next_back_to_current_voq_page():
         "logout.setAttribute('href', logoutUrl)",
         "logout.dataset.loginNext",
         "lastLoginNextHref",
-        "const PAGE_VERSION = 'w60-logout-next-2026-06-09-1'",
+        "const PAGE_VERSION = 'w60-logout-next-2026-06-09-2'",
     ):
         assert marker in src, marker
 

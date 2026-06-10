@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'w60-logout-next-2026-06-09-1';
+const PAGE_VERSION = 'w60-logout-next-2026-06-09-2';
 const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-asr-style-continuous-2026-06-04-82';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
@@ -3252,13 +3252,32 @@ function voqualizerLogoutUrl() {
 function bindLogoutNextRedirect(logout) {
   if (!logout) return;
   const logoutUrl = voqualizerLogoutUrl();
+  const loginNextUrl = voqualizerLoginNextUrl();
+  // Keep href as a graceful fallback if JS is disabled, but the click handler
+  // below intercepts to ensure the framework /logout (which ignores next)
+  // is followed by an explicit redirect to /login?next=<voq page>.
   logout.setAttribute('href', logoutUrl);
-  logout.dataset.loginNext = voqualizerLoginNextUrl();
-  logout.addEventListener('click', () => {
+  logout.dataset.loginNext = loginNextUrl;
+  logout.addEventListener('click', async (ev) => {
+    ev.preventDefault();
     globalThis.__voqualizer_page.lastLogoutClickAt = Date.now();
     globalThis.__voqualizer_page.lastLogoutHref = logoutUrl;
-    globalThis.__voqualizer_page.lastLoginNextHref = voqualizerLoginNextUrl();
+    globalThis.__voqualizer_page.lastLoginNextHref = loginNextUrl;
     setPageStatus('Logging out…', 'info');
+    try {
+      // Hit framework /logout to clear session. Use no-store and same-origin
+      // credentials so the auth cookie is cleared on mobile too. Manual
+      // redirect avoids the framework's no-next redirect changing our URL.
+      await fetch('/logout', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        redirect: 'manual',
+      });
+    } catch (_err) {
+      // Best-effort; even on network error we still redirect to login.
+    }
+    globalThis.location.replace(loginNextUrl);
   });
 }
 
