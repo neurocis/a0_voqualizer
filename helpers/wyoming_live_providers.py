@@ -170,9 +170,9 @@ def bind_live_providers_to_runtime(
     tts_factory = build_live_tts_factory(config)
     submitter = prompt_submitter or build_agent_context_submitter(allow_echo_fallback=True, stream=True)
     pipeline = WyomingVoqualizerPipeline(
-        asr_adapter=build_a0_asr_adapter(asr_factory),
-        prompt_adapter=build_a0_prompt_adapter(submitter),
-        tts_adapter=build_a0_tts_adapter(tts_factory),
+        asr=build_a0_asr_adapter(asr_factory),
+        prompt=build_a0_prompt_adapter(submitter),
+        tts=build_a0_tts_adapter(tts_factory),
     )
     runtime = WyomingInterfaceRuntime(interface)
     # Install the pipeline as the dispatch handler for every Wyoming event

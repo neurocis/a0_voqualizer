@@ -60,6 +60,17 @@ class WyomingInterfaceRuntime:
         self.interface = interface
         self.sessions: dict[str, WyomingSession] = {}
         self.handlers: dict[str, Handler] = {}
+        self.pipeline_handler: Handler | None = None
+
+    def set_pipeline(self, handler: Handler) -> None:
+        """Install a composed pipeline handler for all non-describe events.
+
+        Older scaffolds registered per-event handlers in `handlers`; the Wyoming
+        migration later introduced a composed pipeline object. Keep both paths:
+        describe is still handled locally, explicit handlers remain supported,
+        and otherwise the pipeline receives the event.
+        """
+        self.pipeline_handler = handler
 
     def create_session(self) -> WyomingSession:
         session = WyomingSession(interface=self.interface)
@@ -76,9 +87,11 @@ class WyomingInterfaceRuntime:
         if incoming.type == "describe":
             return [session.info_event()]
         handler = self.handlers.get(incoming.type)
-        if not handler:
-            return [event("error", code="unsupported_event", message=f"Unsupported Wyoming event: {incoming.type}")]
-        return await handler(session, incoming)
+        if handler:
+            return await handler(session, incoming)
+        if self.pipeline_handler:
+            return await self.pipeline_handler(session, incoming)
+        return [event("error", code="unsupported_event", message=f"Unsupported Wyoming event: {incoming.type}")]
 
 
 class WyomingInterfaceManager:
@@ -238,8 +251,16 @@ def build_wyoming_pipeline_runtime(interface: WyomingInterface):
 
 
 def build_wyoming_pipeline_manager(interfaces: list[WyomingInterface]) -> WyomingInterfaceManager:
-    """Create a manager with composed Wyoming pipelines for every interface."""
-    manager = WyomingInterfaceManager()
+    """Create a manager with composed Wyoming pipelines for every interface.
+
+    `WyomingInterfaceManager` constructs default runtimes in its constructor and
+    exposes the `runtimes` mapping directly. Replace each enabled interface's
+    runtime with the composed pipeline runtime without relying on a non-existent
+    `add_runtime()` helper.
+    """
+    manager = WyomingInterfaceManager(interfaces)
     for interface in interfaces:
-        manager.add_runtime(build_wyoming_pipeline_runtime(interface))
+        if not interface.enabled:
+            continue
+        manager.runtimes[interface.id] = build_wyoming_pipeline_runtime(interface)
     return manager

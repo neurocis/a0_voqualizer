@@ -5,6 +5,8 @@ kept independent of the old custom websocket runtime.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable

@@ -992,3 +992,37 @@ validation failed with `name 'Path' is not defined`, causing `action=start` to
 return a non-running status and the browser to report `Wyoming runtime is not
 started`. Added the missing `pathlib.Path` import in `hooks.py` and regression
 coverage for the startup validation path.
+
+
+### W64 Wyoming interface loader Path import
+
+The first runtime-start validation pass showed `name 'Path' is not defined`.
+`hooks.py` already imported `Path`; the actual failing module was
+`helpers/wyoming_interfaces.py`, whose `load_interfaces_from_file(path: str |
+Path)` and `Path(path).read_text()` references lacked a `pathlib.Path` import.
+Added the missing import and expanded regression coverage to catch the real
+startup blocker.
+
+
+### W65 runtime manager constructor startup fix
+
+After fixing the interface loader `Path` import, runtime validation exposed a
+second startup blocker: `WyomingInterfaceManager.__init__()` was called without
+its required `interfaces` argument and the pipeline builder also tried to call a
+non-existent `manager.add_runtime()`. Updated the server helper to instantiate
+`WyomingInterfaceManager(interfaces)` and replace entries in `manager.runtimes`
+directly, with startup regression coverage.
+
+
+### W66 composed pipeline handler compatibility
+
+Runtime startup then exposed that `build_wyoming_pipeline_runtime()` installed a
+composed pipeline with `runtime.set_pipeline(...)`, but `WyomingInterfaceRuntime`
+still only supported per-event handlers. Added `set_pipeline()` plus a pipeline
+fallback in `handle_event()` so describe remains local, explicit handlers remain
+supported, and all other Wyoming events flow through the composed pipeline.
+
+
+### W67 live provider pipeline constructor compatibility
+
+Updated live-provider binding to call `WyomingVoqualizerPipeline(asr=..., prompt=..., tts=...)` using current dataclass field names.
