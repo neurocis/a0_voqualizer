@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'w61-wyoming-init-gate-2026-06-09-1';
+const PAGE_VERSION = 'w62-wyoming-runtime-autostart-2026-06-09-1';
 const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-asr-style-continuous-2026-06-04-82';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
@@ -1273,6 +1273,35 @@ async function loadWyomingWsClientFactory() {
   return factory;
 }
 
+function wyomingRuntimeIsStarted(status) {
+  if (!status || typeof status !== 'object') return false;
+  return !!(status.started || status.running || status._started || status.runtime_started);
+}
+
+function wyomingRuntimeStartError(status) {
+  if (!status || typeof status !== 'object') return '';
+  const errors = Array.isArray(status.errors) ? status.errors.filter(Boolean).join('; ') : '';
+  const validationErrors = Array.isArray(status.validation?.errors) ? status.validation.errors.filter(Boolean).join('; ') : '';
+  return safeString(status.error || status.message || status.last_error || status.start_error || errors || validationErrors || '');
+}
+
+async function startWyomingRuntimeForWeb() {
+  const started = await callJsonApiWithDiagnostics(WYOMING_STATUS_ENDPOINT, {
+    action: 'start',
+    interface_id: WYOMING_PRIMARY_INTERFACE_ID,
+  }, 'wyoming_start');
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.lastWyomingStartAttemptAt = Date.now();
+    globalThis.__voqualizer_page.wyomingLastStart = started;
+    globalThis.__voqualizer_page.lastWyomingStartResult = started;
+  }
+  if (!wyomingRuntimeIsStarted(started)) {
+    const reason = wyomingRuntimeStartError(started) || 'Wyoming runtime did not start';
+    throw new Error(reason);
+  }
+  return started;
+}
+
 async function configureWyomingWebInterface(contextId) {
   const clean = safeString(contextId).trim();
   if (!clean) throw new Error('missing context for Wyoming web interface');
@@ -1282,14 +1311,16 @@ async function configureWyomingWebInterface(contextId) {
     interface_id: WYOMING_PRIMARY_INTERFACE_ID,
     overwrite: true,
   }, 'wyoming_web_configure');
-  if (!configured || configured.ok === false) {
+  if (!configured || configured.ok === false || configured.error) {
     throw new Error(configured?.message || configured?.error || 'Wyoming web configuration failed');
   }
-  const started = await callJsonApiWithDiagnostics(WYOMING_STATUS_ENDPOINT, { action: 'start' }, 'wyoming_start');
+  const started = await startWyomingRuntimeForWeb();
   if (globalThis.__voqualizer_page) {
     globalThis.__voqualizer_page.wyomingLastConfigureAt = Date.now();
     globalThis.__voqualizer_page.wyomingLastConfigure = configured;
     globalThis.__voqualizer_page.wyomingLastStart = started;
+    globalThis.__voqualizer_page.lastWyomingConfigureResult = configured;
+    globalThis.__voqualizer_page.lastWyomingStartResult = started;
   }
   return { configured, started };
 }
@@ -1422,7 +1453,27 @@ async function ensureWyomingSession(contextId, state = getPageStateRef()) {
     wyoming.client = client;
     wyoming.connectedContextId = clean;
     installWyomingClientHandlers(client, state || getPageStateRef());
-    await client.connect();
+    try {
+      await client.connect();
+    } catch (err) {
+      const message = safeString(err?.message || err?.details?.message || err?.details?.error || err);
+      if (!message.includes('runtime is not started') && !message.includes('Wyoming runtime is not started')) throw err;
+      if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.lastWyomingInitRetryReason = message;
+      await startWyomingRuntimeForWeb();
+      try { await client.close?.(); } catch (_err) {}
+      const retryClient = createWyomingWsClient({ interfaceId: WYOMING_PRIMARY_INTERFACE_ID, debug: true });
+      wyoming.client = retryClient;
+      installWyomingClientHandlers(retryClient, state || getPageStateRef());
+      await retryClient.connect();
+      if (globalThis.__voqualizer_page) {
+        globalThis.__voqualizer_page.lastWyomingInitRetryAt = Date.now();
+        globalThis.__voqualizer_page.wyomingSessionReadyAt = Date.now();
+        globalThis.__voqualizer_page.wyomingInterfaceId = WYOMING_PRIMARY_INTERFACE_ID;
+        globalThis.__voqualizer_page.wyomingContextId = clean;
+        globalThis.__voqualizer_page.wyomingClientSnapshot = retryClient.snapshot?.() || null;
+      }
+      return retryClient;
+    }
     if (globalThis.__voqualizer_page) {
       globalThis.__voqualizer_page.wyomingSessionReadyAt = Date.now();
       globalThis.__voqualizer_page.wyomingInterfaceId = WYOMING_PRIMARY_INTERFACE_ID;
@@ -3494,6 +3545,9 @@ export {
   bindLogoutNextRedirect,
   loadWyomingWsClientFactory,
   configureWyomingWebInterface,
+  startWyomingRuntimeForWeb,
+  wyomingRuntimeIsStarted,
+  wyomingRuntimeStartError,
   ensureWyomingSession,
   disconnectWyomingSession,
   isWyomingClientConnected,

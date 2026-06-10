@@ -10,7 +10,7 @@ def test_logout_anchor_has_voqualizer_next_fallback():
     src = HTML.read_text()
     assert 'id="voq-logout-button"' in src
     assert 'href="/logout?next=%2Fplugins%2Fa0_voqualizer%2Fwebui%2Fvoqualizer.html"' in src
-    assert 'w61-wyoming-init-gate-2026-06-09-1' in src
+    assert 'w62-wyoming-runtime-autostart-2026-06-09-1' in src
 
 
 def test_logout_js_sets_dynamic_next_back_to_current_voq_page():
@@ -28,7 +28,7 @@ def test_logout_js_sets_dynamic_next_back_to_current_voq_page():
         "logout.setAttribute('href', logoutUrl)",
         "logout.dataset.loginNext",
         "lastLoginNextHref",
-        "const PAGE_VERSION = 'w61-wyoming-init-gate-2026-06-09-1'",
+        "const PAGE_VERSION = 'w62-wyoming-runtime-autostart-2026-06-09-1'",
     ):
         assert marker in src, marker
 

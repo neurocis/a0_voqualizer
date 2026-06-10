@@ -973,3 +973,13 @@ path. The logout anchor now includes `next=/plugins/a0_voqualizer/webui/voqualiz
 and the page script dynamically refreshes that next target with the current
 query string so login returns to Voqualizer rather than the standard login flow
 with no next destination.
+
+
+### W62 standalone runtime autostart for typed prompts
+
+Fixed the preserved standalone Voqualizer page send path so typed prompts call
+`web_configure`, then explicitly call `wyoming_status` `action=start` before
+opening the Wyoming WS bridge. The client validates the returned runtime status
+and retries once if `wyoming_init` reports that the runtime is not started,
+preventing typed sends from failing with `Wyoming runtime is not started;
+configure interfaces first`.
