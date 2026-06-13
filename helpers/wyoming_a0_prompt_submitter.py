@@ -15,8 +15,19 @@ from typing import Any, AsyncIterable, Callable
 
 
 async def _maybe_await(value: Any) -> Any:
+    """Await framework async values, including Agent Zero DeferredTask objects."""
     if inspect.isawaitable(value):
         return await value
+    # AgentContext/Agent.communicate returns helpers.defer.DeferredTask. It is
+    # not an awaitable, but exposes async result(). If we treat the task object
+    # as the response, later attribute probing can surface misleading errors
+    # such as "'str' object has no attribute 'text'" from task/result proxies.
+    result_method = getattr(value, "result", None)
+    if callable(result_method) and value.__class__.__name__ == "DeferredTask":
+        result = result_method()
+        if inspect.isawaitable(result):
+            return await result
+        return result
     return value
 
 
@@ -31,7 +42,10 @@ def _extract_response_text(value: Any) -> str:
                 return value[key]
         return " ".join(str(v) for v in value.values() if isinstance(v, str)).strip()
     for attr in ("text", "response", "message", "content", "final_text", "chunk", "delta"):
-        got = getattr(value, attr, None)
+        try:
+            got = getattr(value, attr, None)
+        except AttributeError:
+            continue
         if isinstance(got, str):
             return got
     return str(value)
