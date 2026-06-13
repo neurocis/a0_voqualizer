@@ -1076,3 +1076,12 @@ failure. Hardened `WyomingPromptAdapter` so provider errors emit a Wyoming
 `error` event and still produce `voqualizer-response-final` with accumulated text
 (or a compact error text if no response arrived), preventing late provider
 exceptions from breaking the browser submit lifecycle.
+
+
+### W74 WS ACK finalization for downstream handler errors
+
+The browser could receive visible response text but still report `Send failed` and
+remain processing because a late downstream AttributeError propagated through the
+Socket.IO ACK. Hardened `api/ws_wyoming.py` so handler/post-process exceptions
+are emitted as Wyoming `error` + `voqualizer-response-final` events inside a
+successful ACK, preventing transport-level failure after visible response data.

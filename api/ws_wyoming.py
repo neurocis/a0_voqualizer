@@ -223,6 +223,36 @@ class WsWyoming(WsHandler):
             "info": info_payload,
         })
 
+    def _error_final_replies(self, event_type: str, event_data: dict, exc: Exception) -> list[WyomingEvent]:
+        """Represent downstream handler errors as Wyoming events in a successful ACK."""
+        message = f"{type(exc).__name__}: {exc}"
+        generation_id = str((event_data or {}).get("generation_id") or (event_data or {}).get("generationId") or "")
+        return [
+            WyomingEvent(
+                type="error",
+                data={
+                    "code": "wyoming_handler_error",
+                    "message": message,
+                    "event_type": event_type,
+                    "generation_id": generation_id,
+                },
+                payload=b"",
+            ),
+            WyomingEvent(
+                type="voqualizer-response-final",
+                data={
+                    "text": "",
+                    "headline": "",
+                    "display_kind": "error",
+                    "chunk_count": 0,
+                    "ok": False,
+                    "provider_error": message,
+                    "generation_id": generation_id,
+                },
+                payload=b"",
+            ),
+        ]
+
     # ------------------------------------------------------------------
     # wyoming_event
     # ------------------------------------------------------------------
@@ -271,11 +301,14 @@ class WsWyoming(WsHandler):
             self._pending_outbound_event_type = event_type
             self._pending_outbound_event_data = dict(event_data)
             return WsResult.ok({"awaiting_payload": True, "payload_length": payload_length})
-        replies = await bridge.handle_text_envelope(
-            event_type=event_type,
-            event_data=event_data,
-            payload=payload,
-        )
+        try:
+            replies = await bridge.handle_text_envelope(
+                event_type=event_type,
+                event_data=event_data,
+                payload=payload,
+            )
+        except Exception as exc:  # noqa: BLE001
+            replies = self._error_final_replies(event_type, event_data, exc)
         await self._emit_replies(sid, replies)
         return WsResult.ok({"replies": len(replies)})
 
@@ -315,11 +348,14 @@ class WsWyoming(WsHandler):
         del self._pending_outbound_event_type
         del self._pending_outbound_event_data
         del self._pending_outbound_length
-        replies = await bridge.handle_text_envelope(
-            event_type=event_type,
-            event_data=event_data,
-            payload=payload,
-        )
+        try:
+            replies = await bridge.handle_text_envelope(
+                event_type=event_type,
+                event_data=event_data,
+                payload=payload,
+            )
+        except Exception as exc:  # noqa: BLE001
+            replies = self._error_final_replies(event_type, event_data, exc)
         await self._emit_replies(sid, replies)
         return WsResult.ok({"replies": len(replies)})
 
@@ -343,13 +379,23 @@ class WsWyoming(WsHandler):
 
     async def _emit_replies(self, sid: str, replies: list[WyomingEvent]) -> None:
         for ev in replies or []:
-            envelope = {
-                "type": ev.type,
-                "data": dict(ev.data),
-                "payload_length": len(ev.payload or b""),
-            }
-            if ev.payload:
-                envelope["payload_b64"] = base64.b64encode(ev.payload).decode("ascii")
+            try:
+                envelope = {
+                    "type": str(ev.type or ""),
+                    "data": dict(ev.data or {}),
+                    "payload_length": len(ev.payload or b""),
+                }
+                if ev.payload:
+                    envelope["payload_b64"] = base64.b64encode(ev.payload).decode("ascii")
+            except Exception as exc:  # noqa: BLE001
+                envelope = {
+                    "type": "error",
+                    "data": {
+                        "code": "wyoming_reply_encode_error",
+                        "message": f"{type(exc).__name__}: {exc}",
+                    },
+                    "payload_length": 0,
+                }
             try:
                 await self.emit_to(sid, "wyoming_event", envelope)
             except Exception as exc:  # noqa: BLE001
