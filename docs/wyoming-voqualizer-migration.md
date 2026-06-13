@@ -1053,3 +1053,15 @@ Typed prompt send reached `wyoming_event`, but the handler reported
 framework/client wrapped event envelopes (`event`, `envelope`, `wyoming_event`,
 or nested `data`) before validating the canonical Wyoming `type`, while keeping
 the direct `{type, data, payload_length}` path unchanged.
+
+
+### W70 recursive Wyoming event envelope normalization
+
+The empty-type error persisted, indicating the live Socket.IO/framework payload
+shape was still different from the first normalization pass. Broadened
+`_normalize_wyoming_event_envelope()` to recursively search common wrappers
+(`event`, `envelope`, `wyoming_event`, `data`, `payload`, `input`, `message`,
+`args`, `arguments`, lists/tuples, and last-resort dict values) for a strict
+Wyoming envelope with non-empty `type`. The malformed-event error now includes a
+small shape summary so any remaining wrapper mismatch is visible from the user's
+exact error text.

@@ -42,24 +42,67 @@ from usr.plugins.a0_voqualizer.helpers.wyoming_ws_bridge import WyomingWsBridge
 def _normalize_wyoming_event_envelope(data: dict) -> dict:
     """Return the actual Wyoming event envelope from framework/client wrappers.
 
-    The canonical browser client sends `{type, data, payload_length}` directly,
-    but some Socket.IO/framework paths can wrap that object under `event`,
-    `envelope`, or `data`. Normalize before validating `type` so typed prompts
-    do not fail with `wyoming_event requires non-empty type` when the type is
-    simply one level deeper.
+    Canonical browser payload is `{type, data, payload_length}`. In practice the
+    framework may wrap Socket.IO arguments under keys such as `event`, `envelope`,
+    `wyoming_event`, `data`, `payload`, `input`, `args`, or `arguments`, and some
+    paths represent arguments as a one-element list. Search recursively but only
+    accept dictionaries that contain a non-empty Wyoming `type` string.
     """
+    def has_type(obj: object) -> bool:
+        return isinstance(obj, dict) and bool(str(obj.get("type") or "").strip())
+
+    def walk(obj: object, depth: int = 0) -> dict | None:
+        if depth > 6:
+            return None
+        if has_type(obj):
+            return obj  # type: ignore[return-value]
+        if isinstance(obj, (list, tuple)):
+            for item in obj:
+                found = walk(item, depth + 1)
+                if found is not None:
+                    return found
+            return None
+        if not isinstance(obj, dict):
+            return None
+        for key in (
+            "event",
+            "envelope",
+            "wyoming_event",
+            "data",
+            "payload",
+            "input",
+            "message",
+            "args",
+            "arguments",
+        ):
+            if key in obj:
+                found = walk(obj.get(key), depth + 1)
+                if found is not None:
+                    return found
+        # Last resort: inspect all values in case a framework wrapper used an
+        # unexpected key. This remains safe because `has_type()` is strict.
+        for value in obj.values():
+            found = walk(value, depth + 1)
+            if found is not None:
+                return found
+        return None
+
     if not isinstance(data, dict):
         return {}
-    if str(data.get("type") or "").strip():
-        return data
-    for key in ("event", "envelope", "wyoming_event"):
-        nested = data.get(key)
-        if isinstance(nested, dict) and str(nested.get("type") or "").strip():
-            return nested
-    nested = data.get("data")
-    if isinstance(nested, dict) and str(nested.get("type") or "").strip():
-        return nested
-    return data
+    return walk(data) or data
+
+
+def _wyoming_event_shape_debug(data: dict, envelope: dict) -> dict:
+    """Small JSON-safe shape summary for diagnosing malformed WS payloads."""
+    def keys(obj: object) -> list[str]:
+        return sorted([str(k) for k in obj.keys()]) if isinstance(obj, dict) else []
+    return {
+        "top_keys": keys(data),
+        "envelope_keys": keys(envelope),
+        "top_event_kind": type(data.get("event")).__name__ if isinstance(data, dict) and "event" in data else "missing",
+        "top_data_kind": type(data.get("data")).__name__ if isinstance(data, dict) and "data" in data else "missing",
+        "top_args_kind": type(data.get("args")).__name__ if isinstance(data, dict) and "args" in data else "missing",
+    }
 
 
 def _get_runtime():
@@ -194,9 +237,10 @@ class WsWyoming(WsHandler):
         envelope = _normalize_wyoming_event_envelope(data or {})
         event_type = str(envelope.get("type") or "").strip()
         if not event_type:
+            shape = _wyoming_event_shape_debug(data or {}, envelope or {})
             return WsResult.error(
                 code="WYOMING_BAD_EVENT",
-                message="wyoming_event requires non-empty type",
+                message=f"wyoming_event requires non-empty type; shape={shape}",
             )
         event_data = envelope.get("data") or {}
         if not isinstance(event_data, dict):
