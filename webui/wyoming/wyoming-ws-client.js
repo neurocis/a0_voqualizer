@@ -255,24 +255,33 @@ export class WyomingWsClient {
 
   async sendEvent(type, data = {}, payload = null) {
     if (!this._socket) await this.connect();
-    // Always wait for the current session's wyoming_init ack before emitting
-    // a wyoming_event. Server-side bridge state is tied to the current sid;
-    // skipping this gate causes "send wyoming_init before wyoming_event".
-    if (this._initReady) {
-      await this._initReady;
+    if (this._initReady) await this._initReady;
+    let eventType = type;
+    let eventData = data || {};
+    if (type && typeof type === 'object') {
+      if (typeof type.type === 'string' && type.type.trim()) {
+        eventType = type.type;
+        eventData = (type.data && typeof type.data === 'object') ? type.data : (type.event_data || {});
+      } else if (typeof type.text === 'string') {
+        eventType = 'voqualizer-text-prompt';
+        eventData = type;
+      }
     }
+    eventType = String(eventType || '').trim();
+    if (!eventType) throw new Error('Wyoming sendEvent requires non-empty type');
+    // NOTE: We use `event_data` (not `data`) at the envelope top level because
+    // the framework's WsManager auto-unwraps incoming.data into the handler
+    // payload, which would strip our Wyoming `type` field. See ws.py L607-612.
     const envelope = {
-      type: String(type),
-      data: data || {},
+      type: eventType,
+      event_data: eventData || {},
       payload_length: payload ? payload.length : 0,
     };
-    if (payload && payload.length) {
-      envelope.payload_b64 = _bytesToB64(payload);
-    }
+    if (payload && payload.length) envelope.payload_b64 = _bytesToB64(payload);
     this._stats.events_out += 1;
     this._stats.payload_bytes_out += payload ? payload.length : 0;
     this._stats.last_out_type = envelope.type;
-    const gen = envelope.data && (envelope.data.generation_id || envelope.data.generationId || envelope.data.utterance_id);
+    const gen = envelope.event_data && (envelope.event_data.generation_id || envelope.event_data.generationId || envelope.event_data.utterance_id);
     if (gen) this._stats.last_generation_id = String(gen);
     try {
       const ack = await this._socket.emitWithAck('wyoming_event', envelope);

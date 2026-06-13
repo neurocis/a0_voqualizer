@@ -40,55 +40,55 @@ from usr.plugins.a0_voqualizer.helpers.wyoming_ws_bridge import WyomingWsBridge
 
 
 def _normalize_wyoming_event_envelope(data: dict) -> dict:
-    """Return the actual Wyoming event envelope from framework/client wrappers.
+    """Reconstruct the Wyoming event envelope from the handler payload.
 
-    Canonical browser payload is `{type, data, payload_length}`. In practice the
-    framework may wrap Socket.IO arguments under keys such as `event`, `envelope`,
-    `wyoming_event`, `data`, `payload`, `input`, `args`, or `arguments`, and some
-    paths represent arguments as a one-element list. Search recursively but only
-    accept dictionaries that contain a non-empty Wyoming `type` string.
+    The framework's WsManager auto-unwraps `incoming.data` into the handler
+    payload and injects `correlationId`. The browser client therefore sends the
+    Wyoming envelope using `event_data` (instead of `data`) so the type field
+    survives. We accept either shape for safety.
     """
-    def has_type(obj: object) -> bool:
-        return isinstance(obj, dict) and bool(str(obj.get("type") or "").strip())
-
-    def walk(obj: object, depth: int = 0) -> dict | None:
-        if depth > 6:
-            return None
-        if has_type(obj):
-            return obj  # type: ignore[return-value]
-        if isinstance(obj, (list, tuple)):
-            for item in obj:
-                found = walk(item, depth + 1)
-                if found is not None:
-                    return found
-            return None
-        if not isinstance(obj, dict):
-            return None
-        for key in (
-            "event",
-            "envelope",
-            "wyoming_event",
-            "data",
-            "payload",
-            "input",
-            "message",
-            "args",
-            "arguments",
-        ):
-            if key in obj:
-                found = walk(obj.get(key), depth + 1)
-                if found is not None:
-                    return found
-        # Last resort: inspect all values in case a framework wrapper used an
-        # unexpected key. This remains safe because `has_type()` is strict.
-        for value in obj.values():
-            found = walk(value, depth + 1)
-            if found is not None:
-                return found
-        return None
-
     if not isinstance(data, dict):
         return {}
+    # Preferred shape: top-level wyoming envelope with type + event_data
+    if isinstance(data.get("type"), str) and data.get("type", "").strip():
+        ev_data = data.get("event_data")
+        if not isinstance(ev_data, dict):
+            ev_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+        return {
+            "type": data.get("type"),
+            "data": ev_data or {},
+            "payload_length": data.get("payload_length") or 0,
+            "payload_b64": data.get("payload_b64"),
+        }
+    # Recursive fallback for any framework wrapping shape
+    def walk(obj, depth=0):
+        if depth > 6:
+            return None
+        if isinstance(obj, dict) and isinstance(obj.get("type"), str) and obj.get("type", "").strip():
+            ev_data = obj.get("event_data") if isinstance(obj.get("event_data"), dict) else (obj.get("data") if isinstance(obj.get("data"), dict) else {})
+            return {
+                "type": obj.get("type"),
+                "data": ev_data or {},
+                "payload_length": obj.get("payload_length") or 0,
+                "payload_b64": obj.get("payload_b64"),
+            }
+        if isinstance(obj, (list, tuple)):
+            for item in obj:
+                r = walk(item, depth + 1)
+                if r is not None:
+                    return r
+            return None
+        if isinstance(obj, dict):
+            for key in ("event", "envelope", "wyoming_event", "event_data", "data", "payload", "input", "message", "args", "arguments"):
+                if key in obj:
+                    r = walk(obj.get(key), depth + 1)
+                    if r is not None:
+                        return r
+            for v in obj.values():
+                r = walk(v, depth + 1)
+                if r is not None:
+                    return r
+        return None
     return walk(data) or data
 
 
