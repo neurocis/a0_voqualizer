@@ -122,29 +122,44 @@ class WyomingPromptAdapter:
         replies: list[WyomingEvent] = [
             event("voqualizer-response-start", **metadata),
         ]
-        provider_result = self.provider(text, metadata)
-        if inspect.isawaitable(provider_result):
-            provider_result = await provider_result
         final_parts: list[str] = []
-        if hasattr(provider_result, "__aiter__"):
-            async for chunk in provider_result:  # type: ignore[union-attr]
-                if state.cancelled:
-                    break
-                final_parts.append(str(chunk))
+        provider_error: str = ""
+        try:
+            provider_result = self.provider(text, metadata)
+            if inspect.isawaitable(provider_result):
+                provider_result = await provider_result
+            if hasattr(provider_result, "__aiter__"):
+                async for chunk in provider_result:  # type: ignore[union-attr]
+                    if state.cancelled:
+                        break
+                    piece = str(chunk)
+                    final_parts.append(piece)
+                    state.chunk_count += 1
+                    replies.append(event("voqualizer-response-chunk", text=piece, chunk_index=state.chunk_count - 1, **metadata))
+            elif isinstance(provider_result, str):
+                final_parts.append(provider_result)
+                if provider_result:
+                    state.chunk_count += 1
+                    replies.append(event("voqualizer-response-chunk", text=provider_result, chunk_index=0, **metadata))
+            else:
+                for chunk in provider_result or []:  # type: ignore[union-attr]
+                    if state.cancelled:
+                        break
+                    piece = str(chunk)
+                    final_parts.append(piece)
+                    state.chunk_count += 1
+                    replies.append(event("voqualizer-response-chunk", text=piece, chunk_index=state.chunk_count - 1, **metadata))
+        except Exception as exc:  # noqa: BLE001
+            # Do not let late provider/framework errors turn an already-visible
+            # response into a failed ACK that leaves the browser in processing.
+            # Emit a Wyoming error event for diagnostics, then finalize with any
+            # accumulated text, or a compact error message if no text arrived.
+            provider_error = f"{type(exc).__name__}: {exc}"
+            replies.append(event("error", code="prompt_provider_error", message=provider_error, **metadata))
+            if not final_parts:
+                final_parts.append(f"Prompt provider error: {provider_error}")
                 state.chunk_count += 1
-                replies.append(event("voqualizer-response-chunk", text=str(chunk), chunk_index=state.chunk_count - 1, **metadata))
-        elif isinstance(provider_result, str):
-            final_parts.append(provider_result)
-            if provider_result:
-                state.chunk_count += 1
-                replies.append(event("voqualizer-response-chunk", text=provider_result, chunk_index=0, **metadata))
-        else:
-            for chunk in provider_result or []:  # type: ignore[union-attr]
-                if state.cancelled:
-                    break
-                final_parts.append(str(chunk))
-                state.chunk_count += 1
-                replies.append(event("voqualizer-response-chunk", text=str(chunk), chunk_index=state.chunk_count - 1, **metadata))
+                replies.append(event("voqualizer-response-chunk", text=final_parts[-1], chunk_index=0, **metadata))
         collapsed = collapse_response_tool_json("".join(final_parts))
         state.final_text = collapsed["text"]
         replies.append(
@@ -154,6 +169,8 @@ class WyomingPromptAdapter:
                 headline=collapsed["headline"],
                 display_kind=collapsed["kind"],
                 chunk_count=state.chunk_count,
+                provider_error=provider_error,
+                ok=not bool(provider_error),
                 **metadata,
             )
         )

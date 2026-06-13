@@ -1065,3 +1065,14 @@ shape was still different from the first normalization pass. Broadened
 Wyoming envelope with non-empty `type`. The malformed-event error now includes a
 small shape summary so any remaining wrapper mismatch is visible from the user's
 exact error text.
+
+
+### W73 prompt provider error finalization
+
+Typed prompts reached the Agent Zero provider and could display a partial response,
+but a late provider exception (`'str' object has no attribute 'text'`) propagated
+through the Wyoming ACK, leaving the standalone UI in processing with a send
+failure. Hardened `WyomingPromptAdapter` so provider errors emit a Wyoming
+`error` event and still produce `voqualizer-response-final` with accumulated text
+(or a compact error text if no response arrived), preventing late provider
+exceptions from breaking the browser submit lifecycle.
