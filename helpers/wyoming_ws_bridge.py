@@ -92,6 +92,15 @@ class WyomingWsBridge:
         replies = await self.runtime.handle_event(self.session, incoming)
         return list(replies)
 
+    def describe(self) -> WyomingEvent:
+        """Return the interface `info` event expected by `wyoming_init`.
+
+        The Socket.IO handler calls this synchronously and then serializes
+        `info.type`, `info.data`, and `info.payload`, so return the canonical
+        WyomingEvent rather than a transport-specific dict.
+        """
+        return self.session.info_event()
+
     async def send_event(self, send: WsSend, outgoing: WyomingEvent) -> None:
         text, binary = self.encode_for_browser(outgoing)
         await send(text)
@@ -166,14 +175,10 @@ class WyomingWsBridge:
         return value is the list of reply :class:`WyomingEvent` instances the
         caller should send back to its client.
         """
-        from .wyoming_protocol import WyomingEvent
         safe_data = {k: v for k, v in (event_data or {}).items() if k not in ("ctxid", "interface_id")}
         ev = WyomingEvent(type=str(event_type), data=safe_data, payload=payload or b"")
-        replies = await self._runtime.handle_event(self._session, ev)
+        replies = await self.runtime.handle_event(self.session, ev)
         for reply in replies or []:
-            try:
-                self._snapshot["text_out"] = int(self._snapshot.get("text_out", 0)) + 1
-                self._snapshot["last_outgoing_event"] = reply.type
-            except Exception:
-                pass
+            self.debug.text_events_out += 1
+            self.debug.last_outgoing_type = reply.type
         return list(replies or [])

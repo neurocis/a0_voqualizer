@@ -1026,3 +1026,21 @@ supported, and all other Wyoming events flow through the composed pipeline.
 ### W67 live provider pipeline constructor compatibility
 
 Updated live-provider binding to call `WyomingVoqualizerPipeline(asr=..., prompt=..., tts=...)` using current dataclass field names.
+
+
+### W68 WS bridge describe init compatibility
+
+Typed prompt send reached the Wyoming WS bridge, but `wyoming_init` failed with
+`AttributeError: 'WyomingWsBridge' object has no attribute 'describe'`. Added a
+`describe()` compatibility method to the bridge that creates a Wyoming session
+and returns the interface `info` event shape expected by the Socket.IO init path.
+
+
+### W68 WS bridge describe init compatibility
+
+Typed prompt send reached the Wyoming WS bridge, but `wyoming_init` failed with
+`AttributeError: 'WyomingWsBridge' object has no attribute 'describe'`. Added a
+synchronous `describe()` method returning the canonical Wyoming `info` event
+shape expected by `api/ws_wyoming.py`, and repaired `handle_text_envelope()` to
+use the dataclass `runtime`/`session` attributes instead of stale `_runtime` /
+`_session` names.
