@@ -39,6 +39,29 @@ from usr.plugins.a0_voqualizer.helpers.wyoming_protocol import WyomingEvent
 from usr.plugins.a0_voqualizer.helpers.wyoming_ws_bridge import WyomingWsBridge
 
 
+def _normalize_wyoming_event_envelope(data: dict) -> dict:
+    """Return the actual Wyoming event envelope from framework/client wrappers.
+
+    The canonical browser client sends `{type, data, payload_length}` directly,
+    but some Socket.IO/framework paths can wrap that object under `event`,
+    `envelope`, or `data`. Normalize before validating `type` so typed prompts
+    do not fail with `wyoming_event requires non-empty type` when the type is
+    simply one level deeper.
+    """
+    if not isinstance(data, dict):
+        return {}
+    if str(data.get("type") or "").strip():
+        return data
+    for key in ("event", "envelope", "wyoming_event"):
+        nested = data.get(key)
+        if isinstance(nested, dict) and str(nested.get("type") or "").strip():
+            return nested
+    nested = data.get("data")
+    if isinstance(nested, dict) and str(nested.get("type") or "").strip():
+        return nested
+    return data
+
+
 def _get_runtime():
     """Resolve the plugin-level Wyoming runtime without importing admin internals."""
     from usr.plugins.a0_voqualizer import hooks
@@ -168,20 +191,21 @@ class WsWyoming(WsHandler):
                 code="WYOMING_NO_SESSION",
                 message="send wyoming_init before wyoming_event",
             )
-        event_type = str(data.get("type") or "").strip()
+        envelope = _normalize_wyoming_event_envelope(data or {})
+        event_type = str(envelope.get("type") or "").strip()
         if not event_type:
             return WsResult.error(
                 code="WYOMING_BAD_EVENT",
                 message="wyoming_event requires non-empty type",
             )
-        event_data = data.get("data") or {}
+        event_data = envelope.get("data") or {}
         if not isinstance(event_data, dict):
             return WsResult.error(
                 code="WYOMING_BAD_EVENT",
                 message="wyoming_event data must be an object",
             )
-        payload_length = int(data.get("payload_length") or 0)
-        payload_inline = data.get("payload_b64")
+        payload_length = int(envelope.get("payload_length") or 0)
+        payload_inline = envelope.get("payload_b64")
         payload: bytes | None = None
         if isinstance(payload_inline, str) and payload_inline:
             try:

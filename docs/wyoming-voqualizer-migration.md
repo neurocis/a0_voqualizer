@@ -1044,3 +1044,12 @@ synchronous `describe()` method returning the canonical Wyoming `info` event
 shape expected by `api/ws_wyoming.py`, and repaired `handle_text_envelope()` to
 use the dataclass `runtime`/`session` attributes instead of stale `_runtime` /
 `_session` names.
+
+
+### W69 Wyoming event envelope normalization
+
+Typed prompt send reached `wyoming_event`, but the handler reported
+`wyoming_event requires non-empty type`. Added server-side normalization for
+framework/client wrapped event envelopes (`event`, `envelope`, `wyoming_event`,
+or nested `data`) before validating the canonical Wyoming `type`, while keeping
+the direct `{type, data, payload_length}` path unchanged.
