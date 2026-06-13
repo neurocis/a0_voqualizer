@@ -113,7 +113,20 @@ async def submit_to_agent_context(text: str, metadata: dict[str, Any]) -> str:
                 return _extract_response_text(result)
             except TypeError:
                 continue
+            except Exception as exc:  # log non-TypeError errors
+                await _log_submitter_exception(f"submit:{method_name}", exc)
+                continue
     raise RuntimeError(f"AgentContext for ctxid={ctxid!r} has no supported prompt method")
+
+
+async def _log_submitter_exception(stage: str, exc: Exception) -> None:
+    import traceback
+    try:
+        from helpers.print_style import PrintStyle  # type: ignore
+        PrintStyle.error(f"[wyoming_submitter:{stage}] {type(exc).__name__}: {exc}")
+        PrintStyle.error(traceback.format_exc())
+    except Exception:
+        traceback.print_exc()
 
 
 async def stream_to_agent_context(text: str, metadata: dict[str, Any]) -> AsyncIterable[str]:
@@ -130,6 +143,7 @@ async def stream_to_agent_context(text: str, metadata: dict[str, Any]) -> AsyncI
     context, UserMessage = await _resolve_agent_context(ctxid)
     user_message = _build_user_message(clean, UserMessage)
     call_metadata = _call_metadata(metadata, ctxid)
+    last_exc: Exception | None = None
     for method_name in ("stream", "stream_async", "communicate_stream", "message_stream", "submit_stream", "ask_stream"):
         method = getattr(context, method_name, None)
         if method is None:
@@ -161,6 +175,12 @@ async def stream_to_agent_context(text: str, metadata: dict[str, Any]) -> AsyncI
                 return
             except TypeError:
                 continue
+            except Exception as exc:  # log non-TypeError errors
+                last_exc = exc
+                await _log_submitter_exception(f"stream:{method_name}", exc)
+                continue
+    if last_exc is not None:
+        await _log_submitter_exception("stream_fallback_to_submit", last_exc)
     final = await submit_to_agent_context(clean, metadata)
     if final:
         yield final
