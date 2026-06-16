@@ -107,7 +107,16 @@ class WyomingPromptAdapter:
         ]
 
     async def _submit_prompt(self, session: WyomingSession, text: str, *, source: str, input_event: WyomingEvent) -> list[WyomingEvent]:
-        generation_id = session.new_generation()
+        # Respect client-supplied generation_id when present so browser/UI
+        # event-correlation filters (e.g. isCurrentWyomingGeneration) match the
+        # response-start/chunk/final events back to the original submission.
+        client_generation = str((input_event.data or {}).get("generation_id") or (input_event.data or {}).get("generationId") or "").strip()
+        if client_generation:
+            generation_id = client_generation
+            session.active_generation_id = client_generation
+            session.metadata["last_generation_started_at_ms"] = int(__import__("time").time() * 1000)
+        else:
+            generation_id = session.new_generation()
         state = WyomingGenerationState(generation_id=generation_id, prompt_text=text)
         self.generations_by_session[session.session_id] = state
         metadata = {

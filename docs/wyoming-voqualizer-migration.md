@@ -1085,3 +1085,14 @@ remain processing because a late downstream AttributeError propagated through th
 Socket.IO ACK. Hardened `api/ws_wyoming.py` so handler/post-process exceptions
 are emitted as Wyoming `error` + `voqualizer-response-final` events inside a
 successful ACK, preventing transport-level failure after visible response data.
+
+
+### W75 Respect client generation_id
+
+The browser sets `tts.activeGenerationId` to the submission messageId before sending
+`voqualizer-text-prompt`. The Wyoming prompt adapter was overwriting that
+generation_id with `session.new_generation()`, which made the browser's
+`isCurrentWyomingGeneration(...)` filter drop every response-start/chunk/final
+event. The UI then never finalized the submit lifecycle even when the agent
+responded successfully. Adapter now reuses the client-supplied generation_id
+when present.
