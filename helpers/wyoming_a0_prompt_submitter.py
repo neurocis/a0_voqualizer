@@ -9,9 +9,111 @@ the final assistant response/TTS path.
 """
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass, field
 import inspect
+import threading
+import time
 import uuid
 from typing import Any, AsyncIterable, Callable
+
+
+@dataclass(slots=True)
+class _VisibleResponseWaiter:
+    ctxid: str
+    message_id: str
+    created_at_ms: int = field(default_factory=lambda: int(time.time() * 1000))
+    event: threading.Event = field(default_factory=threading.Event)
+    text: str = ""
+    tool_name: str = ""
+
+
+_VISIBLE_WAITERS_BY_CTXID: dict[str, list[_VisibleResponseWaiter]] = {}
+_VISIBLE_WAITERS_LOCK = threading.RLock()
+
+
+def _register_visible_response_waiter(ctxid: str, message_id: str = "") -> _VisibleResponseWaiter:
+    waiter = _VisibleResponseWaiter(ctxid=str(ctxid or ""), message_id=str(message_id or ""))
+    with _VISIBLE_WAITERS_LOCK:
+        _VISIBLE_WAITERS_BY_CTXID.setdefault(waiter.ctxid, []).append(waiter)
+    return waiter
+
+
+def _unregister_visible_response_waiter(waiter: _VisibleResponseWaiter | None) -> None:
+    if waiter is None:
+        return
+    with _VISIBLE_WAITERS_LOCK:
+        items = _VISIBLE_WAITERS_BY_CTXID.get(waiter.ctxid) or []
+        if waiter in items:
+            items.remove(waiter)
+        if not items:
+            _VISIBLE_WAITERS_BY_CTXID.pop(waiter.ctxid, None)
+
+
+def notify_visible_response_completion(agent: Any = None, *, response: Any = None, tool_name: str = "") -> int:
+    """Wake Wyoming submitters as soon as Agent Zero's response tool completes.
+
+    This is called from the plugin's ``tool_execute_after`` extension. The
+    response tool is the visible end of the user-facing monologue. Agent Zero may
+    still run monologue_end/process_chain_end extensions afterward; Wyoming
+    finalization should not wait for those post-response hooks.
+    """
+    if str(tool_name or "") != "response":
+        return 0
+    try:
+        if response is not None and getattr(response, "break_loop", False) is False:
+            return 0
+    except Exception:
+        return 0
+    ctx = getattr(agent, "context", None)
+    ctxid = str(getattr(ctx, "id", "") or "")
+    if not ctxid:
+        return 0
+    text = _extract_response_text(getattr(response, "message", response))
+    with _VISIBLE_WAITERS_LOCK:
+        waiters = list(_VISIBLE_WAITERS_BY_CTXID.get(ctxid) or [])
+    for waiter in waiters:
+        waiter.text = text
+        waiter.tool_name = str(tool_name or "")
+        waiter.event.set()
+    return len(waiters)
+
+
+async def _await_deferred_or_visible_result(value: Any, waiter: _VisibleResponseWaiter | None = None) -> Any:
+    """Await Agent Zero task completion, but finish early on visible response.
+
+    ``AgentContext.communicate`` returns a DeferredTask whose result resolves
+    after the complete process chain. For Voqualizer, the visible send lifecycle
+    should finalize when the response tool completes, not after post-response
+    hooks.
+    """
+    if inspect.isawaitable(value):
+        return await value
+    result_method = getattr(value, "result", None)
+    if callable(result_method) and value.__class__.__name__ == "DeferredTask":
+        result_value = result_method()
+        if waiter is None:
+            if inspect.isawaitable(result_value):
+                return await result_value
+            return result_value
+
+        async def _wait_task_result():
+            if inspect.isawaitable(result_value):
+                return await result_value
+            return result_value
+
+        async def _wait_visible_response():
+            await asyncio.to_thread(waiter.event.wait)
+            return waiter.text
+
+        task_future = asyncio.create_task(_wait_task_result())
+        visible_future = asyncio.create_task(_wait_visible_response())
+        done, pending = await asyncio.wait({task_future, visible_future}, return_when=asyncio.FIRST_COMPLETED)
+        for pending_task in pending:
+            pending_task.cancel()
+        first = next(iter(done))
+        return await first
+    return await _maybe_await(value)
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -148,8 +250,10 @@ async def submit_to_agent_context(text: str, metadata: dict[str, Any]) -> str:
             ((user_message,), {}),
             ((clean,), {}),
         ):
+            waiter = _register_visible_response_waiter(ctxid, str(call_metadata.get("message_id") or "")) if method_name == "communicate" else None
             try:
-                result = await _maybe_await(method(*args, **kwargs))
+                raw_result = method(*args, **kwargs)
+                result = await _await_deferred_or_visible_result(raw_result, waiter)
                 text_result = _extract_response_text(result)
                 _settle_context_progress(context, reason="wyoming_submit_complete")
                 return text_result
@@ -158,6 +262,8 @@ async def submit_to_agent_context(text: str, metadata: dict[str, Any]) -> str:
             except Exception as exc:  # log non-TypeError errors
                 await _log_submitter_exception(f"submit:{method_name}", exc)
                 continue
+            finally:
+                _unregister_visible_response_waiter(waiter)
     raise RuntimeError(f"AgentContext for ctxid={ctxid!r} has no supported prompt method")
 
 

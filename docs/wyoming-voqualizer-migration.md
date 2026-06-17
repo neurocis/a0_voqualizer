@@ -1114,3 +1114,14 @@ prompt as running after the monologue summary is visible because A0 exposes that
 state through `context.log.progress_active`. Wyoming-origin submitter completion
 now explicitly clears the context progress latch with `log.set_progress("Waiting
 for input", active=False)` after the deferred Agent Zero task returns.
+
+
+### W78 Finalize at visible response completion
+
+Wyoming prompt finalization now races the Agent Zero `DeferredTask.result()`
+against a plugin `tool_execute_after` notification for the visible `response`
+tool. When the response tool completes, the Wyoming submitter returns/finalizes
+immediately while Agent Zero's post-response `monologue_end` and
+`process_chain_end` hooks may continue in the background. This removes the long
+visible delay between the monologue summary appearing and Voqualizer/UI
+finalization.
