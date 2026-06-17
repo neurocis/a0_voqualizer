@@ -1096,3 +1096,12 @@ generation_id with `session.new_generation()`, which made the browser's
 event. The UI then never finalized the submit lifecycle even when the agent
 responded successfully. Adapter now reuses the client-supplied generation_id
 when present.
+
+
+### W76 Standalone finalization race hardening
+
+The standalone UI could receive/render a Wyoming response final, then the
+submit ACK promise resumed and overwrote status back to `Awaiting Wyoming
+response…`, leaving the prompt visually running. Added a shared
+`finalizeWyomingSubmission(...)` helper and ACK reply safety finalizer so the
+UI cannot remain latched after the server reports emitted replies.

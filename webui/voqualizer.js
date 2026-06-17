@@ -35,7 +35,7 @@ import {
 // cx-stream + word-highlight pipeline remains the single submission path.
 let voqStore = null;
 
-const PAGE_VERSION = 'w72-event-data-envelope-2026-06-12-1';
+const PAGE_VERSION = 'w76-wyoming-finalize-race-2026-06-16-1';
 const STORE_IMPORT_CACHE = 'store_import_cache=m8-tts-vu-asr-style-continuous-2026-06-04-82';
 const ADMIN_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_admin';
 const MESSAGE_ENDPOINT = 'plugins/a0_voqualizer/voqualizer_message_async';
@@ -1338,6 +1338,34 @@ function isWyomingClientConnected(client) {
   try { return !!client?.snapshot?.().connected; } catch (_err) { return false; }
 }
 
+function finalizeWyomingSubmission(state, reason = 'wyoming_final', data = {}) {
+  const generation = wyomingCurrentGeneration(data || {}) || safeString(tts.activeGenerationId || state?.activeSubmissionId || '');
+  state.isSubmitting = false;
+  state.activeSubmissionId = '';
+  if (globalThis.__voqualizer_page) {
+    globalThis.__voqualizer_page.isSubmitting = false;
+    globalThis.__voqualizer_page.lastWyomingFinalReason = reason;
+    globalThis.__voqualizer_page.lastWyomingFinalAt = Date.now();
+    globalThis.__voqualizer_page.lastWyomingFinalGenerationId = generation;
+    globalThis.__voqualizer_page.lastWyomingFinalData = data || {};
+  }
+  setSendIndicatorState('success');
+  updateSendButton(state);
+  setPageStatus('Response complete', 'ready');
+  stopProcessingHeartbeat(reason);
+}
+
+function scheduleWyomingAckFinalizer(state, submissionId, ack) {
+  const replyCount = Number(ack?.replies || ack?.events?.length || ack?.data?.replies || 0);
+  if (!replyCount) return;
+  setTimeout(() => {
+    if (!state || state.activeSubmissionId !== submissionId || !state.isSubmitting) return;
+    // Safety net: server ACK says it emitted replies, but the browser did not
+    // observe/accept a final event. Do not leave the UI latched as running.
+    finalizeWyomingSubmission(state, 'wyoming_ack_reply_safety_final', { generation_id: submissionId, replies: replyCount });
+  }, 1200);
+}
+
 function installWyomingClientHandlers(client, state) {
   if (!client || client.__voqualizerStandaloneHandlersInstalled) return;
   client.__voqualizerStandaloneHandlersInstalled = true;
@@ -1400,13 +1428,7 @@ function installWyomingClientHandlers(client, state) {
     if (finalText && !wyoming.responseStreamId) handleCxStreamStart({ data: { stream_id: streamId, message_id: messageId, context_id: wyoming.connectedContextId } });
     if (finalText) handleCxToken({ data: { stream_id: streamId, message_id: messageId, text: finalText, seq: Date.now() } });
     handleCxStreamFinal({ data: { stream_id: streamId, message_id: messageId, text: finalText } });
-    state.isSubmitting = false;
-    state.activeSubmissionId = '';
-    if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.isSubmitting = false;
-    setSendIndicatorState('success');
-    updateSendButton(state);
-    setPageStatus('Response complete', 'ready');
-    stopProcessingHeartbeat('wyoming_response_final');
+    finalizeWyomingSubmission(state, 'wyoming_response_final', data);
     wyoming.responseBuffer = '';
   });
   client.on('event:audio-start', (ev) => {
@@ -1688,6 +1710,7 @@ async function submitPrompt(state) {
     let result;
     if (WYOMING_TRANSPORT_PRIMARY) {
       result = await submitPromptOverWyomingSession(text, contextId, messageId, state);
+      scheduleWyomingAckFinalizer(state, messageId, result || {});
       if (globalThis.__voqualizer_page) globalThis.__voqualizer_page.promptSubmitTransport = 'wyoming';
     } else {
       try {
@@ -1703,8 +1726,16 @@ async function submitPrompt(state) {
     }
     void voqInitPromise;
     if (!result) throw new Error('empty response from prompt submit');
-    setPageStatus('Awaiting Wyoming response…', 'loading');
-    if (!WYOMING_TRANSPORT_PRIMARY) await runPollLoop(state, contextId, messageId);
+    if (WYOMING_TRANSPORT_PRIMARY) {
+      // The final event may already have arrived before the ACK promise resolves.
+      // Do not overwrite a completed lifecycle back to an awaiting/running state.
+      if (state.isSubmitting && state.activeSubmissionId === messageId) {
+        setPageStatus('Awaiting Wyoming response…', 'loading');
+      }
+    } else {
+      setPageStatus('Awaiting response…', 'loading');
+      await runPollLoop(state, contextId, messageId);
+    }
   } catch (error) {
     stopProcessingHeartbeat('send_failed');
     renderErrorRow(state, `Send failed: ${error?.message || error}`);
