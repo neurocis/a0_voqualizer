@@ -1105,3 +1105,12 @@ submit ACK promise resumed and overwrote status back to `Awaiting Wyoming
 response…`, leaving the prompt visually running. Added a shared
 `finalizeWyomingSubmission(...)` helper and ACK reply safety finalizer so the
 UI cannot remain latched after the server reports emitted replies.
+
+
+### W77 Clear A0 progress after Wyoming submit completion
+
+Both the standalone Voqualizer page and the main DOM UI can continue showing a
+prompt as running after the monologue summary is visible because A0 exposes that
+state through `context.log.progress_active`. Wyoming-origin submitter completion
+now explicitly clears the context progress latch with `log.set_progress("Waiting
+for input", active=False)` after the deferred Agent Zero task returns.

@@ -103,6 +103,32 @@ def _ctxid_from_metadata(metadata: dict[str, Any]) -> str:
     return ctxid
 
 
+def _settle_context_progress(context: Any, *, reason: str = "wyoming_complete") -> None:
+    """Clear A0's active progress latch after a Wyoming-origin submit completes.
+
+    The main DOM and standalone page both derive their running/progress state
+    from AgentContext.log.progress_active. AgentContext.communicate().result()
+    returns when the monologue has produced its final response, but core A0 does
+    not always reset progress_active to False on that path. Without an explicit
+    settle, both web UIs can keep showing the prompt as running even after the
+    final monologue summary is visible.
+    """
+    try:
+        log = getattr(context, "log", None)
+        if log is None:
+            return
+        set_progress = getattr(log, "set_progress", None)
+        if callable(set_progress):
+            set_progress("Waiting for input", active=False)
+            return
+        set_initial = getattr(log, "set_initial_progress", None)
+        if callable(set_initial):
+            set_initial()
+    except Exception:
+        # Progress settling is best-effort and must never change response data.
+        return
+
+
 async def submit_to_agent_context(text: str, metadata: dict[str, Any]) -> str:
     """Submit text to the fixed ctxID from Wyoming metadata and return final text."""
     ctxid = _ctxid_from_metadata(metadata)
@@ -124,7 +150,9 @@ async def submit_to_agent_context(text: str, metadata: dict[str, Any]) -> str:
         ):
             try:
                 result = await _maybe_await(method(*args, **kwargs))
-                return _extract_response_text(result)
+                text_result = _extract_response_text(result)
+                _settle_context_progress(context, reason="wyoming_submit_complete")
+                return text_result
             except TypeError:
                 continue
             except Exception as exc:  # log non-TypeError errors
@@ -176,16 +204,19 @@ async def stream_to_agent_context(text: str, metadata: dict[str, Any]) -> AsyncI
                         piece = _extract_response_text(chunk)
                         if piece:
                             yield piece
+                    _settle_context_progress(context, reason="wyoming_stream_complete")
                     return
                 if isinstance(result, (list, tuple)) or hasattr(result, "__iter__") and not isinstance(result, (str, bytes, dict)):
                     for chunk in result:
                         piece = _extract_response_text(chunk)
                         if piece:
                             yield piece
+                    _settle_context_progress(context, reason="wyoming_iterable_complete")
                     return
                 piece = _extract_response_text(result)
                 if piece:
                     yield piece
+                _settle_context_progress(context, reason="wyoming_single_result_complete")
                 return
             except TypeError:
                 continue
